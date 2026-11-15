@@ -422,9 +422,10 @@ def generate_note_thumbnail(out_png: Path):
 def main():
     srv, port = start_static_server(GAME_DIR)
     debug_port = 9231
+    browser_bin = find_browser()
     chrome_proc = subprocess.Popen(
         [
-            "chromium",
+            browser_bin,
             "--headless=new",
             "--no-sandbox",
             "--disable-gpu",
