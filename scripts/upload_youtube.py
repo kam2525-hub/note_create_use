@@ -15,12 +15,6 @@ import os
 import re
 from pathlib import Path
 
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
-
 SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
 SCRIPT_DIR = Path(__file__).resolve().parent
 CLIENT_SECRET = SCRIPT_DIR / "client_secret.json"
@@ -28,6 +22,11 @@ TOKEN_FILE = SCRIPT_DIR / "youtube_token.json"
 
 
 def get_youtube_service():
+    from google.auth.transport.requests import Request
+    from google.oauth2.credentials import Credentials
+    from google_auth_oauthlib.flow import InstalledAppFlow
+    from googleapiclient.discovery import build
+
     cid = os.environ.get("YOUTUBE_CLIENT_ID", "").strip()
     csec = os.environ.get("YOUTUBE_CLIENT_SECRET", "").strip()
     rtok = os.environ.get("YOUTUBE_REFRESH_TOKEN", "").strip()
@@ -129,6 +128,8 @@ def main():
             "selfDeclaredMadeForKids": False,
         },
     }
+
+    from googleapiclient.http import MediaFileUpload
 
     media = MediaFileUpload(args.video, chunksize=-1, resumable=True, mimetype="video/mp4")
     request = youtube.videos().insert(part="snippet,status", body=body, media_body=media)
