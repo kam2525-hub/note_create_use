@@ -1,0 +1,8 @@
+shorts/**/output/frames/
+shorts/**/output/*.wav
+shorts/**/output/*.mp4
+scripts/client_secret.json
+scripts/youtube_token.json
+__pycache__/
+*.pyc
+.DS_Store

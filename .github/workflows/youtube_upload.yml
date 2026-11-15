@@ -1,0 +1,72 @@
+name: Generate Short & Upload Private Draft to YouTube
+
+on:
+  workflow_dispatch:
+    inputs:
+      day:
+        description: "Day number to render & upload (e.g. 01)"
+        required: true
+        default: "01"
+      privacy:
+        description: "YouTube privacy status (recommended: private)"
+        required: true
+        default: "private"
+        type: choice
+        options:
+          - private
+          - unlisted
+
+jobs:
+  render-and-upload:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check YouTube Secrets
+        id: check_secrets
+        env:
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+        run: |
+          if [ -z "$YOUTUBE_REFRESH_TOKEN" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "YouTube Secrets are not configured yet. See scripts/YOUTUBE_MOBILE_SETUP.md."
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install system dependencies (ffmpeg & Noto CJK fonts)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-noto-cjk
+
+      - name: Install Python dependencies
+        run: |
+          pip install pillow numpy google-api-python-client google-auth-oauthlib
+
+      - name: Render Short MP4 for Day ${{ inputs.day }}
+        run: |
+          python3 "shorts/day${{ inputs.day }}/generate_shorts.py"
+
+      - name: Upload Short MP4 as Workflow Artifact (always available)
+        uses: actions/upload-artifact@v4
+        with:
+          name: day${{ inputs.day }}-short-video
+          path: shorts/day${{ inputs.day }}/output/day${{ inputs.day }}_short.mp4
+
+      - name: Upload to YouTube Studio as ${{ inputs.privacy }}
+        if: steps.check_secrets.outputs.ready == 'true'
+        env:
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+        run: |
+          python3 scripts/upload_youtube.py \
+            --video "shorts/day${{ inputs.day }}/output/day${{ inputs.day }}_short.mp4" \
+            --metadata-file "notes/day${{ inputs.day }}/youtube_metadata.txt" \
+            --privacy "${{ inputs.privacy }}"

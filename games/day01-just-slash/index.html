@@ -1,0 +1,1148 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>JUST SLASH 99｜神速0.01秒ジャスト斬り</title>
+  <meta name="description" content="99%が3回目でミスる超爽快タイミングアクション！光るゾーンに重なった瞬間にタップして脳汁コンボを繋げ！" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:ital,wght@0,600;0,700;1,700&family=Noto+Sans+JP:wght@500;700;900&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #090b0f;
+      --surface: #141820;
+      --surface-raised: #1c222d;
+      --text: #f7f9fc;
+      --muted: #8b95a7;
+      --gold: #ffd400;
+      --cyan: #00e5ff;
+      --crimson: #ff2e54;
+      --lime: #47ff9c;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Chakra Petch', 'Noto Sans JP', sans-serif;
+    }
+
+    .app {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      max-width: 540px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      background: radial-gradient(circle at 50% 35%, #181e29 0%, #090b0f 75%);
+      overflow: hidden;
+    }
+
+    canvas#gameCanvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      z-index: 1;
+    }
+
+    .hud {
+      position: relative;
+      z-index: 2;
+      padding: 16px 18px 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      pointer-events: none;
+    }
+
+    .score-block {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .score-label {
+      font-size: 11px;
+      letter-spacing: 0.16em;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .score-value {
+      font-size: 36px;
+      line-height: 1;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+      transition: transform 0.08s ease-out;
+    }
+
+    .score-value.bump {
+      transform: scale(1.14);
+      color: var(--gold);
+    }
+
+    .best-line {
+      font-size: 12px;
+      color: var(--muted);
+      letter-spacing: 0.05em;
+    }
+
+    .hud-right {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 8px;
+    }
+
+    .top-controls {
+      display: flex;
+      gap: 8px;
+      pointer-events: auto;
+    }
+
+    .icon-btn {
+      background: var(--surface-raised);
+      color: var(--text);
+      border: none;
+      border-radius: 10px;
+      padding: 7px 11px;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      box-shadow: 0 3px 0 #050608;
+      transition: transform 0.08s ease;
+    }
+
+    .icon-btn:active {
+      transform: translateY(2px);
+      box-shadow: 0 1px 0 #050608;
+    }
+
+    .lives {
+      display: flex;
+      gap: 6px;
+    }
+
+    .heart {
+      width: 24px;
+      height: 10px;
+      border-radius: 3px;
+      background: var(--crimson);
+      box-shadow: 0 0 10px rgba(255, 46, 84, 0.55);
+      transition: all 0.2s ease;
+    }
+
+    .heart.lost {
+      background: #252b36;
+      box-shadow: none;
+      transform: scale(0.85);
+    }
+
+    .combo-banner {
+      position: relative;
+      z-index: 2;
+      text-align: center;
+      margin-top: 6px;
+      pointer-events: none;
+      min-height: 62px;
+    }
+
+    .combo-num {
+      font-size: 40px;
+      font-weight: 700;
+      line-height: 1;
+      letter-spacing: 0.04em;
+      color: var(--cyan);
+      opacity: 0;
+      transform: scale(0.8);
+      transition: transform 0.1s cubic-bezier(0.2, 1.6, 0.4, 1), opacity 0.15s;
+    }
+
+    .combo-num.active {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    .combo-num.fever {
+      color: var(--gold);
+      text-shadow: 0 0 20px rgba(255, 212, 0, 0.6);
+    }
+
+    .fever-tag {
+      display: inline-block;
+      margin-top: 4px;
+      padding: 2px 10px;
+      border-radius: 4px;
+      background: var(--gold);
+      color: #090b0f;
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 0.12em;
+      opacity: 0;
+      transform: translateY(-4px);
+      transition: all 0.15s ease;
+    }
+
+    .fever-tag.active {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .judge-popup {
+      position: absolute;
+      left: 50%;
+      top: 33%;
+      transform: translate(-50%, -50%) scale(0.6);
+      z-index: 3;
+      pointer-events: none;
+      font-size: 42px;
+      font-weight: 900;
+      letter-spacing: 0.06em;
+      opacity: 0;
+      text-shadow: 0 6px 0 rgba(0, 0, 0, 0.85);
+      white-space: nowrap;
+    }
+
+    .judge-popup.show {
+      animation: popJudge 0.45s cubic-bezier(0.18, 1.4, 0.4, 1) forwards;
+    }
+
+    @keyframes popJudge {
+      0% { opacity: 0; transform: translate(-50%, -35%) scale(0.5); }
+      25% { opacity: 1; transform: translate(-50%, -55%) scale(1.16); }
+      70% { opacity: 1; transform: translate(-50%, -62%) scale(1); }
+      100% { opacity: 0; transform: translate(-50%, -78%) scale(0.95); }
+    }
+
+    .bottom-hint {
+      position: relative;
+      z-index: 2;
+      margin-top: auto;
+      padding: 14px 20px 26px;
+      text-align: center;
+      pointer-events: none;
+    }
+
+    .tap-pill {
+      display: inline-block;
+      padding: 10px 22px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      color: #d6deeb;
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 10;
+      background: rgba(9, 11, 15, 0.88);
+      backdrop-filter: blur(8px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 28px 24px;
+      text-align: center;
+      transition: opacity 0.2s ease;
+    }
+
+    .overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .game-kicker {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.22em;
+      color: var(--gold);
+      margin-bottom: 10px;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: 40px;
+      line-height: 1.08;
+      font-weight: 900;
+      letter-spacing: 0.04em;
+      color: var(--text);
+    }
+
+    .subtitle {
+      margin: 0 0 26px;
+      font-size: 15px;
+      line-height: 1.65;
+      color: #b7c2d4;
+      max-width: 340px;
+    }
+
+    .rule-strip {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 28px;
+      width: 100%;
+      max-width: 360px;
+    }
+
+    .rule-item {
+      flex: 1;
+      background: var(--surface);
+      padding: 12px 8px;
+      border-radius: 12px;
+    }
+
+    .rule-item strong {
+      display: block;
+      font-size: 13px;
+      margin-bottom: 4px;
+    }
+
+    .rule-item span {
+      display: block;
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    .cta-btn {
+      width: 100%;
+      max-width: 320px;
+      padding: 16px 24px;
+      border: none;
+      border-radius: 14px;
+      background: var(--gold);
+      color: #090b0f;
+      font-family: inherit;
+      font-size: 19px;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      cursor: pointer;
+      box-shadow: 0 6px 0 #b89200;
+      transition: transform 0.08s ease;
+    }
+
+    .cta-btn:active {
+      transform: translateY(4px);
+      box-shadow: 0 2px 0 #b89200;
+    }
+
+    .secondary-btn {
+      margin-top: 12px;
+      width: 100%;
+      max-width: 320px;
+      padding: 13px 20px;
+      border: none;
+      border-radius: 12px;
+      background: var(--surface-raised);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      box-shadow: 0 4px 0 #050608;
+    }
+
+    .result-rank {
+      font-size: 62px;
+      font-weight: 900;
+      line-height: 1;
+      margin: 6px 0 8px;
+      color: var(--gold);
+      letter-spacing: 0.06em;
+    }
+
+    .result-title {
+      font-size: 18px;
+      font-weight: 900;
+      margin-bottom: 18px;
+      color: var(--cyan);
+    }
+
+    .stats-row {
+      display: flex;
+      gap: 12px;
+      width: 100%;
+      max-width: 340px;
+      margin-bottom: 24px;
+    }
+
+    .stat-box {
+      flex: 1;
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 12px 10px;
+    }
+
+    .stat-box .k {
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+    }
+
+    .stat-box .v {
+      font-size: 22px;
+      font-weight: 700;
+      margin-top: 4px;
+      font-variant-numeric: tabular-nums;
+    }
+  </style>
+</head>
+<body>
+  <div class="app" id="appRoot">
+    <canvas id="gameCanvas"></canvas>
+
+    <header class="hud">
+      <div class="score-block">
+        <span class="score-label">SCORE</span>
+        <span class="score-value" id="scoreEl">0</span>
+        <span class="best-line">BEST <span id="bestEl">0</span></span>
+      </div>
+      <div class="hud-right">
+        <div class="top-controls">
+          <button class="icon-btn" id="soundBtn" type="button">BGM ON</button>
+        </div>
+        <div class="lives" id="livesEl">
+          <div class="heart"></div>
+          <div class="heart"></div>
+          <div class="heart"></div>
+        </div>
+      </div>
+    </header>
+
+    <div class="combo-banner">
+      <div class="combo-num" id="comboEl">0 COMBO</div>
+      <div class="fever-tag" id="feverTag">FEVER x2.0</div>
+    </div>
+
+    <div class="judge-popup" id="judgeEl">GOD!!</div>
+
+    <div class="bottom-hint">
+      <div class="tap-pill" id="hintPill">画面タップ / SPACE で斬れ！</div>
+    </div>
+
+    <!-- START OVERLAY -->
+    <section class="overlay" id="startOverlay">
+      <div class="game-kicker">DAY 01 // HYPER TIMING ACTION</div>
+      <h1>JUST SLASH 99</h1>
+      <p class="subtitle">
+        光るゾーンにバーが重なった瞬間にタップ！<br />
+        5連続成功で <strong>FEVER（得点2倍＋BGM加速）</strong> に突入！
+      </p>
+      <div class="rule-strip">
+        <div class="rule-item">
+          <strong style="color: var(--gold);">GOLD ゾーン</strong>
+          <span>ど真ん中で神判定＆爆発コンボ</span>
+        </div>
+        <div class="rule-item">
+          <strong style="color: var(--crimson);">TRAP 赤刃</strong>
+          <span>赤が出たら押すな！見送りで+300</span>
+        </div>
+      </div>
+      <button class="cta-btn" id="startBtn" type="button">START GAME</button>
+    </section>
+
+    <!-- GAME OVER OVERLAY -->
+    <section class="overlay hidden" id="endOverlay">
+      <div class="game-kicker">RESULT</div>
+      <div class="result-rank" id="rankEl">S</div>
+      <div class="result-title" id="rankTitleEl">0.01秒の覇者</div>
+      <div class="stats-row">
+        <div class="stat-box">
+          <div class="k">SCORE</div>
+          <div class="v" id="finalScoreEl">0</div>
+        </div>
+        <div class="stat-box">
+          <div class="k">MAX COMBO</div>
+          <div class="v" id="finalComboEl">0</div>
+        </div>
+        <div class="stat-box">
+          <div class="k">GOD HIT</div>
+          <div class="v" id="finalGodEl">0</div>
+        </div>
+      </div>
+      <button class="cta-btn" id="retryBtn" type="button">もう1回遊ぶ（SPACE）</button>
+      <button class="secondary-btn" id="shareBtn" type="button">X で記録を自慢する</button>
+    </section>
+  </div>
+
+  <script>
+    (() => {
+      const canvas = document.getElementById('gameCanvas');
+      const ctx = canvas.getContext('2d');
+      const scoreEl = document.getElementById('scoreEl');
+      const bestEl = document.getElementById('bestEl');
+      const comboEl = document.getElementById('comboEl');
+      const feverTag = document.getElementById('feverTag');
+      const livesEl = document.getElementById('livesEl');
+      const judgeEl = document.getElementById('judgeEl');
+      const hintPill = document.getElementById('hintPill');
+      const startOverlay = document.getElementById('startOverlay');
+      const endOverlay = document.getElementById('endOverlay');
+      const startBtn = document.getElementById('startBtn');
+      const retryBtn = document.getElementById('retryBtn');
+      const shareBtn = document.getElementById('shareBtn');
+      const soundBtn = document.getElementById('soundBtn');
+      const rankEl = document.getElementById('rankEl');
+      const rankTitleEl = document.getElementById('rankTitleEl');
+      const finalScoreEl = document.getElementById('finalScoreEl');
+      const finalComboEl = document.getElementById('finalComboEl');
+      const finalGodEl = document.getElementById('finalGodEl');
+
+      const params = new URLSearchParams(window.location.search);
+      const isShortsMode = params.get('shorts') === '1';
+
+      let W = 540, H = 960, DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+      function resize() {
+        const rect = canvas.getBoundingClientRect();
+        W = rect.width || 540;
+        H = rect.height || 960;
+        DPR = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = Math.round(W * DPR);
+        canvas.height = Math.round(H * DPR);
+        ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+      }
+      window.addEventListener('resize', resize);
+      resize();
+
+      // Web Audio API Procedural BGM + SFX
+      const AudioSys = (() => {
+        let ac = null;
+        let muted = false;
+        let bgmTimer = null;
+        let step = 0;
+
+        const scale = [261.63, 293.66, 329.63, 392.00, 440.00, 523.25, 587.33, 659.25, 783.99, 880.00, 1046.50];
+        const bassNotes = [130.81, 130.81, 164.81, 146.83, 174.61, 174.61, 196.00, 146.83];
+        const leadPattern = [523.25, 0, 659.25, 783.99, 659.25, 880.00, 783.99, 523.25, 587.33, 0, 659.25, 783.99, 1046.50, 880.00, 783.99, 659.25];
+
+        function ensure() {
+          if (isShortsMode || muted) return null;
+          if (!ac) {
+            const Ctx = window.AudioContext || window.webkitAudioContext;
+            if (Ctx) ac = new Ctx();
+          }
+          if (ac && ac.state === 'suspended') ac.resume();
+          return ac;
+        }
+
+        function tone(freq, dur, type = 'triangle', vol = 0.14, slide = 1) {
+          const ctxA = ensure();
+          if (!ctxA) return;
+          const now = ctxA.currentTime;
+          const osc = ctxA.createOscillator();
+          const gain = ctxA.createGain();
+          osc.type = type;
+          osc.frequency.setValueAtTime(freq, now);
+          if (slide !== 1) {
+            osc.frequency.exponentialRampToValueAtTime(Math.max(40, freq * slide), now + dur);
+          }
+          gain.gain.setValueAtTime(vol, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+          osc.connect(gain);
+          gain.connect(ctxA.destination);
+          osc.start(now);
+          osc.stop(now + dur);
+        }
+
+        function kick() {
+          tone(135, 0.11, 'sine', 0.22, 0.32);
+        }
+
+        function hat() {
+          const ctxA = ensure();
+          if (!ctxA) return;
+          const len = Math.floor(ctxA.sampleRate * 0.035);
+          const buf = ctxA.createBuffer(1, len, ctxA.sampleRate);
+          const data = buf.getChannelData(0);
+          for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+          const src = ctxA.createBufferSource();
+          const filt = ctxA.createBiquadFilter();
+          const gain = ctxA.createGain();
+          filt.type = 'highpass';
+          filt.frequency.value = 6000;
+          gain.gain.value = 0.06;
+          src.buffer = buf;
+          src.connect(filt);
+          filt.connect(gain);
+          gain.connect(ctxA.destination);
+          src.start();
+        }
+
+        function startBgm(isFever) {
+          stopBgm();
+          if (isShortsMode || muted) return;
+          const intervalMs = isFever ? 86 : 98; // ~153-174 BPM 16th/8th feel
+          bgmTimer = setInterval(() => {
+            if (state.phase !== 'play' || muted) return;
+            if (step % 4 === 0) kick();
+            if (step % 2 === 1) hat();
+            const b = bassNotes[Math.floor(step / 2) % bassNotes.length];
+            tone(b, 0.085, 'sawtooth', 0.045, 0.98);
+            const l = leadPattern[step % leadPattern.length];
+            if (l > 0) {
+              tone(state.fever ? l * 1.25 : l, 0.08, 'square', 0.035, 1.0);
+            }
+            step++;
+          }, intervalMs);
+        }
+
+        function stopBgm() {
+          if (bgmTimer) {
+            clearInterval(bgmTimer);
+            bgmTimer = null;
+          }
+        }
+
+        function hit(combo, isGod) {
+          const idx = Math.min(scale.length - 1, combo % scale.length);
+          const base = scale[idx] * (combo >= scale.length ? 1.5 : 1);
+          tone(base, 0.14, 'triangle', isGod ? 0.22 : 0.15, 1.06);
+          if (isGod) {
+            setTimeout(() => tone(base * 1.5, 0.16, 'sine', 0.16, 1.1), 25);
+          }
+        }
+
+        function feverStart() {
+          [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => {
+            setTimeout(() => tone(f, 0.16, 'sawtooth', 0.14, 1.05), i * 45);
+          });
+        }
+
+        function miss() {
+          tone(140, 0.26, 'sawtooth', 0.24, 0.42);
+        }
+
+        function toggleMute() {
+          muted = !muted;
+          soundBtn.textContent = muted ? 'BGM OFF' : 'BGM ON';
+          if (muted) stopBgm();
+          else if (state.phase === 'play') startBgm(state.fever);
+        }
+
+        return { ensure, startBgm, stopBgm, hit, feverStart, miss, toggleMute };
+      })();
+
+      soundBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        AudioSys.toggleMute();
+      });
+
+      const state = {
+        phase: 'start',
+        score: 0,
+        best: Number(localStorage.getItem('just_slash_best') || 0),
+        combo: 0,
+        maxCombo: 0,
+        godHits: 0,
+        lives: 3,
+        round: 1,
+        fever: false,
+        cursor: 0.1,
+        dir: 1,
+        speed: 1.15,
+        targetCenter: 0.55,
+        targetWidth: 0.16,
+        isTrap: false,
+        trapCleared: false,
+        shake: 0,
+        hitstop: 0,
+        flashAlpha: 0,
+        flashColor: '#ffffff',
+        particles: [],
+        rings: [],
+        slashTrails: [],
+        time: 0,
+        lastJudgeText: ''
+      };
+
+      bestEl.textContent = state.best.toLocaleString();
+
+      function spawnParticles(x, y, color, count = 20) {
+        for (let i = 0; i < count; i++) {
+          const ang = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.4;
+          const spd = 160 + Math.random() * 440;
+          state.particles.push({
+            x, y,
+            vx: Math.cos(ang) * spd,
+            vy: Math.sin(ang) * spd,
+            size: 3 + Math.random() * 5,
+            life: 1,
+            decay: 2.0 + Math.random() * 1.4,
+            color
+          });
+        }
+      }
+
+      function spawnRing(x, y, color) {
+        state.rings.push({ x, y, r: 12, maxR: 170, life: 1, color });
+      }
+
+      function showJudge(text, color) {
+        judgeEl.textContent = text;
+        judgeEl.style.color = color;
+        judgeEl.classList.remove('show');
+        void judgeEl.offsetWidth;
+        judgeEl.classList.add('show');
+      }
+
+      function updateHud() {
+        scoreEl.textContent = state.score.toLocaleString();
+        if (state.score > state.best) {
+          state.best = state.score;
+          bestEl.textContent = state.best.toLocaleString();
+          if (!isShortsMode) localStorage.setItem('just_slash_best', String(state.best));
+        }
+
+        if (state.combo > 0) {
+          comboEl.textContent = `${state.combo} COMBO`;
+          comboEl.classList.add('active');
+          comboEl.classList.toggle('fever', state.fever);
+        } else {
+          comboEl.classList.remove('active', 'fever');
+        }
+        feverTag.classList.toggle('active', state.fever);
+
+        const hearts = livesEl.querySelectorAll('.heart');
+        hearts.forEach((h, i) => h.classList.toggle('lost', i >= state.lives));
+      }
+
+      function nextRound(forcedConfig = null) {
+        state.round++;
+        const progress = Math.min(1, state.round / 22);
+        state.speed = forcedConfig?.speed ?? (1.18 + progress * 1.75);
+        state.targetWidth = forcedConfig?.width ?? Math.max(0.072, 0.165 - progress * 0.088);
+        state.isTrap = forcedConfig?.isTrap ?? (state.round >= 4 && Math.random() < 0.18);
+        state.trapCleared = false;
+        state.targetCenter = forcedConfig?.center ?? (0.24 + Math.random() * 0.52);
+        state.cursor = state.dir > 0 ? 0.04 : 0.96;
+        hintPill.textContent = state.isTrap
+          ? '赤刃だ！タップせずにスルーしろ！'
+          : '光るゾーンに重なった瞬間に斬れ！';
+      }
+
+      function startGame() {
+        AudioSys.ensure();
+        state.phase = 'play';
+        state.score = 0;
+        state.combo = 0;
+        state.maxCombo = 0;
+        state.godHits = 0;
+        state.lives = 3;
+        state.round = 0;
+        state.fever = false;
+        state.dir = 1;
+        state.particles = [];
+        state.rings = [];
+        state.slashTrails = [];
+        startOverlay.classList.add('hidden');
+        endOverlay.classList.add('hidden');
+        nextRound({ center: 0.58, width: 0.17, speed: 1.15, isTrap: false });
+        updateHud();
+        AudioSys.startBgm(false);
+      }
+
+      function endGame() {
+        state.phase = 'end';
+        AudioSys.stopBgm();
+        let rank = 'B', title = 'まだまだいける！';
+        if (state.score >= 8000) { rank = 'S++'; title = '人間卒業・0.01秒の神'; }
+        else if (state.score >= 4500) { rank = 'S'; title = '脳汁ドバドバの覇者'; }
+        else if (state.score >= 2200) { rank = 'A'; title = '超反応スナイパー'; }
+        else if (state.score < 800) { rank = 'C'; title = 'あと1ミリが遠い…！'; }
+
+        rankEl.textContent = rank;
+        rankTitleEl.textContent = title;
+        finalScoreEl.textContent = state.score.toLocaleString();
+        finalComboEl.textContent = state.maxCombo;
+        finalGodEl.textContent = state.godHits;
+        endOverlay.classList.remove('hidden');
+      }
+
+      function triggerAction() {
+        if (state.phase === 'start') {
+          startGame();
+          return;
+        }
+        if (state.phase === 'end') {
+          startGame();
+          return;
+        }
+        if (state.phase !== 'play') return;
+
+        const barX = W * 0.5;
+        const barY = H * 0.56;
+        const barW = Math.min(420, W - 64);
+        const hitX = (barX - barW / 2) + state.cursor * barW;
+
+        if (state.isTrap) {
+          // Tapped on trap!
+          handleMiss(hitX, barY, 'TRAP!!');
+          return;
+        }
+
+        const dist = Math.abs(state.cursor - state.targetCenter);
+        const halfW = state.targetWidth / 2;
+
+        if (dist <= halfW * 0.36) {
+          // GOD HIT
+          state.combo++;
+          state.maxCombo = Math.max(state.maxCombo, state.combo);
+          state.godHits++;
+          const wasFever = state.fever;
+          if (state.combo >= 5) state.fever = true;
+          const mult = state.fever ? 2 : 1;
+          const pts = (300 + state.combo * 45) * mult;
+          state.score += pts;
+          state.hitstop = 0.035;
+          state.shake = 14;
+          state.flashAlpha = 0.28;
+          state.flashColor = '#ffd400';
+          spawnParticles(hitX, barY, '#ffd400', 28);
+          spawnRing(hitX, barY, '#ffd400');
+          state.slashTrails.push({ x: hitX, y: barY, life: 1, color: '#ffd400' });
+          showJudge(`GOD!! +${pts}`, '#ffd400');
+          scoreEl.classList.remove('bump');
+          void scoreEl.offsetWidth;
+          scoreEl.classList.add('bump');
+          AudioSys.hit(state.combo, true);
+          if (!wasFever && state.fever) {
+            AudioSys.feverStart();
+            AudioSys.startBgm(true);
+          }
+          state.dir *= -1;
+          nextRound();
+        } else if (dist <= halfW) {
+          // GOOD HIT
+          state.combo++;
+          state.maxCombo = Math.max(state.maxCombo, state.combo);
+          const wasFever = state.fever;
+          if (state.combo >= 5) state.fever = true;
+          const mult = state.fever ? 2 : 1;
+          const pts = (120 + state.combo * 20) * mult;
+          state.score += pts;
+          state.hitstop = 0.02;
+          state.shake = 7;
+          state.flashAlpha = 0.14;
+          state.flashColor = '#00e5ff';
+          spawnParticles(hitX, barY, '#00e5ff', 16);
+          spawnRing(hitX, barY, '#00e5ff');
+          state.slashTrails.push({ x: hitX, y: barY, life: 1, color: '#00e5ff' });
+          showJudge(`NICE! +${pts}`, '#00e5ff');
+          AudioSys.hit(state.combo, false);
+          if (!wasFever && state.fever) {
+            AudioSys.feverStart();
+            AudioSys.startBgm(true);
+          }
+          state.dir *= -1;
+          nextRound();
+        } else {
+          handleMiss(hitX, barY, 'MISS!!');
+        }
+        updateHud();
+      }
+
+      function handleMiss(x, y, label) {
+        state.combo = 0;
+        if (state.fever) {
+          state.fever = false;
+          AudioSys.startBgm(false);
+        }
+        state.lives--;
+        state.shake = 22;
+        state.flashAlpha = 0.34;
+        state.flashColor = '#ff2e54';
+        spawnParticles(x, y, '#ff2e54', 22);
+        spawnRing(x, y, '#ff2e54');
+        showJudge(label, '#ff2e54');
+        AudioSys.miss();
+        updateHud();
+        if (state.lives <= 0) {
+          endGame();
+        } else {
+          state.dir *= -1;
+          nextRound();
+        }
+      }
+
+      function stepSimulation(dt) {
+        state.time += dt;
+        if (state.shake > 0) state.shake = Math.max(0, state.shake - dt * 65);
+        if (state.flashAlpha > 0) state.flashAlpha = Math.max(0, state.flashAlpha - dt * 1.8);
+
+        if (state.hitstop > 0) {
+          state.hitstop = Math.max(0, state.hitstop - dt);
+        } else if (state.phase === 'play') {
+          state.cursor += state.dir * state.speed * dt;
+          if (state.cursor >= 1) {
+            state.cursor = 1;
+            if (state.isTrap && !state.trapCleared) {
+              state.trapCleared = true;
+              state.combo++;
+              state.maxCombo = Math.max(state.maxCombo, state.combo);
+              state.score += 300;
+              showJudge('回避 +300!!', '#47ff9c');
+              spawnRing(W * 0.5, H * 0.56, '#47ff9c');
+              AudioSys.hit(state.combo, false);
+              updateHud();
+              state.dir = -1;
+              nextRound();
+            } else {
+              state.dir = -1;
+            }
+          } else if (state.cursor <= 0) {
+            state.cursor = 0;
+            if (state.isTrap && !state.trapCleared) {
+              state.trapCleared = true;
+              state.combo++;
+              state.maxCombo = Math.max(state.maxCombo, state.combo);
+              state.score += 300;
+              showJudge('回避 +300!!', '#47ff9c');
+              spawnRing(W * 0.5, H * 0.56, '#47ff9c');
+              AudioSys.hit(state.combo, false);
+              updateHud();
+              state.dir = 1;
+              nextRound();
+            } else {
+              state.dir = 1;
+            }
+          }
+        }
+
+        for (let i = state.particles.length - 1; i >= 0; i--) {
+          const p = state.particles[i];
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+          p.vx *= 0.94;
+          p.vy *= 0.94;
+          p.life -= p.decay * dt;
+          if (p.life <= 0) state.particles.splice(i, 1);
+        }
+
+        for (let i = state.rings.length - 1; i >= 0; i--) {
+          const r = state.rings[i];
+          r.r += (r.maxR - r.r) * Math.min(1, dt * 11);
+          r.life -= dt * 2.8;
+          if (r.life <= 0) state.rings.splice(i, 1);
+        }
+
+        for (let i = state.slashTrails.length - 1; i >= 0; i--) {
+          const s = state.slashTrails[i];
+          s.life -= dt * 4.5;
+          if (s.life <= 0) state.slashTrails.splice(i, 1);
+        }
+      }
+
+      function render() {
+        ctx.clearRect(0, 0, W, H);
+        ctx.save();
+
+        if (state.shake > 0.2) {
+          const sx = (Math.random() - 0.5) * state.shake;
+          const sy = (Math.random() - 0.5) * state.shake;
+          ctx.translate(sx, sy);
+        }
+
+        // Dynamic radial speedlines in FEVER mode
+        if (state.fever && state.phase === 'play') {
+          const cx = W * 0.5;
+          const cy = H * 0.56;
+          ctx.save();
+          ctx.strokeStyle = 'rgba(255, 212, 0, 0.14)';
+          ctx.lineWidth = 2;
+          for (let i = 0; i < 18; i++) {
+            const ang = (Math.PI * 2 * i) / 18 + state.time * 1.4;
+            const r1 = 130 + ((state.time * 240 + i * 37) % 120);
+            const r2 = r1 + 110;
+            ctx.beginPath();
+            ctx.moveTo(cx + Math.cos(ang) * r1, cy + Math.sin(ang) * r1);
+            ctx.lineTo(cx + Math.cos(ang) * r2, cy + Math.sin(ang) * r2);
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
+
+        // Main Timing Bar
+        const barW = Math.min(420, W - 64);
+        const barH = 38;
+        const barX = (W - barW) / 2;
+        const barY = H * 0.56 - barH / 2;
+
+        // Track background
+        ctx.fillStyle = '#151a24';
+        ctx.beginPath();
+        ctx.roundRect(barX, barY, barW, barH, 12);
+        ctx.fill();
+
+        // Target zone
+        const zoneW = state.targetWidth * barW;
+        const zoneX = barX + state.targetCenter * barW - zoneW / 2;
+        ctx.fillStyle = state.isTrap ? 'rgba(255, 46, 84, 0.92)' : 'rgba(0, 229, 255, 0.35)';
+        ctx.beginPath();
+        ctx.roundRect(zoneX, barY - 6, zoneW, barH + 12, 8);
+        ctx.fill();
+
+        // Center GOD sliver
+        if (!state.isTrap) {
+          const godW = Math.max(8, zoneW * 0.34);
+          const godX = barX + state.targetCenter * barW - godW / 2;
+          ctx.fillStyle = '#ffd400';
+          ctx.beginPath();
+          ctx.roundRect(godX, barY - 10, godW, barH + 20, 4);
+          ctx.fill();
+        }
+
+        // Moving Laser Cursor
+        const curX = barX + state.cursor * barW;
+        ctx.save();
+        ctx.shadowColor = '#ffffff';
+        ctx.shadowBlur = 18;
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.roundRect(curX - 4, barY - 18, 8, barH + 36, 4);
+        ctx.fill();
+        ctx.restore();
+
+        // Center Blade Emblem above bar
+        ctx.save();
+        const pulse = 1 + Math.sin(state.time * (state.fever ? 14 : 6)) * 0.05;
+        ctx.translate(W * 0.5, H * 0.41);
+        ctx.scale(pulse, pulse);
+        ctx.rotate(Math.PI / 4);
+        ctx.fillStyle = state.isTrap ? '#ff2e54' : (state.fever ? '#ffd400' : '#00e5ff');
+        ctx.fillRect(-20, -20, 40, 40);
+        ctx.fillStyle = '#090b0f';
+        ctx.fillRect(-9, -9, 18, 18);
+        ctx.restore();
+
+        // Slash trails
+        for (const s of state.slashTrails) {
+          ctx.save();
+          ctx.globalAlpha = s.life;
+          ctx.strokeStyle = s.color;
+          ctx.lineWidth = 6 * s.life;
+          ctx.beginPath();
+          ctx.moveTo(s.x - 45, s.y - 75);
+          ctx.lineTo(s.x + 45, s.y + 75);
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        // Expanding rings
+        for (const r of state.rings) {
+          ctx.save();
+          ctx.globalAlpha = Math.max(0, r.life);
+          ctx.strokeStyle = r.color;
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.arc(r.x, r.y, r.r, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        // Particles
+        for (const p of state.particles) {
+          ctx.save();
+          ctx.globalAlpha = Math.max(0, p.life);
+          ctx.fillStyle = p.color;
+          ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+          ctx.restore();
+        }
+
+        // Screen flash
+        if (state.flashAlpha > 0.01) {
+          ctx.save();
+          ctx.globalAlpha = state.flashAlpha;
+          ctx.fillStyle = state.flashColor;
+          ctx.fillRect(0, 0, W, H);
+          ctx.restore();
+        }
+
+        ctx.restore();
+      }
+
+      // Input handling
+      startBtn.addEventListener('click', (e) => { e.stopPropagation(); startGame(); });
+      retryBtn.addEventListener('click', (e) => { e.stopPropagation(); startGame(); });
+      shareBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const text = `【JUST SLASH 99】記録 ${state.score.toLocaleString()}点（最大${state.maxCombo}コンボ / ランク${rankEl.textContent}）！\n99%が3回目でミスる超脳汁ゲームに挑戦👇`;
+        const url = window.location.href.split('?')[0];
+        window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`, '_blank', 'noopener');
+      });
+
+      document.getElementById('appRoot').addEventListener('pointerdown', (e) => {
+        if (e.target.closest('button')) return;
+        if (state.phase === 'play') triggerAction();
+      });
+
+      window.addEventListener('keydown', (e) => {
+        if (e.code === 'Space' || e.code === 'Enter') {
+          e.preventDefault();
+          triggerAction();
+        }
+      });
+
+      // Deterministic hooks for YouTube Shorts capture
+      window.__shortsAPI = {
+        start: () => startGame(),
+        step: (dt) => { stepSimulation(dt); render(); },
+        hit: () => triggerAction(),
+        setRound: (cfg) => nextRound(cfg),
+        getState: () => ({
+          phase: state.phase,
+          score: state.score,
+          combo: state.combo,
+          fever: state.fever,
+          cursor: state.cursor,
+          targetCenter: state.targetCenter,
+          targetWidth: state.targetWidth,
+          isTrap: state.isTrap,
+          lives: state.lives,
+          dir: state.dir
+        })
+      };
+
+      let lastTs = performance.now();
+      function loop(ts) {
+        if (!isShortsMode) {
+          const dt = Math.min(0.05, (ts - lastTs) / 1000);
+          lastTs = ts;
+          stepSimulation(dt);
+          render();
+          requestAnimationFrame(loop);
+        }
+      }
+
+      if (isShortsMode) {
+        document.querySelector('.bottom-hint').style.display = 'none';
+        render();
+      } else {
+        requestAnimationFrame(loop);
+      }
+    })();
+  </script>
+</body>
+</html>

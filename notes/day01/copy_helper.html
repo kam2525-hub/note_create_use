@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Day 01 投稿コピペヘルパー｜note & YouTube Shorts</title>
+  <style>
+    :root {
+      --bg: #0c0f15;
+      --card: #151a23;
+      --text: #f3f6fa;
+      --muted: #93a0b4;
+      --gold: #ffd400;
+      --cyan: #00e5ff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px 16px 60px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Noto Sans JP', system-ui, -apple-system, sans-serif;
+      line-height: 1.65;
+    }
+    .wrap {
+      max-width: 760px;
+      margin: 0 auto;
+    }
+    h1 {
+      font-size: 24px;
+      margin: 0 0 8px;
+      letter-spacing: 0.02em;
+    }
+    .lead {
+      margin: 0 0 24px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .section {
+      background: var(--card);
+      border-radius: 14px;
+      padding: 18px 20px;
+      margin-bottom: 18px;
+    }
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+    .section-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--cyan);
+    }
+    .copy-btn {
+      border: none;
+      border-radius: 8px;
+      padding: 8px 14px;
+      background: var(--gold);
+      color: #0c0f15;
+      font-weight: 800;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .copy-btn.done {
+      background: #47ff9c;
+    }
+    textarea {
+      width: 100%;
+      background: #0b0e13;
+      color: var(--text);
+      border: none;
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-family: inherit;
+      font-size: 14px;
+      line-height: 1.6;
+      resize: vertical;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Day 01 投稿コピペヘルパー（JUST SLASH 99）</h1>
+    <p class="lead">ボタン1つでコピーして、note や YouTube Studio にそのまま貼り付けられます。</p>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">note タイトル</span>
+        <button class="copy-btn" data-target="noteTitle">コピー</button>
+      </div>
+      <textarea id="noteTitle" rows="2" readonly>99%が3回目でミスる!?「0.01秒の脳汁タイミングゲーム」をブラウザだけで作ってみた【無料プレイ可】</textarea>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">note 本文</span>
+        <button class="copy-btn" data-target="noteBody">コピー</button>
+      </div>
+      <textarea id="noteBody" rows="16" readonly>「あと1ミリだったのに…！」
+
+そう言いながら、気づいたら10回連続でリトライしてしまう。
+そんな「脳汁特化型」の超シンプル・タイミングゲームを1本つくりました！
+
+スマホでもPCでも、インストール不要・ブラウザだけで今すぐ無料で遊べます👇
+
+▶ ゲームを遊ぶ（URL）
+https://kam2525-hub.github.io/note_create_use/games/day01-just-slash/
+
+---
+
+■ ルールは1秒でわかる「2つだけ」
+
+1. 左右に爆速で走る光のバーが、中心の GOLD ゾーン に重なった瞬間にタップ（PCは Space キー）！
+2. 5連続成功で「FEVER TIME」に突入！スコア2倍＆BGMがギアアップします🔥
+
+……ただし、たまに「赤いTRAPゾーン」が出現します。
+赤いときにうっかり押してしまうと即ミス！見送ってスルーできればボーナス点です。
+
+---
+
+■ なぜ「気持ちいい」のか？（こだわりポイント）
+
+短い時間でも思わずハマるように、3つの仕掛けを入れています。
+
+・音階が上がるヒット音：コンボが繋がるほど「ド→レ→ミ→ファ→ソ…」と音が上がり、脳が勝手に気持ちよくなります（右上の「BGM ON」で聴きながら遊ぶのがおすすめです）
+・0.03秒のヒットストップ＋画面シェイク：ど真ん中の「GOD」判定が決まると、一瞬画面が止まって衝撃波とパーティクルが弾けます
+・0.1秒でリスタート：負けた瞬間にSpaceキー／ボタン1回で即やり直し。ストレスゼロで「あと1回！」が止まりません
+
+---
+
+■ あなたは何点いける？
+
+・2,200点以上：Aランク（超反応スナイパー）
+・4,500点以上：Sランク（脳汁ドバドバの覇者）
+・8,000点以上：S++ランク（人間卒業・0.01秒の神）
+
+まずは Sランク（4,500点） を目指してみてください！
+最高記録が出たら、ぜひコメント欄や X でスコアを教えてください👇</textarea>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">YouTube Shorts タイトル</span>
+        <button class="copy-btn" data-target="ytTitle">コピー</button>
+      </div>
+      <textarea id="ytTitle" rows="2" readonly>99%が3回目でミスる鬼ゲー作ったｗ【無料ブラウザゲーム】 #Shorts #ゲーム制作</textarea>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">YouTube Shorts 説明文</span>
+        <button class="copy-btn" data-target="ytDesc">コピー</button>
+      </div>
+      <textarea id="ytDesc" rows="9" readonly>スマホ・PCで今すぐ無料で遊べます👇
+https://kam2525-hub.github.io/note_create_use/games/day01-just-slash/
+
+5連続成功でBGMが加速する「FEVER TIME」に突入🔥
+あなたは何点いける？記録をコメント欄で教えてください！
+
+【1日1アプリ制作 Day 01】JUST SLASH 99
+BGM・効果音つき（画面右上のBGM ONでプレイ推奨）
+
+#Shorts #個人開発 #ミニゲーム #音ゲー #無料ゲーム #暇つぶし</textarea>
+    </div>
+  </div>
+
+  <script>
+    document.querySelectorAll('.copy-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const el = document.getElementById(btn.dataset.target);
+        await navigator.clipboard.writeText(el.value);
+        const orig = btn.textContent;
+        btn.textContent = 'コピー完了！';
+        btn.classList.add('done');
+        setTimeout(() => {
+          btn.textContent = orig;
+          btn.classList.remove('done');
+        }, 1400);
+      });
+    });
+  </script>
+</body>
+</html>

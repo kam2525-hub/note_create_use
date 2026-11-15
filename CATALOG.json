@@ -1,0 +1,17 @@
+{
+  "policy": "Before creating any new game or web tool, check this catalog and never duplicate an existing core_mechanic or title.",
+  "items": [
+    {
+      "day": 1,
+      "date": "2026-11-15",
+      "slug": "day01-just-slash",
+      "title": "JUST SLASH 99（神速0.01秒ジャスト斬り）",
+      "type": "game",
+      "genre": "タイミングアクション / 反射神経",
+      "core_mechanic": "左右に往復するレーザーバーが中央ゾーンに重なった瞬間に1タップ（5連続FEVER・赤TRAP回避あり）",
+      "game_path": "games/day01-just-slash/index.html",
+      "note_path": "notes/day01/note_draft.md",
+      "shorts_script": "shorts/day01/generate_shorts.py"
+    }
+  ]
+}
