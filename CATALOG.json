@@ -12,6 +12,18 @@
       "game_path": "games/day01-just-slash/index.html",
       "note_path": "notes/day01/note_draft.md",
       "shorts_script": "shorts/day01/generate_shorts.py"
+    },
+    {
+      "day": 2,
+      "date": "2026-11-16",
+      "slug": "day02-angle-breaker",
+      "title": "ANGLE BREAKER 99（無限反射×3択スキルビルド）",
+      "type": "game",
+      "genre": "ローグライト反射ブロック崩し",
+      "core_mechanic": "角度をなぞって発射する物理反射ショット＋BOMB/PRISM連鎖＋ウェーブ毎の3択スキル強化ビルド",
+      "game_path": "games/day02-angle-breaker/index.html",
+      "note_path": "notes/day02/note_draft.md",
+      "shorts_script": "shorts/day02/generate_shorts.py"
     }
   ]
 }

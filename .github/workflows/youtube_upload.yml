@@ -52,7 +52,7 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          pip install pillow numpy google-api-python-client google-auth-oauthlib
+          pip install pillow numpy edge-tts gTTS google-api-python-client google-auth-oauthlib
 
       - name: Render Short MP4 for Day ${{ inputs.day }}
         run: |
