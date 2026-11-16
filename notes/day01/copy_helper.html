@@ -107,12 +107,26 @@
       display: block;
       margin-top: 8px;
     }
+    .thumb-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .copy-btn.secondary {
+      background: #1f2735;
+      color: var(--text);
+    }
+    .hint-small {
+      margin: 8px 0 0;
+      font-size: 12px;
+      color: var(--muted);
+    }
   </style>
 </head>
 <body>
   <div class="wrap">
     <h1>Day 01 投稿ヘルパー（JUST SLASH 99）</h1>
-    <p class="lead">X はボタン1タップで入力済み投稿画面が開きます。note はコピーして貼り付けるだけです。</p>
+    <p class="lead">ゲームURLにサムネ画像カード（OGP）を埋め込み済みなので、X はリンクを貼るだけで画像付きカードになります。note に見出し画像を貼るときも下の「画像をコピー」→ note でペーストが使えます。</p>
 
     <div class="quick-bar">
       <a class="action-link" id="xIntentBtn" href="#" target="_blank" rel="noopener">X（Twitter）の投稿画面を開く</a>
@@ -138,10 +152,15 @@ https://kam2525-hub.github.io/note_create_use/games/day01-just-slash/
 
     <div class="section">
       <div class="section-head">
-        <span class="section-title">note 見出し画像（長押しで保存）</span>
-        <a class="copy-btn" style="text-decoration:none;" href="../../shorts/day01/output/note_thumbnail.png" download="day01_note_thumbnail.png">保存</a>
+        <span class="section-title">note 見出し画像（1タップコピー / 写真保存）</span>
+        <div class="thumb-actions">
+          <button class="copy-btn" id="copyImageBtn" type="button">画像をコピー</button>
+          <button class="copy-btn secondary" id="shareImageBtn" type="button">共有 / 写真保存</button>
+          <a class="copy-btn secondary" style="text-decoration:none;" href="../../shorts/day01/output/note_thumbnail.png" download="day01_note_thumbnail.png">保存</a>
+        </div>
       </div>
-      <img class="thumb-preview" src="../../shorts/day01/output/note_thumbnail.png" alt="note 見出し画像" />
+      <img class="thumb-preview" id="thumbImg" src="../../shorts/day01/output/note_thumbnail.png" alt="note 見出し画像" />
+      <p class="hint-small">iPhoneでは「画像をコピー」→ note 本文や見出しで「ペースト」、または「共有 / 写真保存」→「画像を保存」が最速です。</p>
     </div>
 
     <div class="section">
@@ -230,7 +249,62 @@ BGM・効果音つき（画面右上のBGM ONでプレイ推奨）
     document.getElementById('xIntentBtn').href =
       'https://twitter.com/intent/tweet?text=' + encodeURIComponent(xTextEl.value);
 
-    document.querySelectorAll('.copy-btn').forEach((btn) => {
+    const thumbUrl = new URL('../../shorts/day01/output/note_thumbnail.png', window.location.href).href;
+    let cachedBlobPromise = null;
+    function getThumbBlob() {
+      if (!cachedBlobPromise) {
+        cachedBlobPromise = fetch(thumbUrl).then((res) => {
+          if (!res.ok) throw new Error('Image fetch failed');
+          return res.blob();
+        });
+      }
+      return cachedBlobPromise;
+    }
+    // Pre-warm blob so iOS Safari tap keeps user-gesture context cleanly
+    getThumbBlob().catch(() => {});
+
+    const copyImageBtn = document.getElementById('copyImageBtn');
+    copyImageBtn.addEventListener('click', async () => {
+      const orig = copyImageBtn.textContent;
+      try {
+        if (typeof ClipboardItem === 'undefined' || !navigator.clipboard || !navigator.clipboard.write) {
+          throw new Error('ClipboardItem unsupported');
+        }
+        await navigator.clipboard.write([
+          new ClipboardItem({ 'image/png': getThumbBlob() })
+        ]);
+        copyImageBtn.textContent = '画像コピー完了！';
+        copyImageBtn.classList.add('done');
+        setTimeout(() => {
+          copyImageBtn.textContent = orig;
+          copyImageBtn.classList.remove('done');
+        }, 1600);
+      } catch (e) {
+        copyImageBtn.textContent = '非対応時は「共有」へ';
+        setTimeout(() => { copyImageBtn.textContent = orig; }, 1800);
+      }
+    });
+
+    const shareImageBtn = document.getElementById('shareImageBtn');
+    shareImageBtn.addEventListener('click', async () => {
+      const orig = shareImageBtn.textContent;
+      try {
+        const blob = await getThumbBlob();
+        const file = new File([blob], 'day01_note_thumbnail.png', { type: 'image/png' });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: 'Day 01 見出し画像' });
+        } else {
+          window.open(thumbUrl, '_blank', 'noopener');
+        }
+      } catch (e) {
+        if (e && e.name !== 'AbortError') {
+          shareImageBtn.textContent = '画像を長押しで保存';
+          setTimeout(() => { shareImageBtn.textContent = orig; }, 1800);
+        }
+      }
+    });
+
+    document.querySelectorAll('.copy-btn[data-target]').forEach((btn) => {
       btn.addEventListener('click', async () => {
         const el = document.getElementById(btn.dataset.target);
         await navigator.clipboard.writeText(el.value);
