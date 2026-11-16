@@ -18,6 +18,7 @@ import shutil
 import socket
 import struct
 import subprocess
+import tempfile
 import threading
 import time
 import urllib.request
@@ -444,24 +445,32 @@ def main():
     srv, port = start_static_server(GAME_DIR)
     debug_port = 9231
     browser_bin = find_browser()
+    profile_dir = tempfile.mkdtemp(prefix="cdp_profile_")
     chrome_proc = subprocess.Popen(
         [
             browser_bin,
             "--headless=new",
             "--no-sandbox",
             "--disable-gpu",
+            "--disable-dev-shm-usage",
+            "--no-first-run",
+            "--no-default-browser-check",
+            "--remote-allow-origins=*",
+            f"--user-data-dir={profile_dir}",
             f"--remote-debugging-port={debug_port}",
             "--window-size=540,960",
             "about:blank",
         ],
         stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
     )
 
     cdp = None
     try:
         ws_url = None
-        for _ in range(40):
+        for _ in range(60):
+            if chrome_proc.poll() is not None:
+                break
             try:
                 with urllib.request.urlopen(f"http://127.0.0.1:{debug_port}/json/list") as resp:
                     tabs = json.loads(resp.read().decode())
@@ -472,9 +481,11 @@ def main():
                 if ws_url:
                     break
             except Exception:
-                time.sleep(0.15)
+                time.sleep(0.2)
         if not ws_url:
-            raise RuntimeError("Failed to connect to headless Chromium CDP")
+            chrome_proc.terminate()
+            err_txt = chrome_proc.stderr.read().decode(errors="replace") if chrome_proc.stderr else ""
+            raise RuntimeError(f"Failed to connect to headless Chromium CDP ({browser_bin}): {err_txt[:800]}")
 
         cdp = SimpleCDP(ws_url)
         cdp.call("Emulation.setDeviceMetricsOverride", {
@@ -638,6 +649,11 @@ def main():
         if cdp:
             cdp.close()
         chrome_proc.terminate()
+        try:
+            chrome_proc.wait(timeout=5)
+        except Exception:
+            chrome_proc.kill()
+        shutil.rmtree(profile_dir, ignore_errors=True)
         srv.shutdown()
 
 
