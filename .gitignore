@@ -6,3 +6,5 @@ scripts/youtube_token.json
 __pycache__/
 *.pyc
 .DS_Store
+public/.remote/
+node_modules/

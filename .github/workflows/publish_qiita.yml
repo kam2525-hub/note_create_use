@@ -1,0 +1,47 @@
+name: Publish Qiita Articles
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'public/**'
+      - '.github/workflows/publish_qiita.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish_articles:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check QIITA_TOKEN secret
+        id: check_token
+        env:
+          QIITA_TOKEN: ${{ secrets.QIITA_TOKEN }}
+        run: |
+          if [ -n "$QIITA_TOKEN" ]; then
+            echo "has_token=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_token=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::QIITA_TOKEN secret is not set yet. Skipping Qiita publish."
+          fi
+
+      - name: Checkout repository
+        if: steps.check_token.outputs.has_token == 'true'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Publish articles to Qiita
+        if: steps.check_token.outputs.has_token == 'true'
+        uses: increments/qiita-cli/actions/publish@v1
+        with:
+          qiita-token: ${{ secrets.QIITA_TOKEN }}
+          root: "."
