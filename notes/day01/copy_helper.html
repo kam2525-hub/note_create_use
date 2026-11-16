@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Day 01 投稿コピペヘルパー｜note & YouTube Shorts</title>
+  <title>Day 01 投稿コピペ＆下書きヘルパー｜X・note・YouTube</title>
   <style>
     :root {
       --bg: #0c0f15;
@@ -12,6 +12,7 @@
       --muted: #93a0b4;
       --gold: #ffd400;
       --cyan: #00e5ff;
+      --crimson: #ff2e54;
     }
     * { box-sizing: border-box; }
     body {
@@ -27,14 +28,35 @@
       margin: 0 auto;
     }
     h1 {
-      font-size: 24px;
+      font-size: 22px;
       margin: 0 0 8px;
       letter-spacing: 0.02em;
     }
     .lead {
-      margin: 0 0 24px;
+      margin: 0 0 22px;
       color: var(--muted);
       font-size: 14px;
+    }
+    .quick-bar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 12px;
+      margin-bottom: 22px;
+    }
+    .action-link {
+      display: block;
+      text-align: center;
+      text-decoration: none;
+      border-radius: 12px;
+      padding: 14px 16px;
+      font-weight: 900;
+      font-size: 14px;
+      background: var(--gold);
+      color: #0c0f15;
+    }
+    .action-link.secondary {
+      background: #1f2735;
+      color: var(--text);
     }
     .section {
       background: var(--card);
@@ -79,12 +101,48 @@
       line-height: 1.6;
       resize: vertical;
     }
+    .thumb-preview {
+      width: 100%;
+      border-radius: 10px;
+      display: block;
+      margin-top: 8px;
+    }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>Day 01 投稿コピペヘルパー（JUST SLASH 99）</h1>
-    <p class="lead">ボタン1つでコピーして、note や YouTube Studio にそのまま貼り付けられます。</p>
+    <h1>Day 01 投稿ヘルパー（JUST SLASH 99）</h1>
+    <p class="lead">X はボタン1タップで入力済み投稿画面が開きます。note はコピーして貼り付けるだけです。</p>
+
+    <div class="quick-bar">
+      <a class="action-link" id="xIntentBtn" href="#" target="_blank" rel="noopener">X（Twitter）の投稿画面を開く</a>
+      <a class="action-link secondary" href="https://note.com/notes/new" target="_blank" rel="noopener">note 新規記事作成を開く</a>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">X（Twitter）投稿テキスト</span>
+        <button class="copy-btn" data-target="xText">コピー</button>
+      </div>
+      <textarea id="xText" rows="6" readonly>【1日1アプリ Day1】
+99%が3回目でミスる超脳汁タイミングゲーム『JUST SLASH 99』作りました🔥
+
+✅ タップ1回で即プレイ（無料・インストール不要）
+✅ 5連続成功でBGMが加速するFEVER突入
+
+あなたは何点いける？👇
+https://kam2525-hub.github.io/note_create_use/games/day01-just-slash/
+
+#個人開発 #ミニゲーム #無料ゲーム</textarea>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">note 見出し画像（長押しで保存）</span>
+        <a class="copy-btn" style="text-decoration:none;" href="../../shorts/day01/output/note_thumbnail.png" download="day01_note_thumbnail.png">保存</a>
+      </div>
+      <img class="thumb-preview" src="../../shorts/day01/output/note_thumbnail.png" alt="note 見出し画像" />
+    </div>
 
     <div class="section">
       <div class="section-head">
@@ -168,6 +226,10 @@ BGM・効果音つき（画面右上のBGM ONでプレイ推奨）
   </div>
 
   <script>
+    const xTextEl = document.getElementById('xText');
+    document.getElementById('xIntentBtn').href =
+      'https://twitter.com/intent/tweet?text=' + encodeURIComponent(xTextEl.value);
+
     document.querySelectorAll('.copy-btn').forEach((btn) => {
       btn.addEventListener('click', async () => {
         const el = document.getElementById(btn.dataset.target);
