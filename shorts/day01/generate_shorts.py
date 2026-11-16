@@ -35,7 +35,10 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def find_browser() -> str:
-    for name in ("chromium", "google-chrome", "chromium-browser"):
+    env_bin = os.environ.get("CHROME_BIN", "").strip()
+    if env_bin and shutil.which(env_bin):
+        return env_bin
+    for name in ("google-chrome", "chromium", "chromium-browser"):
         p = shutil.which(name)
         if p:
             return p
@@ -446,6 +449,10 @@ def main():
     debug_port = 9231
     browser_bin = find_browser()
     profile_dir = tempfile.mkdtemp(prefix="cdp_profile_")
+    chrome_log_path = Path(profile_dir) / "chrome.log"
+    chrome_log_fh = open(chrome_log_path, "wb")
+    chrome_env = os.environ.copy()
+    chrome_env.pop("DBUS_SESSION_BUS_ADDRESS", None)
     chrome_proc = subprocess.Popen(
         [
             browser_bin,
@@ -453,6 +460,8 @@ def main():
             "--no-sandbox",
             "--disable-gpu",
             "--disable-dev-shm-usage",
+            "--disable-background-networking",
+            "--disable-sync",
             "--no-first-run",
             "--no-default-browser-check",
             "--remote-allow-origins=*",
@@ -462,17 +471,18 @@ def main():
             "about:blank",
         ],
         stdout=subprocess.DEVNULL,
-        stderr=subprocess.PIPE,
+        stderr=chrome_log_fh,
+        env=chrome_env,
     )
 
     cdp = None
     try:
         ws_url = None
-        for _ in range(60):
+        for _ in range(80):
             if chrome_proc.poll() is not None:
                 break
             try:
-                with urllib.request.urlopen(f"http://127.0.0.1:{debug_port}/json/list") as resp:
+                with urllib.request.urlopen(f"http://127.0.0.1:{debug_port}/json/list", timeout=1) as resp:
                     tabs = json.loads(resp.read().decode())
                     for tab in tabs:
                         if tab.get("type") == "page":
@@ -484,7 +494,8 @@ def main():
                 time.sleep(0.2)
         if not ws_url:
             chrome_proc.terminate()
-            err_txt = chrome_proc.stderr.read().decode(errors="replace") if chrome_proc.stderr else ""
+            chrome_log_fh.flush()
+            err_txt = chrome_log_path.read_text(errors="replace") if chrome_log_path.exists() else ""
             raise RuntimeError(f"Failed to connect to headless Chromium CDP ({browser_bin}): {err_txt[:800]}")
 
         cdp = SimpleCDP(ws_url)
@@ -653,6 +664,7 @@ def main():
             chrome_proc.wait(timeout=5)
         except Exception:
             chrome_proc.kill()
+        chrome_log_fh.close()
         shutil.rmtree(profile_dir, ignore_errors=True)
         srv.shutdown()
 
