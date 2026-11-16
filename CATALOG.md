@@ -5,3 +5,4 @@
 | Day | 作成日 | 種別 | タイトル | ジャンル | コアギミック（重複禁止） | ファイル |
 | :-: | :--- | :--- | :--- | :--- | :--- | :--- |
 | 01 | 2026-11-15 | ゲーム | **JUST SLASH 99（神速0.01秒ジャスト斬り）** | タイミングアクション | 往復レーザーが光るゾーンに重なった瞬間に1タップ＋5連続FEVER＋赤TRAP回避 | [games/day01-just-slash/](games/day01-just-slash/index.html) |
+| 02 | 2026-11-16 | ゲーム | **ANGLE BREAKER 99（無限反射×3択スキルビルド）** | ローグライト反射ブロック崩し | 角度ショット反射＋BOMB/PRISM連鎖＋毎ウェーブの3択スキル強化 | [games/day02-angle-breaker/](games/day02-angle-breaker/index.html) |

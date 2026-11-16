@@ -9,6 +9,12 @@
 ## 制作ログ（重複防止カタログ）
 - 一覧表: [CATALOG.md](CATALOG.md) / 機械可読データ: [CATALOG.json](CATALOG.json)
 
+## Day 02: ANGLE BREAKER 99（無限反射×3択スキルビルド）
+- ゲーム本体: [games/day02-angle-breaker/index.html](games/day02-angle-breaker/index.html)
+- 1クリックコピペヘルパー: [notes/day02/copy_helper.html](notes/day02/copy_helper.html)
+- note 記事原稿: [notes/day02/note_draft.md](notes/day02/note_draft.md)
+- ショート動画生成スクリプト（60fps＋音声ナレーション）: [shorts/day02/generate_shorts.py](shorts/day02/generate_shorts.py)
+
 ## Day 01: JUST SLASH 99（神速0.01秒ジャスト斬り）
 - ゲーム本体: [games/day01-just-slash/index.html](games/day01-just-slash/index.html)
 - 1クリックコピペヘルパー: [notes/day01/copy_helper.html](notes/day01/copy_helper.html)
