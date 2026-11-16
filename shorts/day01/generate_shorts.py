@@ -14,6 +14,7 @@ import json
 import math
 import os
 import random
+import shutil
 import socket
 import struct
 import subprocess
@@ -31,17 +32,37 @@ GAME_DIR = ROOT / "games" / "day01-just-slash"
 OUT_DIR = ROOT / "shorts" / "day01" / "output"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
-FONT_BOLD = "/usr/share/fonts/opentype/noto/NotoSerifCJK-Bold.ttc"
-FONT_SANS = "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"
-# Prefer Sans CJK if available in system; fallback safely
-for cand in [
-    "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
-    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-    "/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc",
-]:
-    if os.path.exists(cand):
-        FONT_SANS = cand
-        break
+
+def find_browser() -> str:
+    for name in ("chromium", "google-chrome", "chromium-browser"):
+        p = shutil.which(name)
+        if p:
+            return p
+    raise RuntimeError("No Chromium or Google Chrome binary found on PATH")
+
+
+def find_jp_font() -> str:
+    candidates = [
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc",
+        "/usr/share/fonts/noto-cjk/NotoSansCJK-Bold.ttc",
+    ]
+    for cand in candidates:
+        if os.path.exists(cand):
+            return cand
+    try:
+        out = subprocess.check_output(
+            ["fc-match", "-f", "%{file}", "Noto Sans CJK JP:bold"], text=True
+        ).strip()
+        if out and os.path.exists(out):
+            return out
+    except Exception:
+        pass
+    raise RuntimeError("Japanese Noto Sans CJK font not found")
+
+
+FONT_SANS = find_jp_font()
 
 
 class SimpleCDP:
