@@ -9,6 +9,12 @@
 ## 制作ログ（重複防止カタログ）
 - 一覧表: [CATALOG.md](CATALOG.md) / 機械可読データ: [CATALOG.json](CATALOG.json)
 
+## Day 03: BLINK SLASH 99（時間停止ワープ斬り×刀スタイル解放）
+- ゲーム本体: [games/day03-blink-slash/index.html](games/day03-blink-slash/index.html)
+- 1クリックコピペヘルパー: [notes/day03/copy_helper.html](notes/day03/copy_helper.html)
+- note 記事原稿: [notes/day03/note_draft.md](notes/day03/note_draft.md)
+- ショート動画生成スクリプト（60fps＋音声ナレーション）: [shorts/day03/generate_shorts.py](shorts/day03/generate_shorts.py)
+
 ## Day 02: ANGLE BREAKER 99（無限反射×3択スキルビルド）
 - ゲーム本体: [games/day02-angle-breaker/index.html](games/day02-angle-breaker/index.html)
 - 1クリックコピペヘルパー: [notes/day02/copy_helper.html](notes/day02/copy_helper.html)

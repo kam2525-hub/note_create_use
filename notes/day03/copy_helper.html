@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Day 03 投稿ヘルパー｜BLINK SLASH 99</title>
+  <style>
+    :root {
+      --bg: #080b11;
+      --card: #121824;
+      --text: #f5f7fb;
+      --muted: #8b95a7;
+      --gold: #ffd400;
+      --cyan: #00e5ff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px 16px 60px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
+      line-height: 1.65;
+    }
+    .wrap { max-width: 760px; margin: 0 auto; }
+    h1 { font-size: 22px; margin: 0 0 8px; }
+    .lead { margin: 0 0 20px; color: var(--muted); font-size: 14px; }
+    .quick-bar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 12px;
+      margin-bottom: 22px;
+    }
+    .action-link {
+      display: block;
+      text-align: center;
+      text-decoration: none;
+      border-radius: 12px;
+      padding: 14px 16px;
+      font-weight: 900;
+      font-size: 14px;
+      background: var(--gold);
+      color: #0c0f15;
+    }
+    .action-link.secondary { background: #1f2735; color: var(--text); }
+    .section {
+      background: var(--card);
+      border-radius: 14px;
+      padding: 18px 20px;
+      margin-bottom: 18px;
+    }
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+    .section-title { font-size: 15px; font-weight: 700; color: var(--cyan); }
+    .thumb-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .copy-btn {
+      border: none;
+      border-radius: 8px;
+      padding: 8px 14px;
+      background: var(--gold);
+      color: #0c0f15;
+      font-weight: 800;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .copy-btn.secondary { background: #1f2735; color: var(--text); }
+    .copy-btn.done { background: #47ff9c; }
+    textarea {
+      width: 100%;
+      background: #0b0e13;
+      color: var(--text);
+      border: none;
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-family: inherit;
+      font-size: 14px;
+      line-height: 1.6;
+      resize: vertical;
+    }
+    .thumb-preview { width: 100%; border-radius: 10px; display: block; margin-top: 8px; }
+    .hint-small { margin: 8px 0 0; font-size: 12px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Day 03 投稿ヘルパー（ゲーム3日目：BLINK SLASH 99）</h1>
+    <p class="lead">ゲームURLに「ゲーム3日目」サムネ画像カード（OGP）を埋め込み済み。X も note もURLを貼るだけで画像カードになります。</p>
+
+    <div class="quick-bar">
+      <a class="action-link" id="xIntentBtn" href="#" target="_blank" rel="noopener">X（Twitter）の投稿画面を開く</a>
+      <a class="action-link secondary" href="https://note.com/notes/new" target="_blank" rel="noopener">note 新規記事作成を開く</a>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">X（Twitter）投稿テキスト</span>
+        <button class="copy-btn" data-target="xText">コピー</button>
+      </div>
+      <textarea id="xText" rows="7" readonly>【100日後にバズるゲームを作る男｜3日目】
+指を置くと時間が止まり、離すと瞬間ワープ斬り！『BLINK SLASH 99』を作りました⚔
+
+✅ 見切り回避＆連続ワープで無双
+✅ 4種の刀スタイル解放・チップ強化・実績12種のやり込み
+
+何Waveまで生き残れる？👇
+https://kam2525-hub.github.io/note_create_use/games/day03-blink-slash/
+
+#100日後にバズるゲームを作る男 #個人開発 #ゲーム制作</textarea>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">note 見出し画像（ゲーム3日目入り）</span>
+        <div class="thumb-actions">
+          <button class="copy-btn" id="copyImageBtn" type="button">画像をコピー</button>
+          <button class="copy-btn secondary" id="shareImageBtn" type="button">共有 / 写真保存</button>
+          <a class="copy-btn secondary" style="text-decoration:none;" href="../../shorts/day03/output/note_thumbnail.png" download="day03_note_thumbnail.png">保存</a>
+        </div>
+      </div>
+      <img class="thumb-preview" src="../../shorts/day03/output/note_thumbnail.png" alt="ゲーム3日目 サムネイル" />
+      <p class="hint-small">iPhoneでは「画像をコピー」→ note でペースト、または「共有 / 写真保存」→「画像を保存」が最速です。</p>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">note タイトル</span>
+        <button class="copy-btn" data-target="noteTitle">コピー</button>
+      </div>
+      <textarea id="noteTitle" rows="2" readonly>【ゲーム3日目】ホールドで時間停止→離してワープ斬り！刀スタイル解放＆実績やり込みアクション『BLINK SLASH 99』</textarea>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">note 本文</span>
+        <button class="copy-btn" data-target="noteBody">コピー</button>
+      </div>
+      <textarea id="noteBody" rows="16" readonly>100日後にバズるゲームを作る男、3日目です。
+
+3日目の今日は、「1本の指で時間が止まり、離した瞬間に一閃で切り伏せる気持ちよさ」と「何度も周回したくなるやり込み要素」を両立させた時間停止ワープ斬りアクション『BLINK SLASH 99』を作りました！
+
+スマホでもPCでも、インストール不要・ブラウザだけで今すぐ無料で遊べます👇
+
+https://kam2525-hub.github.io/note_create_use/games/day03-blink-slash/
+
+---
+
+■ 遊び方は「止めて、狙って、離す」だけ
+
+1. 画面をホールド（長押し）している間だけ時間が超スローに！
+2. ドラッグで進路を決め、指を離すと瞬間ワープ斬りが発動！
+3. 敵を斬ればゲージが即回復するので、着地せずに連続ワープ斬りで無双できます。
+
+---
+
+■ 3日目のこだわり（やり込み要素がガッツリあります）
+
+Day 02（3択スキル）とは別軸の、「プレイヤースキル上達＋育成＋実績コレクション」を詰め込みました。
+
+・4種類の「刀スタイル」をアンロック：
+  蒼閃 AZURE（バランス型）／連牙 TWIN FANG（分身二段追撃）／雷電 THUNDER（盾貫通の連鎖落雷）／修羅 SHURA（HP1背水＆スコア2.5倍）
+・上達すると気持ちいい「見切り（JUST DODGE）」：
+  敵のレーザーや突撃の直撃スレスレでワープすると時間停止＋無敵カウンターが発動！
+・3種のチップ強化（Lv.1〜5）＆実績12個：
+  稼いだ CORE で時間停止延長や斬撃幅UPを永続強化でき、12個の実績と5Wave毎のBOSS戦に挑戦できます。
+
+---
+
+■ 目指せ「RANK S++（25,000点）」＆「修羅スタイルでWave 5突破」
+
+まずは Wave 5のBOSS撃破 と 2つ目の刀スタイル解放 を目指して遊んでみてください！
+到達したWaveや解放した実績は、ぜひコメント欄や X で教えてください👇</textarea>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">YouTube Shorts タイトル</span>
+        <button class="copy-btn" data-target="ytTitle">コピー</button>
+      </div>
+      <textarea id="ytTitle" rows="2" readonly>【3日目】時間停止ワープ斬り×刀スタイル解放のやり込みアクション作った【100日後にバズるゲームを作る男】 #Shorts #ゲーム制作 #個人開発</textarea>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">YouTube Shorts 説明文</span>
+        <button class="copy-btn" data-target="ytDesc">コピー</button>
+      </div>
+      <textarea id="ytDesc" rows="11" readonly>スマホ・PCで今すぐ無料で遊べます▼
+https://kam2525-hub.github.io/note_create_use/games/day03-blink-slash/
+
+100日後にバズるゲームを作る男【ゲーム3日目】
+『BLINK SLASH 99』
+
+指を置くと時間が超スローに！狙って離すだけで瞬間ワープ斬り！
+「見切り回避」「4種の刀スタイル解放」「チップ強化」「実績12種」「BOSS戦」まで詰め込んだやり込みアクションです。
+あなたは何Waveまで生き残れる？記録をコメント欄で教えてください！
+
+#Shorts #YouTubeShorts #100日後にバズるゲームを作る男 #ゲーム3日目 #個人開発 #ゲーム制作 #インディーゲーム #AIゲーム制作 #アクションゲーム #時間停止 #ブラウザゲーム #無料ゲーム #スマホゲーム #ミニゲーム #神ゲー #暇つぶし #暇つぶしゲーム #ゲーム紹介 #indiegame</textarea>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">YouTube タグ（カンマ区切り・手動貼付用）</span>
+        <button class="copy-btn" data-target="ytTags">コピー</button>
+      </div>
+      <textarea id="ytTags" rows="3" readonly>Shorts,YouTubeShorts,100日後にバズるゲームを作る男,ゲーム3日目,BLINK SLASH 99,個人開発,ゲーム制作,インディーゲーム,AIゲーム制作,AI開発,プログラミング,アクションゲーム,時間停止,ワープアクション,やり込みゲーム,ブラウザゲーム,無料ゲーム,スマホゲーム,ミニゲーム,暇つぶし,暇つぶしゲーム,神ゲー,ゲーム実況,おすすめゲーム,HTML5ゲーム,JavaScript,indiegame</textarea>
+    </div>
+  </div>
+
+  <script>
+    const xTextEl = document.getElementById('xText');
+    document.getElementById('xIntentBtn').href =
+      'https://twitter.com/intent/tweet?text=' + encodeURIComponent(xTextEl.value);
+
+    const thumbUrl = new URL('../../shorts/day03/output/note_thumbnail.png', window.location.href).href;
+    let cachedBlobPromise = null;
+    function getThumbBlob() {
+      if (!cachedBlobPromise) {
+        cachedBlobPromise = fetch(thumbUrl).then((res) => {
+          if (!res.ok) throw new Error('Image fetch failed');
+          return res.blob();
+        });
+      }
+      return cachedBlobPromise;
+    }
+    getThumbBlob().catch(() => {});
+
+    const copyImageBtn = document.getElementById('copyImageBtn');
+    copyImageBtn.addEventListener('click', async () => {
+      const orig = copyImageBtn.textContent;
+      try {
+        if (typeof ClipboardItem === 'undefined' || !navigator.clipboard || !navigator.clipboard.write) {
+          throw new Error('ClipboardItem unsupported');
+        }
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': getThumbBlob() })]);
+        copyImageBtn.textContent = '画像コピー完了！';
+        copyImageBtn.classList.add('done');
+        setTimeout(() => {
+          copyImageBtn.textContent = orig;
+          copyImageBtn.classList.remove('done');
+        }, 1600);
+      } catch (e) {
+        copyImageBtn.textContent = '非対応時は「共有」へ';
+        setTimeout(() => { copyImageBtn.textContent = orig; }, 1800);
+      }
+    });
+
+    const shareImageBtn = document.getElementById('shareImageBtn');
+    shareImageBtn.addEventListener('click', async () => {
+      const orig = shareImageBtn.textContent;
+      try {
+        const blob = await getThumbBlob();
+        const file = new File([blob], 'day03_note_thumbnail.png', { type: 'image/png' });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: 'ゲーム3日目 サムネイル' });
+        } else {
+          window.open(thumbUrl, '_blank', 'noopener');
+        }
+      } catch (e) {
+        if (e && e.name !== 'AbortError') {
+          shareImageBtn.textContent = '画像を長押しで保存';
+          setTimeout(() => { shareImageBtn.textContent = orig; }, 1800);
+        }
+      }
+    });
+
+    document.querySelectorAll('.copy-btn[data-target]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const el = document.getElementById(btn.dataset.target);
+        await navigator.clipboard.writeText(el.value);
+        const orig = btn.textContent;
+        btn.textContent = 'コピー完了！';
+        btn.classList.add('done');
+        setTimeout(() => {
+          btn.textContent = orig;
+          btn.classList.remove('done');
+        }, 1400);
+      });
+    });
+  </script>
+</body>
+</html>

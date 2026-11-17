@@ -24,6 +24,18 @@
       "game_path": "games/day02-angle-breaker/index.html",
       "note_path": "notes/day02/note_draft.md",
       "shorts_script": "shorts/day02/generate_shorts.py"
+    },
+    {
+      "day": 3,
+      "date": "2026-11-17",
+      "slug": "day03-blink-slash",
+      "title": "BLINK SLASH 99（時間停止ワープ斬り×刀スタイル解放）",
+      "type": "game",
+      "genre": "時間停止ワープ斬撃アクション",
+      "core_mechanic": "ホールドで時間停止→ドラッグして離すと瞬間ワープ斬り＋見切り回避＋4種刀スタイル解放・チップ強化・実績12種",
+      "game_path": "games/day03-blink-slash/index.html",
+      "note_path": "notes/day03/note_draft.md",
+      "shorts_script": "shorts/day03/generate_shorts.py"
     }
   ]
 }
