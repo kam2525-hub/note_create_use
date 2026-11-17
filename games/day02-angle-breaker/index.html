@@ -841,6 +841,10 @@
         playTone(980, 0.18, 'sawtooth', 0.12, 260);
       }
 
+      function sfxZap() {
+        playTone(1320, 0.08, 'square', 0.075, 520);
+      }
+
       function sfxUpgrade() {
         playTone(523.25, 0.12, 'triangle', 0.1);
         setTimeout(() => playTone(659.25, 0.12, 'triangle', 0.1), 70);
@@ -864,7 +868,10 @@
           desc: '発射されるボールの数が +2 増える',
           rare: false,
           maxLv: 8,
-          apply: (s) => { s.baseBalls = Math.min(MAX_BALLS, s.baseBalls + 2); }
+          apply: (s) => {
+            s.perks.multiball = (s.perks.multiball || 0) + 1;
+            s.baseBalls = Math.min(MAX_BALLS, s.baseBalls + 2);
+          }
         },
         {
           id: 'split',
@@ -928,6 +935,33 @@
           rare: false,
           maxLv: 3,
           apply: (s) => { s.perks.laser = (s.perks.laser || 0) + 1; }
+        },
+        {
+          id: 'lightning',
+          icon: '◈',
+          name: 'チェインライトニング',
+          desc: 'ヒット時、近くのブロックへ連鎖電撃（Lvで確率・連鎖数UP）',
+          rare: true,
+          maxLv: 3,
+          apply: (s) => { s.perks.lightning = (s.perks.lightning || 0) + 1; }
+        },
+        {
+          id: 'heavy',
+          icon: '◉',
+          name: 'ヘビーショット',
+          desc: '数発に1発、巨大・高威力＋衝撃波の重弾を発射',
+          rare: false,
+          maxLv: 3,
+          apply: (s) => { s.perks.heavy = (s.perks.heavy || 0) + 1; }
+        },
+        {
+          id: 'sweep',
+          icon: '═',
+          name: '横掃射レーザー',
+          desc: '毎ターン開始時、最下段の列へ横一閃レーザーを掃射',
+          rare: false,
+          maxLv: 3,
+          apply: (s) => { s.perks.sweep = (s.perks.sweep || 0) + 1; }
         }
       ];
 
@@ -974,10 +1008,12 @@
         balls: [],
         particles: [],
         lasers: [],
+        bolts: [],
         rings: [],
         popups: [],
         shootQueue: 0,
         shootTimer: 0,
+        shotsFiredTurn: 0,
         shootAngle: -Math.PI / 2,
         elapsedTurn: 0,
         splitBudgetTurn: 0,
@@ -1050,6 +1086,15 @@
       // =====================================================
       // Wave & Board Spawning
       // =====================================================
+      function estimateWaveBaseHp(wave) {
+        const linearHp = wave * (wave <= 3 ? 2.4 : 3.0) + (state.baseBalls - 5) * 0.75;
+        const over = Math.max(0, wave - 12);
+        const hpScale = over === 0
+          ? 1
+          : Math.pow(1.052, Math.min(over, 20)) * Math.pow(1.068, Math.max(0, over - 20));
+        return Math.max(2, Math.round(linearHp * hpScale));
+      }
+
       function spawnWaveRow(wave) {
         // Move existing down
         for (const b of state.blocks) b.row += 1;
@@ -1065,40 +1110,39 @@
 
         const isBossWave = !SHORTS_MODE && wave >= 10 && wave % 5 === 0;
 
-        // Choose columns cleanly
+        // Choose columns cleanly, preserving at least 2 open gap columns (including 1 aligned with row 2)
         const cols = [0, 1, 2, 3, 4, 5, 6];
         for (let i = cols.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
           [cols[i], cols[j]] = [cols[j], cols[i]];
         }
-
-        // Plan B: Keep early waves crisp, then ramp HP smoothly from Wave 13+
-        const linearHp = wave * (wave <= 3 ? 2.2 : 2.8) + (state.baseBalls - 5) * 0.7;
-        const over = Math.max(0, wave - 12);
-        const hpScale = over === 0
-          ? 1
-          : Math.pow(1.075, Math.min(over, 22)) * Math.pow(1.095, Math.max(0, over - 22));
-        const baseHp = Math.max(2, Math.round(linearHp * hpScale));
-
-        // Plan C: Pickup spawns until MAX_BALLS (every 2 waves after Wave 24)
-        const canSpawnPickup = state.baseBalls < MAX_BALLS && (wave < 24 || wave % 2 === 0);
-        let startIdx = 0;
-        if (canSpawnPickup) {
-          state.pickups.push({ col: cols[0], row: 1, pulse: Math.random() * Math.PI * 2 });
-          startIdx = 1;
+        const row2Blocked = new Set(state.blocks.filter((b) => b.row === 2).map((b) => b.col));
+        const row2Open = [0, 1, 2, 3, 4, 5, 6].filter((c) => !row2Blocked.has(c));
+        if (row2Open.length > 0) {
+          const alignedGap = row2Open[Math.floor(Math.random() * row2Open.length)];
+          const idx = cols.indexOf(alignedGap);
+          if (idx > 0) [cols[0], cols[idx]] = [cols[idx], cols[0]];
         }
 
-        // Plan D: Boss wave fills all remaining columns (6..7 blocks) with heavy BOSS core(s)
-        const maxCols = cols.length - startIdx;
-        const blockCount = isBossWave
-          ? maxCols
-          : Math.min(maxCols, 3 + Math.floor(wave / 3) + (Math.random() < 0.4 ? 1 : 0));
+        const baseHp = estimateWaveBaseHp(wave);
 
-        // Plan A: Bomb spawn probability decreases as waves climb (and never on Boss rows)
+        // Reserve cols[0] & cols[1] as passable gap lanes (pickup does not block balls)
+        const canSpawnPickup = state.baseBalls < MAX_BALLS && (wave < 28 || wave % 2 === 0);
+        if (canSpawnPickup) {
+          state.pickups.push({ col: cols[0], row: 1, pulse: Math.random() * Math.PI * 2 });
+        }
+        const blockStartIdx = 2;
+        const maxSpawnCols = cols.length - blockStartIdx; // 5 blocks max => always >= 2 open columns
+
+        const blockCount = isBossWave
+          ? maxSpawnCols
+          : Math.min(maxSpawnCols, 3 + Math.floor(wave / 4) + (Math.random() < 0.45 ? 1 : 0));
+
+        // Keep bombs and prisms relevant into late waves so chain reactions stay satisfying
         const bombRate = isBossWave
           ? 0
-          : wave <= 12 ? 0.22 : wave <= 24 ? 0.14 : wave <= 38 ? 0.08 : 0.04;
-        const prismRate = isBossWave ? 0.15 : 0.22;
+          : wave <= 12 ? 0.20 : wave <= 26 ? 0.16 : 0.12;
+        const prismRate = isBossWave ? 0.25 : 0.22;
 
         let bombPlaced = false;
         let prismPlaced = false;
@@ -1106,23 +1150,23 @@
         let bossesPlaced = 0;
 
         for (let i = 0; i < blockCount; i++) {
-          const col = cols[startIdx + i];
+          const col = cols[blockStartIdx + i];
           let kind = 'normal';
           let hp = Math.max(2, Math.round(baseHp * (0.75 + Math.random() * 0.55)));
 
           if (isBossWave && bossesPlaced < bossSlots) {
             kind = 'boss';
-            hp = Math.max(12, Math.round(baseHp * (2.3 + Math.min(0.8, wave * 0.01))));
+            hp = Math.max(12, Math.round(baseHp * (2.2 + Math.min(0.7, wave * 0.01))));
             bossesPlaced++;
           } else if (isBossWave) {
-            hp = Math.max(4, Math.round(baseHp * (1.05 + Math.random() * 0.4)));
+            hp = Math.max(4, Math.round(baseHp * (1.0 + Math.random() * 0.35)));
             if (!prismPlaced && Math.random() < prismRate) {
               kind = 'prism';
               prismPlaced = true;
             }
           } else if (wave >= 2 && !bombPlaced && Math.random() < bombRate) {
             kind = 'bomb';
-            hp = Math.max(2, Math.round(hp * (wave >= 20 ? 1.05 : 0.85)));
+            hp = Math.max(2, Math.round(hp * (wave >= 20 ? 1.0 : 0.85)));
             bombPlaced = true;
           } else if (wave >= 2 && !prismPlaced && Math.random() < prismRate) {
             kind = 'prism';
@@ -1208,6 +1252,7 @@
         state.balls = [];
         state.particles = [];
         state.lasers = [];
+        state.bolts = [];
         state.rings = [];
         state.popups = [];
         state.launcherX = W / 2;
@@ -1272,21 +1317,44 @@
         state.wave += 1;
         state.phase = 'aim';
         spawnWaveRow(state.wave);
-        syncHUD();
-        if (state.phase === 'aim' && (state.perks.laser || 0) > 0) {
-          fireOpeningLasers();
+        if (state.phase === 'aim') {
+          if ((state.perks.laser || 0) > 0) fireOpeningLasers();
+          if ((state.perks.sweep || 0) > 0) fireSweepLasers();
+          if (state.blocks.some((b) => b.hp <= 0)) {
+            state.blocks = state.blocks.filter((b) => b.hp > 0);
+            updateDangerBanner(!SHORTS_MODE && state.wave >= 10 && state.wave % 5 === 0, state.wave);
+          }
         }
+        syncHUD();
       }
 
       function fireOpeningLasers() {
         const count = state.perks.laser || 0;
+        const baseAtk = 1 + (state.perks.power || 0);
+        const dmg = Math.max(baseAtk + 1, Math.round(baseAtk * 1.5 + estimateWaveBaseHp(state.wave) * 0.25));
         for (let i = 0; i < count; i++) {
           const col = Math.floor(Math.random() * COLS);
           const cx = gridLeft + col * (cellW + CELL_GAP) + cellW / 2;
           state.lasers.push({ x1: cx, y1: TOP_PAD, x2: cx, y2: dangerLineY(), life: 0.32, maxLife: 0.32, color: '#00e5ff' });
-          const dmg = 2 + (state.perks.power || 0);
-          const targets = state.blocks.filter((b) => b.col === col);
+          const targets = state.blocks.filter((b) => b.hp > 0 && b.col === col);
           targets.forEach((b) => damageBlock(b, dmg, cx, cellRect(b.col, b.row).y + cellH / 2, false));
+          sfxLaser();
+        }
+      }
+
+      function fireSweepLasers() {
+        const count = state.perks.sweep || 0;
+        if (count <= 0) return;
+        const rows = [...new Set(state.blocks.filter((b) => b.hp > 0).map((b) => b.row))].sort((a, b) => b - a);
+        if (rows.length === 0) return;
+        const baseAtk = 1 + (state.perks.power || 0);
+        const dmg = Math.max(baseAtk + 1, Math.round(baseAtk * 1.5 + estimateWaveBaseHp(state.wave) * 0.24));
+        for (let i = 0; i < count; i++) {
+          const row = rows[Math.min(i, rows.length - 1)];
+          const cy = cellRect(0, row).y + cellH / 2;
+          state.lasers.push({ x1: gridLeft, y1: cy, x2: W - gridLeft, y2: cy, life: 0.34, maxLife: 0.34, color: '#ff5c8a' });
+          const targets = state.blocks.filter((b) => b.hp > 0 && b.row === row);
+          targets.forEach((b) => damageBlock(b, dmg, cellRect(b.col, b.row).x + cellW / 2, cy, false));
           sfxLaser();
         }
       }
@@ -1375,7 +1443,8 @@
           sfxLaser();
           state.shake = Math.max(state.shake, 4);
           state.events.push({ type: 'laser', t: state.shortsTimer });
-          const laserDmg = 2 + (state.perks.power || 0);
+          const baseAtk = 1 + (state.perks.power || 0);
+          const laserDmg = Math.max(baseAtk + 1, Math.round(baseAtk * 1.5 + estimateWaveBaseHp(state.wave) * 0.30));
           if (b.axis === 'h') {
             state.lasers.push({ x1: gridLeft, y1: cy, x2: W - gridLeft, y2: cy, life: 0.24, maxLife: 0.24, color: '#00e5ff' });
             state.blocks.filter((o) => o !== b && o.row === b.row).forEach((o) => {
@@ -1406,7 +1475,7 @@
             state.rings.push({ x: cx, y: cy, r: 12, maxR: cellW * 2.2, color: '#ff8c24', life: 0.34, maxLife: 0.34 });
             addPopup(cx, cy - 6, 'BOOM!', '#ffd400', true);
             state.events.push({ type: 'bomb', t: state.shortsTimer });
-            const bombMult = state.wave <= 14 ? 1.0 : state.wave <= 26 ? 0.78 : 0.60;
+            const bombMult = state.wave <= 12 ? 0.92 : state.wave <= 26 ? 0.80 : 0.72;
             const blastDmg = Math.max(6, Math.round(b.maxHp * bombMult));
             state.blocks
               .filter((o) => o !== b && o.hp > 0 && Math.abs(o.col - b.col) <= 1 && Math.abs(o.row - b.row) <= 1)
@@ -1427,7 +1496,8 @@
 
           // Blast perk
           if (allowSideEffects && (state.perks.blast || 0) > 0) {
-            const pDmg = (state.perks.blast || 0) * 2;
+            const blastLv = state.perks.blast || 0;
+            const pDmg = Math.max(blastLv * 2, Math.round(b.maxHp * (0.09 * blastLv)));
             state.blocks
               .filter((o) => o !== b && o.hp > 0 && Math.abs(o.col - b.col) + Math.abs(o.row - b.row) === 1)
               .forEach((o) => {
@@ -1458,6 +1528,56 @@
         }
       }
 
+      function triggerChainLightning(sourceBlk, baseDmg, startX, startY, isMini) {
+        const lv = state.perks.lightning || 0;
+        if (lv <= 0) return;
+        const chance = (isMini ? 0.14 : 0.18) + lv * (isMini ? 0.06 : 0.08);
+        if (Math.random() >= chance) return;
+
+        const maxJumps = lv + 1;
+        const jumpDmg = Math.max(2, Math.round(baseDmg * 0.75));
+        const maxRange = cellW * 2.9;
+        const visited = new Set([sourceBlk]);
+        let curX = startX;
+        let curY = startY;
+        let jumped = false;
+
+        for (let j = 0; j < maxJumps; j++) {
+          let best = null;
+          let bestDist = Infinity;
+          let bestX = 0;
+          let bestY = 0;
+          for (const cand of state.blocks) {
+            if (cand.hp <= 0 || visited.has(cand)) continue;
+            const rc = cellRect(cand.col, cand.row);
+            const tx = rc.x + rc.w / 2;
+            const ty = rc.y + rc.h / 2;
+            const d = Math.hypot(tx - curX, ty - curY);
+            if (d <= maxRange && d < bestDist) {
+              best = cand;
+              bestDist = d;
+              bestX = tx;
+              bestY = ty;
+            }
+          }
+          if (!best) break;
+          visited.add(best);
+          jumped = true;
+
+          const mx = (curX + bestX) / 2 + (Math.random() - 0.5) * 22;
+          const my = (curY + bestY) / 2 + (Math.random() - 0.5) * 22;
+          state.bolts.push({
+            pts: [{ x: curX, y: curY }, { x: mx, y: my }, { x: bestX, y: bestY }],
+            life: 0.18,
+            maxLife: 0.18
+          });
+          damageBlock(best, jumpDmg, bestX, bestY, false);
+          curX = bestX;
+          curY = bestY;
+        }
+        if (jumped) sfxZap();
+      }
+
       function launchTurn(angle) {
         if (state.phase !== 'aim') return;
         state.phase = 'shooting';
@@ -1465,6 +1585,7 @@
         state.shootAngle = angle;
         state.shootQueue = state.baseBalls;
         state.shootTimer = 0;
+        state.shotsFiredTurn = 0;
         state.elapsedTurn = 0;
         state.chain = 0;
         state.nextLauncherX = null;
@@ -1477,15 +1598,20 @@
       function spawnOneBall() {
         const vx = Math.cos(state.shootAngle) * BALL_SPEED;
         const vy = Math.sin(state.shootAngle) * BALL_SPEED;
+        const heavyLv = state.perks.heavy || 0;
+        const heavyEvery = heavyLv === 1 ? 5 : heavyLv === 2 ? 4 : 3;
+        const isHeavy = heavyLv > 0 && (state.shotsFiredTurn % heavyEvery === 0);
+        state.shotsFiredTurn += 1;
         state.balls.push({
           x: state.launcherX,
           y: state.launcherY - 2,
           vx,
           vy,
-          r: BALL_R,
+          r: isHeavy ? BALL_R * 1.45 : BALL_R,
           mini: false,
+          heavy: isHeavy,
           bounces: 0,
-          pierceLeft: state.perks.pierce || 0,
+          pierceLeft: (state.perks.pierce || 0) + (isHeavy ? 1 : 0),
           trail: []
         });
       }
@@ -1535,6 +1661,11 @@
         state.lasers = state.lasers.filter((ls) => {
           ls.life -= dt;
           return ls.life > 0;
+        });
+
+        state.bolts = state.bolts.filter((bt) => {
+          bt.life -= dt;
+          return bt.life > 0;
         });
 
         state.rings = state.rings.filter((rg) => {
@@ -1632,15 +1763,34 @@
                 const rampBonus = (state.perks.ramp || 0) > 0
                   ? 1 + Math.min(2.0, ball.bounces * 0.14 * state.perks.ramp)
                   : 1;
+                const heavyMult = ball.heavy ? 1.75 : 1;
                 const critChance = (state.perks.crit || 0) * 0.22;
                 const isCrit = Math.random() < critChance;
-                const rawDmg = Math.max(1, Math.round(baseAtk * rampBonus * (isCrit ? 2 : 1) * (ball.mini ? 0.7 : 1)));
+                const rawDmg = Math.max(1, Math.round(baseAtk * rampBonus * heavyMult * (isCrit ? 2 : 1) * (ball.mini ? 0.7 : 1)));
 
                 damageBlock(blk, rawDmg, cx, cy, true);
                 sfxHit(state.chain, isCrit);
                 state.events.push({ type: 'hit', chain: state.chain, crit: isCrit, t: state.shortsTimer });
                 if (isCrit) {
                   addPopup(cx, cy - 10, `CRIT ${rawDmg}!`, '#ffd400', false);
+                }
+
+                // Heavy shot shockwave splash
+                if (ball.heavy) {
+                  state.shake = Math.max(state.shake, 2.5);
+                  state.rings.push({ x: cx, y: cy, r: 6, maxR: cellW * 1.25, color: '#ff9f2e', life: 0.2, maxLife: 0.2 });
+                  const splashDmg = Math.max(1, Math.round(rawDmg * 0.45));
+                  state.blocks
+                    .filter((o) => o !== blk && o.hp > 0 && Math.abs(o.col - blk.col) + Math.abs(o.row - blk.row) === 1)
+                    .forEach((o) => {
+                      const orc = cellRect(o.col, o.row);
+                      damageBlock(o, splashDmg, orc.x + orc.w / 2, orc.y + orc.h / 2, false);
+                    });
+                }
+
+                // Chain lightning perk
+                if ((state.perks.lightning || 0) > 0) {
+                  triggerChainLightning(blk, rawDmg, cx, cy, ball.mini);
                 }
 
                 // Pierce or bounce
@@ -1959,6 +2109,26 @@
           ctx.restore();
         }
 
+        // Chain Lightning Bolts
+        for (const bt of state.bolts) {
+          const a = bt.life / bt.maxLife;
+          ctx.save();
+          ctx.globalAlpha = a;
+          ctx.lineJoin = 'round';
+          ctx.lineCap = 'round';
+          ctx.strokeStyle = '#7bf5ff';
+          ctx.lineWidth = 5 * a;
+          ctx.beginPath();
+          ctx.moveTo(bt.pts[0].x, bt.pts[0].y);
+          for (let i = 1; i < bt.pts.length; i++) ctx.lineTo(bt.pts[i].x, bt.pts[i].y);
+          ctx.stroke();
+
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 2 * a;
+          ctx.stroke();
+          ctx.restore();
+        }
+
         // Shockwave rings
         for (const rg of state.rings) {
           const t = 1 - rg.life / rg.maxLife;
@@ -2013,15 +2183,22 @@
             const frac = (i + 1) / (b.trail.length + 1);
             ctx.beginPath();
             ctx.arc(tp.x, tp.y, b.r * frac * 0.85, 0, Math.PI * 2);
-            ctx.fillStyle = b.mini
-              ? `rgba(255, 212, 0, ${frac * 0.35})`
-              : `rgba(0, 229, 255, ${frac * 0.38})`;
+            ctx.fillStyle = b.heavy
+              ? `rgba(255, 159, 46, ${frac * 0.45})`
+              : b.mini
+                ? `rgba(255, 212, 0, ${frac * 0.35})`
+                : `rgba(0, 229, 255, ${frac * 0.38})`;
             ctx.fill();
           }
           ctx.beginPath();
           ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
-          ctx.fillStyle = b.mini ? '#ffd400' : '#f7fbff';
+          ctx.fillStyle = b.heavy ? '#ff9f2e' : b.mini ? '#ffd400' : '#f7fbff';
           ctx.fill();
+          if (b.heavy) {
+            ctx.lineWidth = 1.6;
+            ctx.strokeStyle = '#fff3cf';
+            ctx.stroke();
+          }
         }
 
         // Particles
@@ -2075,6 +2252,7 @@
         state.balls = [];
         state.particles = [];
         state.lasers = [];
+        state.bolts = [];
         state.rings = [];
         state.popups = [];
         state.launcherX = W * 0.34;
