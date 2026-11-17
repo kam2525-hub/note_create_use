@@ -5,6 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>JUST SLASH 99｜神速0.01秒ジャスト斬り</title>
   <meta name="description" content="99%が3回目でミスる超爽快タイミングアクション！光るゾーンに重なった瞬間にタップして脳汁コンボを繋げ！" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="JUST SLASH 99｜神速0.01秒ジャスト斬り" />
+  <meta property="og:description" content="99%が3回目でミスる超爽快タイミングアクション！ブラウザだけで今すぐ無料プレイ" />
+  <meta property="og:url" content="https://kam2525-hub.github.io/note_create_use/games/day01-just-slash/" />
+  <meta property="og:image" content="https://kam2525-hub.github.io/note_create_use/shorts/day01/output/note_thumbnail.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="JUST SLASH 99｜神速0.01秒ジャスト斬り" />
+  <meta name="twitter:description" content="99%が3回目でミスる超爽快タイミングアクション！ブラウザだけで今すぐ無料プレイ" />
+  <meta name="twitter:image" content="https://kam2525-hub.github.io/note_create_use/shorts/day01/output/note_thumbnail.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:ital,wght@0,600;0,700;1,700&family=Noto+Sans+JP:wght@500;700;900&display=swap" rel="stylesheet" />
@@ -527,12 +536,13 @@
       window.addEventListener('resize', resize);
       resize();
 
-      // Web Audio API Procedural BGM + SFX
+      // Web Audio API Procedural BGM + SFX (iOS Safari compatible)
       const AudioSys = (() => {
         let ac = null;
         let muted = false;
         let bgmTimer = null;
         let step = 0;
+        let unlocked = false;
 
         const scale = [261.63, 293.66, 329.63, 392.00, 440.00, 523.25, 587.33, 659.25, 783.99, 880.00, 1046.50];
         const bassNotes = [130.81, 130.81, 164.81, 146.83, 174.61, 174.61, 196.00, 146.83];
@@ -540,15 +550,32 @@
 
         function ensure() {
           if (isShortsMode || muted) return null;
+          try {
+            if (navigator.audioSession && navigator.audioSession.type !== 'playback') {
+              navigator.audioSession.type = 'playback';
+            }
+          } catch (_) {}
           if (!ac) {
             const Ctx = window.AudioContext || window.webkitAudioContext;
             if (Ctx) ac = new Ctx();
           }
-          if (ac && ac.state === 'suspended') ac.resume();
+          if (ac && ac.state === 'suspended') {
+            ac.resume().catch(() => {});
+          }
+          if (ac && !unlocked) {
+            try {
+              const b = ac.createBuffer(1, 1, 22050);
+              const s = ac.createBufferSource();
+              s.buffer = b;
+              s.connect(ac.destination);
+              s.start(0);
+              unlocked = true;
+            } catch (_) {}
+          }
           return ac;
         }
 
-        function tone(freq, dur, type = 'triangle', vol = 0.14, slide = 1) {
+        function tone(freq, dur, type = 'triangle', vol = 0.22, slide = 1) {
           const ctxA = ensure();
           if (!ctxA) return;
           const now = ctxA.currentTime;
@@ -568,13 +595,13 @@
         }
 
         function kick() {
-          tone(135, 0.11, 'sine', 0.22, 0.32);
+          tone(165, 0.12, 'triangle', 0.34, 0.35);
         }
 
         function hat() {
           const ctxA = ensure();
           if (!ctxA) return;
-          const len = Math.floor(ctxA.sampleRate * 0.035);
+          const len = Math.floor(ctxA.sampleRate * 0.04);
           const buf = ctxA.createBuffer(1, len, ctxA.sampleRate);
           const data = buf.getChannelData(0);
           for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
@@ -582,8 +609,8 @@
           const filt = ctxA.createBiquadFilter();
           const gain = ctxA.createGain();
           filt.type = 'highpass';
-          filt.frequency.value = 6000;
-          gain.gain.value = 0.06;
+          filt.frequency.value = 5000;
+          gain.gain.value = 0.11;
           src.buffer = buf;
           src.connect(filt);
           filt.connect(gain);
@@ -594,16 +621,17 @@
         function startBgm(isFever) {
           stopBgm();
           if (isShortsMode || muted) return;
+          ensure();
           const intervalMs = isFever ? 86 : 98; // ~153-174 BPM 16th/8th feel
           bgmTimer = setInterval(() => {
             if (state.phase !== 'play' || muted) return;
             if (step % 4 === 0) kick();
             if (step % 2 === 1) hat();
-            const b = bassNotes[Math.floor(step / 2) % bassNotes.length];
-            tone(b, 0.085, 'sawtooth', 0.045, 0.98);
+            const b = bassNotes[Math.floor(step / 2) % bassNotes.length] * 2;
+            tone(b, 0.09, 'sawtooth', 0.11, 0.98);
             const l = leadPattern[step % leadPattern.length];
             if (l > 0) {
-              tone(state.fever ? l * 1.25 : l, 0.08, 'square', 0.035, 1.0);
+              tone(state.fever ? l * 1.25 : l, 0.085, 'square', 0.11, 1.0);
             }
             step++;
           }, intervalMs);
@@ -619,31 +647,37 @@
         function hit(combo, isGod) {
           const idx = Math.min(scale.length - 1, combo % scale.length);
           const base = scale[idx] * (combo >= scale.length ? 1.5 : 1);
-          tone(base, 0.14, 'triangle', isGod ? 0.22 : 0.15, 1.06);
+          tone(base, 0.15, 'triangle', isGod ? 0.30 : 0.22, 1.06);
           if (isGod) {
-            setTimeout(() => tone(base * 1.5, 0.16, 'sine', 0.16, 1.1), 25);
+            setTimeout(() => tone(base * 1.5, 0.16, 'sine', 0.22, 1.1), 25);
           }
         }
 
         function feverStart() {
           [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => {
-            setTimeout(() => tone(f, 0.16, 'sawtooth', 0.14, 1.05), i * 45);
+            setTimeout(() => tone(f, 0.16, 'sawtooth', 0.20, 1.05), i * 45);
           });
         }
 
         function miss() {
-          tone(140, 0.26, 'sawtooth', 0.24, 0.42);
+          tone(160, 0.28, 'sawtooth', 0.32, 0.42);
         }
 
         function toggleMute() {
           muted = !muted;
           soundBtn.textContent = muted ? 'BGM OFF' : 'BGM ON';
           if (muted) stopBgm();
-          else if (state.phase === 'play') startBgm(state.fever);
+          else {
+            ensure();
+            if (state.phase === 'play') startBgm(state.fever);
+          }
         }
 
         return { ensure, startBgm, stopBgm, hit, feverStart, miss, toggleMute };
       })();
+
+      // Unlock iOS Web Audio on very first touch anywhere
+      window.addEventListener('touchstart', () => AudioSys.ensure(), { passive: true, once: true });
 
       soundBtn.addEventListener('click', (e) => {
         e.stopPropagation();

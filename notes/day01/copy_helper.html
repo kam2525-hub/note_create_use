@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Day 01 投稿コピペヘルパー｜note & YouTube Shorts</title>
+  <title>Day 01 投稿コピペ＆下書きヘルパー｜X・note・YouTube</title>
   <style>
     :root {
       --bg: #0c0f15;
@@ -12,6 +12,7 @@
       --muted: #93a0b4;
       --gold: #ffd400;
       --cyan: #00e5ff;
+      --crimson: #ff2e54;
     }
     * { box-sizing: border-box; }
     body {
@@ -27,14 +28,35 @@
       margin: 0 auto;
     }
     h1 {
-      font-size: 24px;
+      font-size: 22px;
       margin: 0 0 8px;
       letter-spacing: 0.02em;
     }
     .lead {
-      margin: 0 0 24px;
+      margin: 0 0 22px;
       color: var(--muted);
       font-size: 14px;
+    }
+    .quick-bar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 12px;
+      margin-bottom: 22px;
+    }
+    .action-link {
+      display: block;
+      text-align: center;
+      text-decoration: none;
+      border-radius: 12px;
+      padding: 14px 16px;
+      font-weight: 900;
+      font-size: 14px;
+      background: var(--gold);
+      color: #0c0f15;
+    }
+    .action-link.secondary {
+      background: #1f2735;
+      color: var(--text);
     }
     .section {
       background: var(--card);
@@ -79,12 +101,67 @@
       line-height: 1.6;
       resize: vertical;
     }
+    .thumb-preview {
+      width: 100%;
+      border-radius: 10px;
+      display: block;
+      margin-top: 8px;
+    }
+    .thumb-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .copy-btn.secondary {
+      background: #1f2735;
+      color: var(--text);
+    }
+    .hint-small {
+      margin: 8px 0 0;
+      font-size: 12px;
+      color: var(--muted);
+    }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>Day 01 投稿コピペヘルパー（JUST SLASH 99）</h1>
-    <p class="lead">ボタン1つでコピーして、note や YouTube Studio にそのまま貼り付けられます。</p>
+    <h1>Day 01 投稿ヘルパー（JUST SLASH 99）</h1>
+    <p class="lead">ゲームURLにサムネ画像カード（OGP）を埋め込み済みなので、X はリンクを貼るだけで画像付きカードになります。note に見出し画像を貼るときも下の「画像をコピー」→ note でペーストが使えます。</p>
+
+    <div class="quick-bar">
+      <a class="action-link" id="xIntentBtn" href="#" target="_blank" rel="noopener">X（Twitter）の投稿画面を開く</a>
+      <a class="action-link secondary" href="https://note.com/notes/new" target="_blank" rel="noopener">note 新規記事作成を開く</a>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">X（Twitter）投稿テキスト</span>
+        <button class="copy-btn" data-target="xText">コピー</button>
+      </div>
+      <textarea id="xText" rows="6" readonly>【1日1アプリ Day1】
+99%が3回目でミスる超脳汁タイミングゲーム『JUST SLASH 99』作りました🔥
+
+✅ タップ1回で即プレイ（無料・インストール不要）
+✅ 5連続成功でBGMが加速するFEVER突入
+
+あなたは何点いける？👇
+https://kam2525-hub.github.io/note_create_use/games/day01-just-slash/
+
+#個人開発 #ミニゲーム #無料ゲーム</textarea>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">note 見出し画像（1タップコピー / 写真保存）</span>
+        <div class="thumb-actions">
+          <button class="copy-btn" id="copyImageBtn" type="button">画像をコピー</button>
+          <button class="copy-btn secondary" id="shareImageBtn" type="button">共有 / 写真保存</button>
+          <a class="copy-btn secondary" style="text-decoration:none;" href="../../shorts/day01/output/note_thumbnail.png" download="day01_note_thumbnail.png">保存</a>
+        </div>
+      </div>
+      <img class="thumb-preview" id="thumbImg" src="../../shorts/day01/output/note_thumbnail.png" alt="note 見出し画像" />
+      <p class="hint-small">iPhoneでは「画像をコピー」→ note 本文や見出しで「ペースト」、または「共有 / 写真保存」→「画像を保存」が最速です。</p>
+    </div>
 
     <div class="section">
       <div class="section-head">
@@ -168,7 +245,66 @@ BGM・効果音つき（画面右上のBGM ONでプレイ推奨）
   </div>
 
   <script>
-    document.querySelectorAll('.copy-btn').forEach((btn) => {
+    const xTextEl = document.getElementById('xText');
+    document.getElementById('xIntentBtn').href =
+      'https://twitter.com/intent/tweet?text=' + encodeURIComponent(xTextEl.value);
+
+    const thumbUrl = new URL('../../shorts/day01/output/note_thumbnail.png', window.location.href).href;
+    let cachedBlobPromise = null;
+    function getThumbBlob() {
+      if (!cachedBlobPromise) {
+        cachedBlobPromise = fetch(thumbUrl).then((res) => {
+          if (!res.ok) throw new Error('Image fetch failed');
+          return res.blob();
+        });
+      }
+      return cachedBlobPromise;
+    }
+    // Pre-warm blob so iOS Safari tap keeps user-gesture context cleanly
+    getThumbBlob().catch(() => {});
+
+    const copyImageBtn = document.getElementById('copyImageBtn');
+    copyImageBtn.addEventListener('click', async () => {
+      const orig = copyImageBtn.textContent;
+      try {
+        if (typeof ClipboardItem === 'undefined' || !navigator.clipboard || !navigator.clipboard.write) {
+          throw new Error('ClipboardItem unsupported');
+        }
+        await navigator.clipboard.write([
+          new ClipboardItem({ 'image/png': getThumbBlob() })
+        ]);
+        copyImageBtn.textContent = '画像コピー完了！';
+        copyImageBtn.classList.add('done');
+        setTimeout(() => {
+          copyImageBtn.textContent = orig;
+          copyImageBtn.classList.remove('done');
+        }, 1600);
+      } catch (e) {
+        copyImageBtn.textContent = '非対応時は「共有」へ';
+        setTimeout(() => { copyImageBtn.textContent = orig; }, 1800);
+      }
+    });
+
+    const shareImageBtn = document.getElementById('shareImageBtn');
+    shareImageBtn.addEventListener('click', async () => {
+      const orig = shareImageBtn.textContent;
+      try {
+        const blob = await getThumbBlob();
+        const file = new File([blob], 'day01_note_thumbnail.png', { type: 'image/png' });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: 'Day 01 見出し画像' });
+        } else {
+          window.open(thumbUrl, '_blank', 'noopener');
+        }
+      } catch (e) {
+        if (e && e.name !== 'AbortError') {
+          shareImageBtn.textContent = '画像を長押しで保存';
+          setTimeout(() => { shareImageBtn.textContent = orig; }, 1800);
+        }
+      }
+    });
+
+    document.querySelectorAll('.copy-btn[data-target]').forEach((btn) => {
       btn.addEventListener('click', async () => {
         const el = document.getElementById(btn.dataset.target);
         await navigator.clipboard.writeText(el.value);
