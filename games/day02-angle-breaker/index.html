@@ -855,6 +855,7 @@
       // =====================================================
       // Skill / Upgrade Pool
       // =====================================================
+      const MAX_BALLS = 45;
       const UPGRADES = [
         {
           id: 'multiball',
@@ -863,7 +864,7 @@
           desc: '発射されるボールの数が +2 増える',
           rare: false,
           maxLv: 8,
-          apply: (s) => { s.baseBalls += 2; }
+          apply: (s) => { s.baseBalls = Math.min(MAX_BALLS, s.baseBalls + 2); }
         },
         {
           id: 'split',
@@ -941,7 +942,10 @@
       const CELL_GAP = 5;
 
       const STORAGE_KEY = 'angle_breaker_99_best_v1';
-      let bestScore = Number(localStorage.getItem(STORAGE_KEY) || 0);
+      let bestScore = 0;
+      try {
+        bestScore = Number(localStorage.getItem(STORAGE_KEY) || 0);
+      } catch (_) {}
       bestValEl.textContent = bestScore.toLocaleString();
 
       let W = 380;
@@ -1026,14 +1030,21 @@
       }
 
       function blockColorByHp(hp, kind) {
+        if (kind === 'boss') return { fill: '#2b1038', stroke: '#d875ff', text: '#f6d9ff' };
         if (kind === 'bomb') return { fill: '#351b0e', stroke: '#ff8c24', text: '#ffd7ad' };
         if (kind === 'prism') return { fill: '#0b2b38', stroke: '#00e5ff', text: '#aef5ff' };
-        const t = Math.min(1, Math.log10(Math.max(1, hp)) / 2.2);
-        if (t < 0.25) return { fill: '#102736', stroke: '#00e5ff', text: '#d8fbff' };
-        if (t < 0.5) return { fill: '#112c22', stroke: '#3bff9c', text: '#dcffed' };
-        if (t < 0.72) return { fill: '#2c250e', stroke: '#ffd400', text: '#fff5b8' };
-        if (t < 0.88) return { fill: '#351c12', stroke: '#ff7b29', text: '#ffe2cc' };
+        const t = Math.min(1, Math.log10(Math.max(1, hp)) / 3.4);
+        if (t < 0.20) return { fill: '#102736', stroke: '#00e5ff', text: '#d8fbff' };
+        if (t < 0.42) return { fill: '#112c22', stroke: '#3bff9c', text: '#dcffed' };
+        if (t < 0.64) return { fill: '#2c250e', stroke: '#ffd400', text: '#fff5b8' };
+        if (t < 0.84) return { fill: '#351c12', stroke: '#ff7b29', text: '#ffe2cc' };
         return { fill: '#371122', stroke: '#ff3358', text: '#ffd6de' };
+      }
+
+      function formatHp(hp) {
+        if (hp >= 100000) return Math.round(hp / 1000) + 'K';
+        if (hp >= 1000) return (hp / 1000).toFixed(hp >= 10000 ? 0 : 1).replace(/\.0$/, '') + 'K';
+        return String(hp);
       }
 
       // =====================================================
@@ -1052,6 +1063,8 @@
           return;
         }
 
+        const isBossWave = !SHORTS_MODE && wave >= 10 && wave % 5 === 0;
+
         // Choose columns cleanly
         const cols = [0, 1, 2, 3, 4, 5, 6];
         for (let i = cols.length - 1; i > 0; i--) {
@@ -1059,28 +1072,63 @@
           [cols[i], cols[j]] = [cols[j], cols[i]];
         }
 
-        const blockCount = Math.min(6, 3 + Math.floor(wave / 3) + (Math.random() < 0.4 ? 1 : 0));
-        const baseHp = Math.max(2, Math.round(wave * (wave <= 3 ? 2.2 : 2.8) + (state.baseBalls - 5) * 0.7));
+        // Plan B: Keep early waves crisp, then ramp HP smoothly from Wave 13+
+        const linearHp = wave * (wave <= 3 ? 2.2 : 2.8) + (state.baseBalls - 5) * 0.7;
+        const over = Math.max(0, wave - 12);
+        const hpScale = over === 0
+          ? 1
+          : Math.pow(1.075, Math.min(over, 22)) * Math.pow(1.095, Math.max(0, over - 22));
+        const baseHp = Math.max(2, Math.round(linearHp * hpScale));
 
-        // 1 pickup ball almost every wave
-        const ballCol = cols[0];
-        state.pickups.push({ col: ballCol, row: 1, pulse: Math.random() * Math.PI * 2 });
+        // Plan C: Pickup spawns until MAX_BALLS (every 2 waves after Wave 24)
+        const canSpawnPickup = state.baseBalls < MAX_BALLS && (wave < 24 || wave % 2 === 0);
+        let startIdx = 0;
+        if (canSpawnPickup) {
+          state.pickups.push({ col: cols[0], row: 1, pulse: Math.random() * Math.PI * 2 });
+          startIdx = 1;
+        }
+
+        // Plan D: Boss wave fills all remaining columns (6..7 blocks) with heavy BOSS core(s)
+        const maxCols = cols.length - startIdx;
+        const blockCount = isBossWave
+          ? maxCols
+          : Math.min(maxCols, 3 + Math.floor(wave / 3) + (Math.random() < 0.4 ? 1 : 0));
+
+        // Plan A: Bomb spawn probability decreases as waves climb (and never on Boss rows)
+        const bombRate = isBossWave
+          ? 0
+          : wave <= 12 ? 0.22 : wave <= 24 ? 0.14 : wave <= 38 ? 0.08 : 0.04;
+        const prismRate = isBossWave ? 0.15 : 0.22;
 
         let bombPlaced = false;
         let prismPlaced = false;
-        for (let i = 1; i <= blockCount && i < cols.length; i++) {
-          const col = cols[i];
+        const bossSlots = isBossWave ? (wave >= 30 ? 2 : 1) : 0;
+        let bossesPlaced = 0;
+
+        for (let i = 0; i < blockCount; i++) {
+          const col = cols[startIdx + i];
           let kind = 'normal';
           let hp = Math.max(2, Math.round(baseHp * (0.75 + Math.random() * 0.55)));
-          if (wave >= 2 && !bombPlaced && Math.random() < 0.22) {
+
+          if (isBossWave && bossesPlaced < bossSlots) {
+            kind = 'boss';
+            hp = Math.max(12, Math.round(baseHp * (2.3 + Math.min(0.8, wave * 0.01))));
+            bossesPlaced++;
+          } else if (isBossWave) {
+            hp = Math.max(4, Math.round(baseHp * (1.05 + Math.random() * 0.4)));
+            if (!prismPlaced && Math.random() < prismRate) {
+              kind = 'prism';
+              prismPlaced = true;
+            }
+          } else if (wave >= 2 && !bombPlaced && Math.random() < bombRate) {
             kind = 'bomb';
-            hp = Math.max(2, Math.round(hp * 0.85));
+            hp = Math.max(2, Math.round(hp * (wave >= 20 ? 1.05 : 0.85)));
             bombPlaced = true;
-          } else if (wave >= 2 && !prismPlaced && Math.random() < 0.22) {
+          } else if (wave >= 2 && !prismPlaced && Math.random() < prismRate) {
             kind = 'prism';
             hp = Math.max(2, Math.round(hp * 0.9));
             prismPlaced = true;
-          } else if (Math.random() < 0.16 && wave >= 4) {
+          } else if (Math.random() < 0.18 && wave >= 4) {
             hp = Math.round(hp * 1.65);
           }
 
@@ -1096,13 +1144,16 @@
           });
         }
 
-        updateDangerBanner();
+        updateDangerBanner(isBossWave, wave);
       }
 
-      function updateDangerBanner() {
+      function updateDangerBanner(isBossWave = false, waveNum = state.wave) {
         const nearDanger = state.blocks.some((b) => b.row >= ROWS - 2);
         if (nearDanger) {
           arenaBannerEl.textContent = '⚠ 赤ライン直前！優先して破壊しよう';
+          arenaBannerEl.classList.add('danger');
+        } else if (isBossWave) {
+          arenaBannerEl.textContent = `🔥 WAVE ${waveNum} BOSS LINE！集中突破せよ`;
           arenaBannerEl.classList.add('danger');
         } else if (state.phase === 'aim') {
           arenaBannerEl.textContent = '画面をなぞって角度を決め、指を離すと発射';
@@ -1116,7 +1167,7 @@
         chainValEl.textContent = state.chain.toLocaleString();
         chainValEl.classList.toggle('hot', state.chain >= 20);
         bestValEl.textContent = Math.max(bestScore, state.score).toLocaleString();
-        ballCountValEl.textContent = state.baseBalls;
+        ballCountValEl.textContent = state.baseBalls >= MAX_BALLS ? `${state.baseBalls} (MAX)` : state.baseBalls;
         atkValEl.textContent = 1 + (state.perks.power || 0);
 
         const entries = Object.entries(state.perks).filter(([, v]) => v > 0);
@@ -1172,7 +1223,11 @@
 
       function openUpgradeModal() {
         state.phase = 'upgrade';
-        const available = UPGRADES.filter((u) => (state.perks[u.id] || 0) < u.maxLv);
+        const available = UPGRADES.filter((u) => {
+          if ((state.perks[u.id] || 0) >= u.maxLv) return false;
+          if (u.id === 'multiball' && state.baseBalls >= MAX_BALLS) return false;
+          return true;
+        });
         if (available.length === 0) {
           advanceToNextWave();
           return;
@@ -1351,13 +1406,20 @@
             state.rings.push({ x: cx, y: cy, r: 12, maxR: cellW * 2.2, color: '#ff8c24', life: 0.34, maxLife: 0.34 });
             addPopup(cx, cy - 6, 'BOOM!', '#ffd400', true);
             state.events.push({ type: 'bomb', t: state.shortsTimer });
-            const blastDmg = Math.max(6, Math.round(b.maxHp * 1.1));
+            const bombMult = state.wave <= 14 ? 1.0 : state.wave <= 26 ? 0.78 : 0.60;
+            const blastDmg = Math.max(6, Math.round(b.maxHp * bombMult));
             state.blocks
               .filter((o) => o !== b && o.hp > 0 && Math.abs(o.col - b.col) <= 1 && Math.abs(o.row - b.row) <= 1)
               .forEach((o) => {
                 const orc = cellRect(o.col, o.row);
                 damageBlock(o, blastDmg, orc.x + orc.w / 2, orc.y + orc.h / 2, true);
               });
+          } else if (b.kind === 'boss') {
+            sfxBomb();
+            state.shake = Math.max(state.shake, 7);
+            state.score += 350 + state.wave * 30;
+            state.rings.push({ x: cx, y: cy, r: 10, maxR: cellW * 1.6, color: '#d875ff', life: 0.3, maxLife: 0.3 });
+            addPopup(cx, cy - 6, 'BOSS BREAK!', '#f6d9ff', true);
           } else {
             sfxDestroy();
             state.shake = Math.max(state.shake, 2.5);
@@ -1543,8 +1605,13 @@
               const py = prc.y + prc.h / 2;
               if (Math.hypot(ball.x - px, ball.y - py) < ball.r + 12) {
                 state.pickups.splice(pi, 1);
-                state.baseBalls += 1;
-                addPopup(px, py - 6, '+1 BALL', '#3bff9c', false);
+                if (state.baseBalls < MAX_BALLS) {
+                  state.baseBalls += 1;
+                  addPopup(px, py - 6, '+1 BALL', '#3bff9c', false);
+                } else {
+                  state.score += 300 + state.wave * 20;
+                  addPopup(px, py - 6, '+BONUS', '#ffd400', false);
+                }
                 spawnParticles(px, py, '#3bff9c', 9, 140);
                 sfxUpgrade();
               }
@@ -1825,7 +1892,12 @@
           ctx.stroke();
 
           // Special badge icon
-          if (b.kind === 'bomb') {
+          if (b.kind === 'boss') {
+            ctx.fillStyle = '#e49bff';
+            ctx.font = '900 9px "Chakra Petch", sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText('BOSS', rc.x + 5, rc.y + 11);
+          } else if (b.kind === 'bomb') {
             ctx.fillStyle = '#ff8c24';
             ctx.font = '900 9px "Chakra Petch", sans-serif';
             ctx.textAlign = 'left';
@@ -1837,11 +1909,12 @@
             ctx.fillText(b.axis === 'h' ? 'BEAM↔' : 'BEAM↕', rc.x + 5, rc.y + 11);
           }
 
+          const hpLabel = formatHp(b.hp);
           ctx.fillStyle = b.flash > 0 ? '#0b0e14' : pal.text;
-          ctx.font = `900 ${b.hp >= 100 ? 13 : 16}px "Chakra Petch", sans-serif`;
+          ctx.font = `900 ${hpLabel.length >= 4 ? 12 : b.hp >= 100 ? 13 : 16}px "Chakra Petch", sans-serif`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText(String(b.hp), rc.x + rc.w / 2, rc.y + rc.h / 2 + (b.kind === 'normal' ? 1 : 4));
+          ctx.fillText(hpLabel, rc.x + rc.w / 2, rc.y + rc.h / 2 + (b.kind === 'normal' ? 1 : 4));
         }
 
         // +BALL Pickups
