@@ -355,7 +355,7 @@
     .modal-card {
       width: 100%;
       max-width: 400px;
-      max-height: 92dvh;
+      max-height: 100%;
       overflow-y: auto;
       background: linear-gradient(180deg, #182236 0%, #0f1624 100%);
       border: 1.5px solid rgba(0, 229, 255, 0.36);
@@ -1279,22 +1279,71 @@
         });
       });
 
-      function openArmory() {
+      let armoryReturnTo = null;
+
+      function syncRunStatsAfterArmory() {
+        if (state.phase !== 'play') return;
+        const blade = getBlade();
+        const focusLv = save.chips.focus || 0;
+        const greedLv = save.chips.greed || 0;
+        state.maxHp = blade.maxHp;
+        state.hp = Math.min(state.hp, state.maxHp);
+        state.maxFocus = 100 + focusLv * 18;
+        state.focus = Math.min(state.focus, state.maxFocus);
+        state.greedMult = 1 + greedLv * 0.18;
+      }
+
+      function openArmory(from) {
+        if (!armoryOverlay.classList.contains('show')) {
+          if (from) {
+            armoryReturnTo = from;
+          } else if (titleOverlay.classList.contains('show')) {
+            armoryReturnTo = 'title';
+          } else if (resultOverlay.classList.contains('show') || state.phase === 'gameover') {
+            armoryReturnTo = 'result';
+          } else if (state.phase === 'play') {
+            armoryReturnTo = 'play';
+          } else {
+            armoryReturnTo = 'title';
+          }
+        }
+        state.isAiming = false;
+        state.aimValid = false;
+        state.timeScale = 1.0;
+        titleOverlay.classList.remove('show');
+        resultOverlay.classList.remove('show');
         renderArmory();
         armoryOverlay.classList.add('show');
       }
 
-      armoryTopBtn.addEventListener('click', () => {
-        if (state.phase !== 'play') openArmory();
-      });
-      openArmoryBtn.addEventListener('click', openArmory);
-      resArmoryBtn.addEventListener('click', () => {
-        resultOverlay.classList.remove('show');
-        openArmory();
-      });
-      closeArmoryBtn.addEventListener('click', () => {
+      function closeArmory() {
         armoryOverlay.classList.remove('show');
+        const target = armoryReturnTo || (state.phase === 'gameover' ? 'result' : state.phase === 'play' ? 'play' : 'title');
+        armoryReturnTo = null;
+        if (target === 'result' || state.phase === 'gameover') {
+          titleOverlay.classList.remove('show');
+          resultOverlay.classList.add('show');
+        } else if (target === 'title' || state.phase === 'title') {
+          resultOverlay.classList.remove('show');
+          titleOverlay.classList.add('show');
+        } else {
+          titleOverlay.classList.remove('show');
+          resultOverlay.classList.remove('show');
+          syncRunStatsAfterArmory();
+        }
+        syncHUD();
+      }
+
+      armoryTopBtn.addEventListener('click', () => {
+        if (armoryOverlay.classList.contains('show')) {
+          closeArmory();
+        } else {
+          openArmory();
+        }
       });
+      openArmoryBtn.addEventListener('click', () => openArmory('title'));
+      resArmoryBtn.addEventListener('click', () => openArmory('result'));
+      closeArmoryBtn.addEventListener('click', closeArmory);
 
       modeToggleBtn.addEventListener('click', () => {
         hardMode = !hardMode;
@@ -1833,6 +1882,7 @@
 
       canvas.addEventListener('pointerup', endDrag);
       canvas.addEventListener('pointercancel', endDrag);
+      window.addEventListener('blur', endDrag);
 
       function damagePlayer() {
         if (SHORTS_MODE || state.invuln > 0 || state.phase !== 'play') return;
@@ -1858,8 +1908,7 @@
           if (toastTimer <= 0) unlockToast.classList.remove('show');
         }
 
-        if (state.phase !== 'play') return;
-        if (SHORTS_MODE && armoryOverlay.classList.contains('show')) return;
+        if (state.phase !== 'play' || armoryOverlay.classList.contains('show')) return;
 
         if (state.hitstop > 0) {
           state.hitstop -= rawDt;
