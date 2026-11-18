@@ -418,7 +418,7 @@
       <div class="eyebrow">DAY 04 // 3Dお掃除アクション</div>
       <h1>SWEEP RUSH</h1>
       <p class="desc">
-        指1本で散らかった3Dブロックを一掃！<br />
+        画面のどこでも指をスライドするだけ（PCはドラッグ／WASDも可）！<br />
         洗剤ボム連鎖＆3択パワーアップで巨大化して部屋ごと吹き飛ばそう。
       </p>
       <button class="cta-btn" id="startBtn" type="button">お掃除スタート！</button>
@@ -661,12 +661,13 @@
         vx: 0,
         vy: 0,
         angle: -Math.PI / 2,
-        baseRadius: 34,
-        speed: 410,
+        baseRadius: 38,
+        speed: 460,
         pointerActive: false,
         targetX: 0,
         targetY: 200,
         invuln: 0,
+        hasSteered: false,
 
         perks: {
           wide: 0,
@@ -863,9 +864,9 @@
             });
           }
 
-          // Add 1-3 Spike Hazards from Stage 2+
-          if (stageNum >= 2) {
-            const hazCount = Math.min(3, stageNum - 1);
+          // Add 1-2 gentle bumper hazards from Stage 3+
+          if (stageNum >= 3) {
+            const hazCount = Math.min(2, stageNum - 2);
             for (let h = 0; h < hazCount; h++) {
               state.blocks.push({
                 id: id++,
@@ -962,14 +963,13 @@
             addPopup(b.x, b.y, 38, 'SMASH +180', '#ffbe0b', true);
             state.events.push({ type: 'bomb', x: b.x, y: b.y });
           } else if (state.invuln <= 0 && source === 'sweep') {
-            state.invuln = 0.85;
-            state.combo = 0;
-            state.shake = Math.max(state.shake, 11);
-            state.flashAlpha = 0.28;
-            state.flashColor = '#ff5a5f';
-            state.timeLeft = Math.max(0.5, state.timeLeft - 1.5);
-            addPopup(b.x, b.y, 40, '-1.5s!', '#ff5a5f', true);
-            playTone(150, 0.22, 'sawtooth', 0.16, 65);
+            state.invuln = 0.65;
+            state.shake = Math.max(state.shake, 7);
+            const awayAng = Math.atan2(state.py - b.y, state.px - b.x);
+            state.px += Math.cos(awayAng) * 32;
+            state.py += Math.sin(awayAng) * 32;
+            addPopup(b.x, b.y, 40, 'BOUNCE!', '#5b6982', false);
+            playTone(170, 0.14, 'triangle', 0.12, 95);
           }
           return;
         }
@@ -1215,54 +1215,97 @@
         const zRot = dy * sinP + wz * cosP;
 
         const depth = camDist + yRot;
-        const focal = Math.min(viewW * 1.24, viewH * 0.78);
+        const focal = Math.min(viewW * 1.18, viewH * 0.75);
         const scale = focal / Math.max(160, depth);
 
         const sx = viewW * 0.5 + dx * scale;
-        const sy = viewH * 0.48 + (zRot * -1 + 88) * scale;
+        const sy = viewH * 0.48 + (zRot * -1 + 84) * scale;
         return { x: sx, y: sy, scale, depth };
       }
 
-      // Inverse ray-floor intersection for crisp touch/mouse steering
-      function screenToFloor(clientX, clientY) {
-        // Iterative approximation on Z=0 plane
-        let wx = state.px;
-        let wy = state.py;
-        for (let i = 0; i < 6; i++) {
-          const p = project3D(wx, wy, 0);
-          const errX = clientX - p.x;
-          const errY = clientY - p.y;
-          wx += errX / Math.max(0.25, p.scale);
-          wy += errY / (Math.max(0.25, p.scale) * 0.68);
-        }
-        return {
-          x: Math.max(-FLOOR_W / 2 + 24, Math.min(FLOOR_W / 2 - 24, wx)),
-          y: Math.max(-FLOOR_D / 2 + 24, Math.min(FLOOR_D / 2 - 24, wy)),
-        };
-      }
+      // Floating Virtual Joystick (Touch anywhere + Dynamic Anchor for instant U-turns)
+      const joy = {
+        active: false,
+        pointerId: null,
+        originX: 0,
+        originY: 0,
+        currX: 0,
+        currY: 0,
+        dx: 0,
+        dy: 0,
+        maxR: 46,
+      };
 
-      // Pointer & Keyboard Controls
       const keys = {};
-      window.addEventListener('keydown', (e) => { keys[e.key.toLowerCase()] = true; });
+      window.addEventListener('keydown', (e) => {
+        keys[e.key.toLowerCase()] = true;
+        if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'w', 'a', 's', 'd'].includes(e.key.toLowerCase())) {
+          state.hasSteered = true;
+        }
+      });
       window.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
+
+      function resetJoystick() {
+        joy.active = false;
+        joy.pointerId = null;
+        joy.dx = 0;
+        joy.dy = 0;
+        state.pointerActive = false;
+      }
 
       canvas.addEventListener('pointerdown', (e) => {
         if (SHORTS_MODE || state.phase !== 'play') return;
         ensureAudio();
+        if (canvas.setPointerCapture) {
+          try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+        }
+        joy.active = true;
+        joy.pointerId = e.pointerId;
+        joy.originX = e.clientX;
+        joy.originY = e.clientY;
+        joy.currX = e.clientX;
+        joy.currY = e.clientY;
+        joy.dx = 0;
+        joy.dy = 0;
         state.pointerActive = true;
-        const pt = screenToFloor(e.clientX, e.clientY);
-        state.targetX = pt.x;
-        state.targetY = pt.y;
       });
+
       canvas.addEventListener('pointermove', (e) => {
-        if (SHORTS_MODE || !state.pointerActive || state.phase !== 'play') return;
-        const pt = screenToFloor(e.clientX, e.clientY);
-        state.targetX = pt.x;
-        state.targetY = pt.y;
+        if (SHORTS_MODE || !joy.active || state.phase !== 'play') return;
+        if (joy.pointerId !== null && e.pointerId !== joy.pointerId) return;
+        joy.currX = e.clientX;
+        joy.currY = e.clientY;
+        let rx = joy.currX - joy.originX;
+        let ry = joy.currY - joy.originY;
+        let dist = Math.hypot(rx, ry);
+
+        // Dynamic anchor follows finger beyond maxR so reversing direction is instant
+        if (dist > joy.maxR) {
+          joy.originX = joy.currX - (rx / dist) * joy.maxR;
+          joy.originY = joy.currY - (ry / dist) * joy.maxR;
+          rx = joy.currX - joy.originX;
+          ry = joy.currY - joy.originY;
+          dist = joy.maxR;
+        }
+
+        if (dist > 5) {
+          const strength = Math.min(1, (dist - 5) / 22);
+          joy.dx = (rx / dist) * strength;
+          joy.dy = (ry / dist) * strength;
+          state.hasSteered = true;
+        } else {
+          joy.dx = 0;
+          joy.dy = 0;
+        }
       });
-      const stopPtr = () => { state.pointerActive = false; };
+
+      const stopPtr = (e) => {
+        if (joy.pointerId !== null && e && e.pointerId !== undefined && e.pointerId !== joy.pointerId) return;
+        resetJoystick();
+      };
       canvas.addEventListener('pointerup', stopPtr);
       canvas.addEventListener('pointercancel', stopPtr);
+      window.addEventListener('blur', resetJoystick);
 
       // =====================================================
       // Simulation Step
@@ -1286,6 +1329,7 @@
           state.timeLeft -= dt;
           if (state.timeLeft <= 0) {
             state.timeLeft = 0;
+            resetJoystick();
             syncHUD();
             finishGame();
             return;
@@ -1299,7 +1343,7 @@
           if (state.comboTimer <= 0) state.combo = 0;
         }
 
-        // Steering
+        // Steering (Keyboard / Floating Virtual Joystick / Shorts Showcase)
         const spd = state.speed * (1 + state.perks.turbo * 0.25) * (state.fever > 0 ? 1.2 : 1.0);
         let kx = 0;
         let ky = 0;
@@ -1315,7 +1359,13 @@
           state.px += state.vx * dt;
           state.py += state.vy * dt;
           state.angle = Math.atan2(state.vy, state.vx);
-        } else if (state.pointerActive || SHORTS_MODE) {
+        } else if (!SHORTS_MODE && joy.active && (joy.dx !== 0 || joy.dy !== 0)) {
+          state.vx = joy.dx * spd;
+          state.vy = joy.dy * spd;
+          state.px += state.vx * dt;
+          state.py += state.vy * dt;
+          state.angle = Math.atan2(state.vy, state.vx);
+        } else if (SHORTS_MODE) {
           const dx = state.targetX - state.px;
           const dy = state.targetY - state.py;
           const dist = Math.hypot(dx, dy);
@@ -1330,14 +1380,17 @@
             state.vx = 0;
             state.vy = 0;
           }
+        } else {
+          state.vx = 0;
+          state.vy = 0;
         }
 
         state.px = Math.max(-FLOOR_W / 2 + 24, Math.min(FLOOR_W / 2 - 24, state.px));
         state.py = Math.max(-FLOOR_D / 2 + 24, Math.min(FLOOR_D / 2 - 24, state.py));
 
-        // Smooth camera follow
-        state.camX += (state.px * 0.45 - state.camX) * Math.min(1, dt * 6.5);
-        state.camY += ((state.py + 80) * 0.45 - state.camY) * Math.min(1, dt * 6.5);
+        // Gentle camera follow so the whole room stays easy to read on portrait mobile
+        state.camX += (state.px * 0.18 - state.camX) * Math.min(1, dt * 6.0);
+        state.camY += ((state.py * 0.16 + 32) - state.camY) * Math.min(1, dt * 6.0);
 
         const rad = sweeperRadius();
         markFloorCleaned(state.px, state.py, rad);
@@ -1351,21 +1404,21 @@
           }
         }
 
-        // Sweep & Magnet Pull
-        const magRad = rad + 36 + state.perks.magnet * 55;
+        // Sweep & Edge Suction Pull
+        const magRad = rad + 22 + state.perks.magnet * 58;
         for (const b of state.blocks) {
           if (b.removed) continue;
           const dx = state.px - b.x;
           const dy = state.py - b.y;
           const d = Math.hypot(dx, dy);
 
-          if (b.kind !== 'hazard' && state.perks.magnet > 0 && d < magRad && d > rad) {
-            const pull = (160 + state.perks.magnet * 95) * dt;
+          if (b.kind !== 'hazard' && d < magRad && d > rad) {
+            const pull = (115 + state.perks.magnet * 110) * dt;
             b.x += (dx / d) * pull;
             b.y += (dy / d) * pull;
           }
 
-          if (d <= rad + b.size * 0.52) {
+          if (d <= rad + b.size * 0.56) {
             sweepBlock(b, 'sweep');
           }
         }
@@ -1444,9 +1497,9 @@
 
         syncHUD();
 
-        // Check Stage Clear (97%+ cleaned auto-completes remaining stragglers cleanly!)
+        // Check Stage Clear (95%+ cleaned auto-completes remaining stragglers cleanly!)
         const remainingNonHaz = state.blocks.filter((b) => b.kind !== 'hazard').length;
-        if (remainingNonHaz === 0 || (!SHORTS_MODE && cleanPercent() >= 97)) {
+        if (remainingNonHaz === 0 || (!SHORTS_MODE && cleanPercent() >= 95)) {
           // Auto-pop last few blocks for crisp 100% clean satisfaction
           state.blocks.filter((b) => b.kind !== 'hazard').forEach((b) => {
             b.removed = true;
@@ -1455,7 +1508,10 @@
           });
           state.blocks = state.blocks.filter((b) => !b.removed);
           syncHUD();
-          if (!SHORTS_MODE) openUpgradeModal();
+          if (!SHORTS_MODE) {
+            resetJoystick();
+            openUpgradeModal();
+          }
         }
       }
 
@@ -1821,6 +1877,48 @@
           ctx.globalAlpha = state.flashAlpha;
           ctx.fillRect(0, 0, viewW, viewH);
           ctx.globalAlpha = 1;
+        }
+
+        // Floating Virtual Joystick visual feedback (mobile & mouse drag)
+        if (!SHORTS_MODE && state.phase === 'play') {
+          if (joy.active) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(joy.originX, joy.originY, joy.maxR, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(27, 37, 56, 0.10)';
+            ctx.fill();
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+            ctx.stroke();
+
+            const knobX = joy.originX + joy.dx * joy.maxR;
+            const knobY = joy.originY + joy.dy * joy.maxR;
+            ctx.beginPath();
+            ctx.arc(knobX, knobY, 20, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.94)';
+            ctx.shadowColor = 'rgba(27, 37, 56, 0.22)';
+            ctx.shadowBlur = 10;
+            ctx.fill();
+            ctx.restore();
+          } else if (!state.hasSteered) {
+            const gx = viewW * 0.5 + Math.sin(state.ambientT * 3.2) * 26;
+            const gy = viewH * 0.82;
+            ctx.save();
+            ctx.fillStyle = 'rgba(27, 37, 56, 0.72)';
+            ctx.beginPath();
+            if (ctx.roundRect) {
+              ctx.roundRect(viewW * 0.5 - 118, gy - 22, 236, 44, 22);
+            } else {
+              ctx.rect(viewW * 0.5 - 118, gy - 22, 236, 44);
+            }
+            ctx.fill();
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '800 14px "M PLUS Rounded 1c", system-ui, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('👆 スライドして操縦！', gx * 0.25 + viewW * 0.375, gy);
+            ctx.restore();
+          }
         }
 
         ctx.restore();
