@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Day 04 投稿ヘルパー｜SWEEP RUSH</title>
+  <style>
+    :root {
+      --bg: #eef5fc;
+      --card: #ffffff;
+      --text: #1b2538;
+      --muted: #5b6982;
+      --accent: #12b882;
+      --blue: #2f80ed;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px 16px 60px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
+      line-height: 1.65;
+    }
+    .wrap { max-width: 760px; margin: 0 auto; }
+    h1 { font-size: 22px; margin: 0 0 8px; }
+    .lead { margin: 0 0 20px; color: var(--muted); font-size: 14px; }
+    .quick-bar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 12px;
+      margin-bottom: 22px;
+    }
+    .action-link {
+      display: block;
+      text-align: center;
+      text-decoration: none;
+      border-radius: 14px;
+      padding: 14px 16px;
+      font-weight: 900;
+      font-size: 14px;
+      background: var(--accent);
+      color: #ffffff;
+    }
+    .action-link.secondary { background: #ffffff; color: var(--text); border: 1px solid #d7e3f3; }
+    .section {
+      background: var(--card);
+      border-radius: 18px;
+      padding: 18px 20px;
+      margin-bottom: 18px;
+      box-shadow: 0 8px 24px rgba(27, 37, 56, 0.06);
+    }
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+    .section-title { font-size: 15px; font-weight: 800; color: var(--blue); }
+    .thumb-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .copy-btn {
+      border: none;
+      border-radius: 10px;
+      padding: 8px 14px;
+      background: var(--accent);
+      color: #ffffff;
+      font-weight: 800;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .copy-btn.secondary { background: #eef4fc; color: var(--text); }
+    .copy-btn.done { background: #ffbe0b; color: #1b2538; }
+    textarea {
+      width: 100%;
+      background: #f5f9ff;
+      color: var(--text);
+      border: 1px solid #e1ebf7;
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-family: inherit;
+      font-size: 14px;
+      line-height: 1.6;
+      resize: vertical;
+    }
+    .thumb-preview { width: 100%; border-radius: 12px; display: block; margin-top: 8px; }
+    .hint-small { margin: 8px 0 0; font-size: 12px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Day 04 投稿ヘルパー（ゲーム4日目：SWEEP RUSH）</h1>
+    <p class="lead">ゲームURLに「ゲーム4日目」サムネ画像カード（OGP）を埋め込み済み。X も note もURLを貼るだけで画像カードになります。</p>
+
+    <div class="quick-bar">
+      <a class="action-link" id="xIntentBtn" href="#" target="_blank" rel="noopener">X（Twitter）の投稿画面を開く</a>
+      <a class="action-link secondary" href="https://note.com/notes/new" target="_blank" rel="noopener">note 新規記事作成を開く</a>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">X（Twitter）投稿テキスト</span>
+        <button class="copy-btn" data-target="xText">コピー</button>
+      </div>
+      <textarea id="xText" rows="7" readonly>【100日後にバズるゲームを作る男｜4日目】
+部屋中の3Dブロックを一撃で掃除して巨大化する『SWEEP RUSH』を作りました🧹✨
+
+✅ 指1本で散らかった立体ブロックを一掃
+✅ 洗剤ボム連鎖＆3択強化でブレードが超巨大化！
+
+何ステージまでピカピカにできる？👇
+https://kam2525-hub.github.io/note_create_use/games/day04-sweep-rush/
+
+#100日後にバズるゲームを作る男 #個人開発 #ゲーム制作</textarea>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">note 見出し画像（ゲーム4日目入り）</span>
+        <div class="thumb-actions">
+          <button class="copy-btn" id="copyImageBtn" type="button">画像をコピー</button>
+          <button class="copy-btn secondary" id="shareImageBtn" type="button">共有 / 写真保存</button>
+          <a class="copy-btn secondary" style="text-decoration:none;" href="../../shorts/day04/output/note_thumbnail.png" download="day04_note_thumbnail.png">保存</a>
+        </div>
+      </div>
+      <img class="thumb-preview" src="../../shorts/day04/output/note_thumbnail.png" alt="ゲーム4日目 サムネイル" />
+      <p class="hint-small">iPhoneでは「画像をコピー」→ note でペースト、または「共有 / 写真保存」→「画像を保存」が最速です。</p>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">note タイトル</span>
+        <button class="copy-btn" data-target="noteTitle">コピー</button>
+      </div>
+      <textarea id="noteTitle" rows="2" readonly>【ゲーム4日目】散らかった3Dブロックを一撃で掃除して巨大化する『SWEEP RUSH』を作った【無料プレイ可】</textarea>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">note 本文</span>
+        <button class="copy-btn" data-target="noteBody">コピー</button>
+      </div>
+      <textarea id="noteBody" rows="16" readonly>100日後にバズるゲームを作る男、4日目です。
+
+4日目の今日は、「散らかった部屋を一瞬でピカピカにする気持ちよさ」と「3択強化でマシンがどんどんインフレする中毒性」を合わせた3Dお掃除アクション『SWEEP RUSH』を作りました！
+
+スマホでもPCでも、インストール不要・ブラウザだけで今すぐ無料で遊べます👇
+
+https://kam2525-hub.github.io/note_create_use/games/day04-sweep-rush/
+
+---
+
+■ 遊び方は「なぞって掃除するだけ」
+
+1. 画面をなぞる（PCは矢印 / WASDキーも可）と、クリーナーマシンが立体ブロックをザクザク掃除！
+2. 掃除した床は真っ白ピカピカに変わり、コンボが繋がるほどヒット音の音階が上がります。
+3. 部屋を掃除しきると「3択マシン強化」が出現！次のステージがどんどん快適＆ド派手になります。
+
+---
+
+■ 4日目のこだわり（見た目も手触りも完全刷新）
+
+・明るいミニチュア3Dジオラマ＆スッキリUI：
+  画面を囲う余計な枠をなくし、フルスクリーンの立体フロアで遊べる爽やかな見た目にしました。
+・お掃除ギミックの連鎖爆発：
+  山に埋まった BOMB!（洗剤ボム）や SPIN!（吸引トルネード）を巻き込むと、周囲のブロックが一気に吹き飛びます。
+・6種類のインフレ強化ビルド：
+  ワイドブレード・洗剤ボム弾・吸引トルネード・チェイン静電気・強力バキューム・ターボモーターを重ねるほど、1周走るだけで部屋丸ごと掃除できるようになります！
+
+---
+
+■ あなたは何ステージまでピカピカにできる？
+
+まずは STAGE 3突破・12,000点（MEGA SWEEPER）を目指してみてください！
+到達ステージやスコアは、ぜひコメント欄や X で教えてください👇</textarea>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">YouTube Shorts タイトル</span>
+        <button class="copy-btn" data-target="ytTitle">コピー</button>
+      </div>
+      <textarea id="ytTitle" rows="2" readonly>部屋中の3Dブロックを一撃で掃除するゲームが気持ちよすぎたｗ【無料ブラウザゲーム】 #Shorts #ゲーム制作</textarea>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">YouTube Shorts 説明文</span>
+        <button class="copy-btn" data-target="ytDesc">コピー</button>
+      </div>
+      <textarea id="ytDesc" rows="10" readonly>スマホ・PCで今すぐ無料で遊べます▼
+https://kam2525-hub.github.io/note_create_use/games/day04-sweep-rush/
+
+100日後にバズるゲームを作る男【ゲーム4日目】
+『SWEEP RUSH』
+
+散らかったカラフルな3Dブロックを、爆速クリーナーで一気に吸い込んでお掃除！
+「洗剤ボム連鎖」「吸引トルネード」「3択マシン巨大化」が重なると、画面ごと吹き飛ぶ爽快感が味わえます。
+あなたは何ステージまでピカピカにできる？記録をコメント欄で教えてください！
+
+#Shorts #ゲーム制作 #個人開発 #無料ゲーム #ブラウザゲーム #ミニゲーム #お掃除ゲーム</textarea>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">YouTube タグ（カンマ区切り・手動貼付用）</span>
+        <button class="copy-btn" data-target="ytTags">コピー</button>
+      </div>
+      <textarea id="ytTags" rows="3" readonly>Shorts,100日後にバズるゲームを作る男,ゲーム4日目,SWEEP RUSH,お掃除ゲーム,3Dゲーム,個人開発,ゲーム制作,インディーゲーム,ブラウザゲーム,無料ゲーム,スマホゲーム,ミニゲーム,爽快ゲーム,暇つぶし</textarea>
+    </div>
+  </div>
+
+  <script>
+    const xTextEl = document.getElementById('xText');
+    document.getElementById('xIntentBtn').href =
+      'https://twitter.com/intent/tweet?text=' + encodeURIComponent(xTextEl.value);
+
+    const thumbUrl = new URL('../../shorts/day04/output/note_thumbnail.png', window.location.href).href;
+    let cachedBlobPromise = null;
+    function getThumbBlob() {
+      if (!cachedBlobPromise) {
+        cachedBlobPromise = fetch(thumbUrl).then((res) => {
+          if (!res.ok) throw new Error('Image fetch failed');
+          return res.blob();
+        });
+      }
+      return cachedBlobPromise;
+    }
+    getThumbBlob().catch(() => {});
+
+    const copyImageBtn = document.getElementById('copyImageBtn');
+    copyImageBtn.addEventListener('click', async () => {
+      const orig = copyImageBtn.textContent;
+      try {
+        if (typeof ClipboardItem === 'undefined' || !navigator.clipboard || !navigator.clipboard.write) {
+          throw new Error('ClipboardItem unsupported');
+        }
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': getThumbBlob() })]);
+        copyImageBtn.textContent = '画像コピー完了！';
+        copyImageBtn.classList.add('done');
+        setTimeout(() => {
+          copyImageBtn.textContent = orig;
+          copyImageBtn.classList.remove('done');
+        }, 1600);
+      } catch (e) {
+        copyImageBtn.textContent = '非対応時は「共有」へ';
+        setTimeout(() => { copyImageBtn.textContent = orig; }, 1800);
+      }
+    });
+
+    const shareImageBtn = document.getElementById('shareImageBtn');
+    shareImageBtn.addEventListener('click', async () => {
+      const orig = shareImageBtn.textContent;
+      try {
+        const blob = await getThumbBlob();
+        const file = new File([blob], 'day04_note_thumbnail.png', { type: 'image/png' });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: 'ゲーム4日目 サムネイル' });
+        } else {
+          window.open(thumbUrl, '_blank', 'noopener');
+        }
+      } catch (e) {
+        if (e && e.name !== 'AbortError') {
+          shareImageBtn.textContent = '画像を長押しで保存';
+          setTimeout(() => { shareImageBtn.textContent = orig; }, 1800);
+        }
+      }
+    });
+
+    document.querySelectorAll('.copy-btn[data-target]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const el = document.getElementById(btn.dataset.target);
+        await navigator.clipboard.writeText(el.value);
+        const orig = btn.textContent;
+        btn.textContent = 'コピー完了！';
+        btn.classList.add('done');
+        setTimeout(() => {
+          btn.textContent = orig;
+          btn.classList.remove('done');
+        }, 1400);
+      });
+    });
+  </script>
+</body>
+</html>

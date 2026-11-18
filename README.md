@@ -9,6 +9,12 @@
 ## 制作ログ（重複防止カタログ）
 - 一覧表: [CATALOG.md](CATALOG.md) / 機械可読データ: [CATALOG.json](CATALOG.json)
 
+## Day 04: SWEEP RUSH（3Dお掃除無双 × 3択インフレ強化）
+- ゲーム本体: [games/day04-sweep-rush/index.html](games/day04-sweep-rush/index.html)
+- 1クリックコピペヘルパー: [notes/day04/copy_helper.html](notes/day04/copy_helper.html)
+- note 記事原稿: [notes/day04/note_draft.md](notes/day04/note_draft.md)
+- ショート動画生成スクリプト（1080×1920 フルスクリーン60fps＋音声ナレーション）: [shorts/day04/generate_shorts.py](shorts/day04/generate_shorts.py)
+
 ## Day 03: BLINK SLASH 99（時間停止ワープ斬り×刀スタイル解放）
 - ゲーム本体: [games/day03-blink-slash/index.html](games/day03-blink-slash/index.html)
 - 1クリックコピペヘルパー: [notes/day03/copy_helper.html](notes/day03/copy_helper.html)

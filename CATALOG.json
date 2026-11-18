@@ -36,6 +36,18 @@
       "game_path": "games/day03-blink-slash/index.html",
       "note_path": "notes/day03/note_draft.md",
       "shorts_script": "shorts/day03/generate_shorts.py"
+    },
+    {
+      "day": 4,
+      "date": "2026-11-18",
+      "slug": "day04-sweep-rush",
+      "title": "SWEEP RUSH（3Dお掃除無双 × 3択インフレ強化）",
+      "type": "game",
+      "genre": "3Dお掃除爽快アクション / ローグライト",
+      "core_mechanic": "フルスクリーン3Dジオラマ上の立体ブロック山をなぞって掃除・床をピカピカ化＋洗剤ボム/トルネード連鎖＋ステージ毎の3択ブレード巨大化ビルド",
+      "game_path": "games/day04-sweep-rush/index.html",
+      "note_path": "notes/day04/note_draft.md",
+      "shorts_script": "shorts/day04/generate_shorts.py"
     }
   ]
 }
