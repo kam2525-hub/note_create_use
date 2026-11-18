@@ -40,12 +40,12 @@
     {
       "day": 4,
       "date": "2026-11-18",
-      "slug": "day04-sweep-rush",
-      "title": "SWEEP RUSH（3Dお掃除無双 × 3択インフレ強化）",
+      "slug": "day04-eleven-dribble",
+      "title": "ELEVEN DRIBBLE（一人称3D・11人抜きドリブルサッカー）",
       "type": "game",
-      "genre": "3Dお掃除爽快アクション / ローグライト",
-      "core_mechanic": "フルスクリーン3Dジオラマ上の立体ブロック山をなぞって掃除・床をピカピカ化＋洗剤ボム/トルネード連鎖＋ステージ毎の3択ブレード巨大化ビルド",
-      "game_path": "games/day04-sweep-rush/index.html",
+      "genre": "一人称3Dスポーツアクション / 11人抜きサッカー",
+      "core_mechanic": "一人称POV視点で足元のボールとスパイクを見ながら左右スライドでランダム移動・スライディングするCPU 10人をフェイント突破（アンクルブレイカー加速）＋11人目の守護神GKと1対1カーブシュート",
+      "game_path": "games/day04-eleven-dribble/index.html",
       "note_path": "notes/day04/note_draft.md",
       "shorts_script": "shorts/day04/generate_shorts.py"
     }

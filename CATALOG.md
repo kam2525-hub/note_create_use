@@ -7,4 +7,4 @@
 | 01 | 2026-11-15 | ゲーム | **JUST SLASH 99（神速0.01秒ジャスト斬り）** | タイミングアクション | 往復レーザーが光るゾーンに重なった瞬間に1タップ＋5連続FEVER＋赤TRAP回避 | [games/day01-just-slash/](games/day01-just-slash/index.html) |
 | 02 | 2026-11-16 | ゲーム | **ANGLE BREAKER 99（無限反射×3択スキルビルド）** | ローグライト反射ブロック崩し | 角度ショット反射＋BOMB/PRISM連鎖＋毎ウェーブの3択スキル強化 | [games/day02-angle-breaker/](games/day02-angle-breaker/index.html) |
 | 03 | 2026-11-17 | ゲーム | **BLINK SLASH 99（時間停止ワープ斬り×刀スタイル解放）** | 時間停止ワープ斬撃アクション | ホールド時間停止＋離して瞬間ワープ斬り＋見切り回避＋4種刀スタイル解放・チップ強化・実績12種 | [games/day03-blink-slash/](games/day03-blink-slash/index.html) |
-| 04 | 2026-11-18 | ゲーム | **SWEEP RUSH（3Dお掃除無双 × 3択インフレ強化）** | 3Dお掃除アクション | フルスクリーン3Dジオラマ上の立体ブロックを掃除＋洗剤ボム/竜巻連鎖＋3択ブレード巨大化ビルド | [games/day04-sweep-rush/](games/day04-sweep-rush/index.html) |
+| 04 | 2026-11-18 | ゲーム | **ELEVEN DRIBBLE（一人称3D・11人抜きドリブルサッカー）** | 一人称3Dスポーツ・サッカー | 一人称POV視点で左右スライドによるフェイント突破（ランダム移動＆スライディングCPU 10人抜き）＋11人目GKとの1対1カーブシュート | [games/day04-eleven-dribble/](games/day04-eleven-dribble/index.html) |

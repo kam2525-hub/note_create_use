@@ -30,7 +30,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[2]
-GAME_DIR = ROOT / "games" / "day04-sweep-rush"
+GAME_DIR = ROOT / "games" / "day04-eleven-dribble"
 OUT_DIR = ROOT / "shorts" / "day04" / "output"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -184,13 +184,13 @@ def start_static_server(directory: Path):
     return srv, port
 
 
-# Natural, punchy Japanese voice narration (short sentences, zero robotic hype)
+# Natural, punchy Japanese voice narration for First-Person 11-Man Dribble Soccer
 NARRATION_CUES = [
-    (0.05, "散らかった部屋を一気に掃除するゲーム作った！"),
-    (2.45, "洗剤ボムを巻き込むと、周りごと大爆発！"),
-    (5.65, "クリアしたら強化を1つ選んで、"),
-    (8.15, "マシンが巨大化！あとは部屋ごと吹き飛ばすだけ！"),
-    (14.50, "スマホでそのまま遊べるよ！"),
+    (0.05, "一人称視点で11人抜きするサッカーゲーム作った！"),
+    (3.10, "ランダムに動く相手を、左右のフェイントでかわして、"),
+    (7.30, "スライディングもギリギリで突破すると一気に加速！"),
+    (12.80, "10人抜いたら最後はキーパーと1対1！"),
+    (15.30, "11人抜きゴール！スマホで今すぐ遊べるよ！"),
 ]
 
 
@@ -254,8 +254,8 @@ def generate_audio(total_dur: float, events: list, wav_path: Path):
     sfx = np.zeros(n_samples, dtype=np.float32)
     voice = np.zeros(n_samples, dtype=np.float32)
 
-    # 142 BPM upbeat marimba-house arcade BGM
-    bpm = 142.0
+    # 144 BPM energetic Latin/Stadium samba-house BGM
+    bpm = 144.0
     step_dur = 60.0 / bpm / 2.0
     bass_notes = [130.81, 130.81, 164.81, 196.0, 146.83, 146.83, 196.0, 164.81]
     lead_notes = [523.25, 659.25, 783.99, 1046.5, 880.0, 783.99, 659.25, 587.33]
@@ -285,47 +285,55 @@ def generate_audio(total_dur: float, events: list, wav_path: Path):
 
         bgm[s_start : s_start + s_len] += bass + marimba + kick + hat
 
-    # Frame-accurate ASMR pop + explosion SFX
-    penta = [392.0, 440.0, 493.88, 587.33, 659.25, 783.99, 880.0, 987.77, 1174.66, 1318.51]
-    last_pop_t = -1.0
+    # Frame-accurate soccer SFX (whistle, pass, ankle_breaker, shoot, goal)
+    penta = [440.0, 493.88, 523.25, 587.33, 659.25, 783.99, 880.0, 987.77, 1046.5, 1174.66, 1318.51]
     for ev in events:
         t0 = float(ev.get("t", 0.0))
         idx0 = int(t0 * sr)
         if idx0 >= n_samples:
             continue
         kind = ev.get("type")
-        if kind == "pop":
-            if t0 - last_pop_t < 0.025:
-                continue
-            last_pop_t = t0
-            c = int(ev.get("combo", 1))
-            f0 = penta[c % len(penta)]
-            e_len = min(int(0.085 * sr), n_samples - idx0)
+        if kind in ("kickoff", "shoot_zone"):
+            # Referee whistle trill
+            e_len = min(int(0.24 * sr), n_samples - idx0)
             lt = np.arange(e_len, dtype=np.float32) / sr
-            freq = np.linspace(f0, f0 * 1.24, e_len, dtype=np.float32)
-            sfx[idx0 : idx0 + e_len] += np.sin(2.0 * math.pi * np.cumsum(freq) / sr) * np.exp(-lt * 28.0) * 0.24
-        elif kind == "bomb":
-            e_len = min(int(0.36 * sr), n_samples - idx0)
+            trill = 2850.0 + 120.0 * np.sin(2.0 * math.pi * 28.0 * lt)
+            sfx[idx0 : idx0 + e_len] += np.sin(2.0 * math.pi * np.cumsum(trill) / sr) * np.exp(-lt * 8.0) * 0.18
+        elif kind == "pass":
+            c = int(ev.get("count", 1))
+            f0 = penta[min(c, len(penta) - 1)]
+            e_len = min(int(0.14 * sr), n_samples - idx0)
             lt = np.arange(e_len, dtype=np.float32) / sr
-            f = 185.0 * np.exp(-lt * 9.0) + 40.0
-            rng = np.random.default_rng(seed=int(t0 * 1000) + 4)
-            boom = np.sin(2.0 * math.pi * np.cumsum(f) / sr) * np.exp(-lt * 8.0) * 0.42
-            fizz = rng.uniform(-1.0, 1.0, e_len).astype(np.float32) * np.exp(-lt * 14.0) * 0.14
-            sfx[idx0 : idx0 + e_len] += boom + fizz
-        elif kind in ("vortex", "fever"):
-            for k, f in enumerate((523.25, 659.25, 783.99, 1046.5)):
-                k0 = idx0 + int(k * 0.045 * sr)
-                e_len = min(int(0.16 * sr), n_samples - k0)
+            freq = np.linspace(f0, f0 * 1.28, e_len, dtype=np.float32)
+            sfx[idx0 : idx0 + e_len] += np.sin(2.0 * math.pi * np.cumsum(freq) / sr) * np.exp(-lt * 20.0) * 0.25
+        elif kind == "ankle_breaker":
+            c = int(ev.get("count", 1))
+            base_f = penta[min(c, len(penta) - 1)]
+            for k, mul in enumerate((1.0, 1.25, 1.5)):
+                k0 = idx0 + int(k * 0.035 * sr)
+                e_len = min(int(0.14 * sr), n_samples - k0)
                 if e_len > 0:
                     lt = np.arange(e_len, dtype=np.float32) / sr
-                    sfx[k0 : k0 + e_len] += np.sin(2.0 * math.pi * f * lt) * np.exp(-lt * 15.0) * 0.22
-        elif kind == "stage_clear":
+                    sfx[k0 : k0 + e_len] += np.sin(2.0 * math.pi * (base_f * mul) * lt) * np.exp(-lt * 16.0) * 0.22
+        elif kind == "shoot":
+            e_len = min(int(0.26 * sr), n_samples - idx0)
+            lt = np.arange(e_len, dtype=np.float32) / sr
+            f = 210.0 * np.exp(-lt * 12.0) + 42.0
+            sfx[idx0 : idx0 + e_len] += np.sin(2.0 * math.pi * np.cumsum(f) / sr) * np.exp(-lt * 9.0) * 0.44
+        elif kind == "goal":
+            # Goal fanfare chord + crowd roar
             for k, f in enumerate((523.25, 659.25, 783.99, 1046.5)):
                 k0 = idx0 + int(k * 0.06 * sr)
-                e_len = min(int(0.20 * sr), n_samples - k0)
+                e_len = min(int(0.45 * sr), n_samples - k0)
                 if e_len > 0:
                     lt = np.arange(e_len, dtype=np.float32) / sr
-                    sfx[k0 : k0 + e_len] += np.sin(2.0 * math.pi * f * lt) * np.exp(-lt * 12.0) * 0.26
+                    sfx[k0 : k0 + e_len] += np.sin(2.0 * math.pi * f * lt) * np.exp(-lt * 6.0) * 0.28
+            e_len = min(int(1.2 * sr), n_samples - idx0)
+            if e_len > 0:
+                lt = np.arange(e_len, dtype=np.float32) / sr
+                rng = np.random.default_rng(seed=1986)
+                roar = rng.uniform(-1.0, 1.0, e_len).astype(np.float32) * np.exp(-lt * 2.2) * 0.14
+                sfx[idx0 : idx0 + e_len] += roar
 
     duck = np.ones(n_samples, dtype=np.float32)
     tts_tmp_dir = Path(tempfile.mkdtemp(prefix="tts_day04_"))
@@ -378,7 +386,6 @@ def overlay_human_captions(
     draw = ImageDraw.Draw(img)
     W, H = img.size
 
-    # Subtle creator subtitle in upper-mid safe zone (below game HUD, above center action)
     if pop_text:
         age = max(0.0, t - pop_start)
         pop_lift = int(14 * math.exp(-age * 16.0))
@@ -387,63 +394,60 @@ def overlay_human_captions(
         tw = tb[2] - tb[0]
         th = tb[3] - tb[1]
         tx = (W - tw) // 2
-        ty = 310 - th // 2 - pop_lift
+        ty = 130 - th // 2 - pop_lift
 
-        # Soft shadow + bold readable outline (classic Japanese creator telop look)
-        draw.text((tx + 4, ty + 6), pop_text, font=fnt, fill=(15, 24, 42, 165))
+        draw.text((tx + 4, ty + 6), pop_text, font=fnt, fill=(6, 18, 12, 185))
         draw.text(
             (tx, ty),
             pop_text,
             font=fnt,
             fill=pop_color,
             stroke_width=10,
-            stroke_fill=(20, 30, 48),
+            stroke_fill=(8, 24, 16),
         )
 
-    # Clean, non-intrusive end pointer ONLY in last 3.2 seconds (upper-safe zone)
     if end_cta:
         tb = draw.textbbox((0, 0), end_cta, font=font_small, stroke_width=6)
         tw = tb[2] - tb[0]
         tx = (W - tw) // 2
-        ty = 390
+        ty = 205
         draw.text(
             (tx, ty),
             end_cta,
             font=font_small,
             fill=(255, 255, 255),
             stroke_width=6,
-            stroke_fill=(20, 30, 48),
+            stroke_fill=(8, 24, 16),
         )
 
     return img.convert("RGB")
 
 
 def generate_thumbnail(action_img: Image.Image, out_png: Path):
-    """Bright, playful studio-style 1280x670 thumbnail (zero dark cyber grid)."""
+    """Bright, vibrant stadium-style 1280x670 thumbnail for ELEVEN DRIBBLE."""
     W, H = 1280, 670
-    img = Image.new("RGB", (W, H), (235, 245, 255))
+    img = Image.new("RGB", (W, H), (236, 253, 245))
     draw = ImageDraw.Draw(img)
 
-    # Soft sky-to-cream vertical studio gradient
+    # Fresh stadium mint-to-sky gradient
     for y in range(0, H, 4):
         frac = y / H
-        r = int(206 + 44 * frac)
-        g = int(233 + 19 * frac)
-        b = int(255)
+        r = int(220 + 25 * frac)
+        g = int(252 - 6 * frac)
+        b = int(231 + 20 * frac)
         draw.rectangle([(0, y), (W, y + 4)], fill=(r, g, b))
 
-    # Subtle bright polka dots in background (playful toy aesthetic)
-    for gx in range(40, W, 96):
-        for gy in range(40, H, 96):
-            draw.ellipse([(gx - 4, gy - 4), (gx + 4, gy + 4)], fill=(192, 220, 248))
+    # Subtle pitch lines pattern in background
+    for gx in range(60, W, 120):
+        draw.line([(gx, 0), (gx, H)], fill=(187, 247, 208), width=2)
 
-    # Right-side crisp 3D gameplay card with soft drop shadow (no neon border!)
+    # Right-side crisp 3D gameplay card with soft drop shadow
     card_w, card_h = 330, 586
     cx, cy = 876, 42
     draw.rounded_rectangle(
         [(cx + 10, cy + 14), (cx + card_w + 10, cy + card_h + 14)],
         radius=28,
-        fill=(182, 204, 228),
+        fill=(134, 239, 172),
     )
     preview = action_img.resize((card_w, card_h), Image.Resampling.LANCZOS)
     mask = Image.new("L", (card_w, card_h), 0)
@@ -457,24 +461,22 @@ def generate_thumbnail(action_img: Image.Image, out_png: Path):
     )
 
     font_tag = ImageFont.truetype(FONT_SANS, 32)
-    font_hero = ImageFont.truetype(FONT_SANS, 82)
-    font_title = ImageFont.truetype(FONT_SANS, 58)
+    font_hero = ImageFont.truetype(FONT_SANS, 78)
+    font_title = ImageFont.truetype(FONT_SANS, 56)
     font_sub = ImageFont.truetype(FONT_SANS, 34)
 
-    # Day 4 badge
     badge_txt = "ゲーム4日目｜ブラウザで今すぐ遊べる"
     sb = draw.textbbox((0, 0), badge_txt, font=font_tag)
-    draw.rounded_rectangle([(68, 72), (68 + (sb[2] - sb[0]) + 42, 130)], radius=18, fill=(255, 190, 11))
-    draw.text((89, 80), badge_txt, font=font_tag, fill=(27, 37, 56))
+    draw.rounded_rectangle([(68, 72), (68 + (sb[2] - sb[0]) + 42, 130)], radius=18, fill=(250, 204, 21))
+    draw.text((89, 80), badge_txt, font=font_tag, fill=(15, 23, 42))
 
-    # Bold hook headline
-    draw.text((68, 172), "部屋中の3Dブロックを", font=font_hero, fill=(27, 37, 56))
-    draw.text((68, 272), "一撃でお掃除無双！", font=font_hero, fill=(255, 90, 95))
+    draw.text((68, 172), "一人称3Dドリブルで", font=font_hero, fill=(15, 23, 42))
+    draw.text((68, 272), "衝撃の11人抜きGOAL!", font=font_hero, fill=(22, 163, 74))
 
-    draw.text((70, 396), "SWEEP RUSH", font=font_title, fill=(47, 128, 237))
-    draw.text((70, 470), "洗剤ボム連鎖 × 3択お掃除ビルド", font=font_sub, fill=(75, 92, 118))
+    draw.text((70, 396), "ELEVEN DRIBBLE", font=font_title, fill=(2, 132, 199))
+    draw.text((70, 470), "左右スライドでランダムCPUを突破×カーブシュート", font=font_sub, fill=(51, 65, 85))
 
-    pills = [("3D爽快アクション", (18, 196, 139)), ("巨大化インフレ", (255, 136, 0)), ("完全無料", (47, 128, 237))]
+    pills = [("一人称3Dサッカー", (22, 163, 74)), ("11人抜きチャレンジ", (234, 88, 12)), ("完全無料", (2, 132, 199))]
     px = 70
     for label, col in pills:
         pb = draw.textbbox((0, 0), label, font=font_tag)
@@ -543,7 +545,6 @@ def main():
             raise RuntimeError(f"Failed to connect to Chrome CDP ({browser_bin}): {err_txt[:800]}")
 
         cdp = SimpleCDP(ws_url)
-        # Native 540x960 @2x = 1080x1920 full-bleed!
         cdp.call("Emulation.setDeviceMetricsOverride", {
             "width": 540,
             "height": 960,
@@ -566,21 +567,20 @@ def main():
         for old in frames_dir.glob("*.png"):
             old.unlink()
 
-        font_big = ImageFont.truetype(FONT_SANS, 66)
+        font_big = ImageFont.truetype(FONT_SANS, 64)
         font_med = ImageFont.truetype(FONT_SANS, 48)
         font_small = ImageFont.truetype(FONT_SANS, 38)
 
         caption_plan = [
-            (0.0, 2.40, "部屋を爆速でお掃除!!", (255, 255, 255)),
-            (2.40, 5.55, "洗剤ボムで大爆発!!", (255, 214, 51)),
-            (5.55, 8.05, "3択でマシン強化!!", (102, 240, 190)),
-            (8.05, 14.40, "ブレード巨大化で一掃ｗ", (255, 214, 51)),
-            (14.40, 18.10, "何％まで掃除できる？", (255, 255, 255)),
+            (0.0, 3.05, "一人称で11人抜きサッカー!!", (255, 255, 255)),
+            (3.05, 7.20, "ランダムCPUをフェイント突破!!", (163, 230, 53)),
+            (7.20, 12.70, "スライディングも神回避で加速!!", (34, 211, 238)),
+            (12.70, 15.30, "10人突破！最後はGKと1対1!!", (250, 204, 21)),
+            (15.30, 18.10, "11人抜きGOAL!! 何人抜ける？", (250, 204, 21)),
         ]
 
         all_events = []
         thumb_action_img = None
-        thumb_best_score = -1.0
 
         for f_idx in range(total_frames):
             t = f_idx * dt_sec
@@ -593,18 +593,8 @@ def main():
             shot = cdp.call("Page.captureScreenshot", {"format": "png"})
             game_img = Image.open(io.BytesIO(base64.b64decode(shot["data"]))).convert("RGB")
 
-            if step_res.get("phase") == "play" and 25 <= step_res.get("pct", 0) <= 72:
-                action_score = 1.0 + sum(
-                    25.0 if ev.get("type") == "bomb"
-                    else 12.0 if ev.get("type") == "vortex"
-                    else 2.0
-                    for ev in evs
-                )
-                if 13.0 <= t <= 16.5:
-                    action_score += 8.0
-                if action_score >= thumb_best_score:
-                    thumb_best_score = action_score
-                    thumb_action_img = game_img.copy()
+            if f_idx == 865:
+                thumb_action_img = game_img.copy()
 
             pop_text, pop_start, pop_color = "", t, (255, 255, 255)
             for s0, s1, txt, col in caption_plan:
@@ -612,7 +602,7 @@ def main():
                     pop_text, pop_start, pop_color = txt, s0, col
                     break
 
-            end_cta = "リンクから無料で遊べるよ ▼" if t >= 14.8 else ""
+            end_cta = "リンクから無料で遊べるよ ▼" if t >= 15.0 else ""
             frame = overlay_human_captions(
                 frame_img=game_img,
                 t=t,
