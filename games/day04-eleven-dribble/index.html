@@ -223,6 +223,49 @@
       osc.connect(gain).connect(ac.destination);
       osc.start(now);
       osc.stop(now + 0.27);
+    } else if (type === 'accel_burst') {
+      // Turbo rising whoosh + low kick punch
+      [180, 360, 720].forEach((freq, i) => {
+        const osc = ac.createOscillator();
+        const gain = ac.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(freq, now + i * 0.03);
+        osc.frequency.exponentialRampToValueAtTime(freq * 1.85, now + i * 0.03 + 0.22);
+        gain.gain.setValueAtTime(0.18, now + i * 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.03 + 0.23);
+        osc.connect(gain).connect(ac.destination);
+        osc.start(now + i * 0.03);
+        osc.stop(now + i * 0.03 + 0.24);
+      });
+    } else if (type === 'double_touch') {
+      // Rapid crisp "Tap-Tap!" dual inside-foot touch
+      [0, 0.095].forEach((delay, idx) => {
+        const osc = ac.createOscillator();
+        const gain = ac.createGain();
+        osc.type = 'triangle';
+        const f = idx === 0 ? 540 : 810;
+        osc.frequency.setValueAtTime(f, now + delay);
+        osc.frequency.exponentialRampToValueAtTime(190, now + delay + 0.085);
+        gain.gain.setValueAtTime(0.26, now + delay);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + delay + 0.09);
+        osc.connect(gain).connect(ac.destination);
+        osc.start(now + delay);
+        osc.stop(now + delay + 0.095);
+      });
+    } else if (type === 'roulette') {
+      // Swirling 360-degree 4-note arpeggio spin
+      [440, 554.37, 659.25, 880].forEach((freq, idx) => {
+        const osc = ac.createOscillator();
+        const gain = ac.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, now + idx * 0.045);
+        osc.frequency.exponentialRampToValueAtTime(freq * 1.25, now + idx * 0.045 + 0.16);
+        gain.gain.setValueAtTime(0.2, now + idx * 0.045);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.045 + 0.17);
+        osc.connect(gain).connect(ac.destination);
+        osc.start(now + idx * 0.045);
+        osc.stop(now + idx * 0.045 + 0.18);
+      });
     }
   }
 
@@ -235,10 +278,53 @@
 
   // Shoot Button Layout (Bottom Right Ergonomic Zone)
   const SHOOT_BTN = {
-    x: W - 96,
-    y: H - 155,
-    r: 58,
+    x: W - 88,
+    y: H - 140,
+    r: 55,
   };
+
+  // 3 Special Dribble Skill Buttons (Bottom Left-to-Center Ergonomic Arc)
+  const SKILL_BTNS = [
+    {
+      id: 'accel_burst',
+      icon: '⚡',
+      title: 'バースト',
+      sub: '爆速縦突破',
+      x: 70,
+      y: H - 122,
+      w: 104,
+      h: 58,
+      col1: '#22d3ee',
+      col2: '#0284c7',
+      border: '#a3e635',
+    },
+    {
+      id: 'double_touch',
+      icon: '👟',
+      title: 'ダブルタッチ',
+      sub: '2タッチ横抜き',
+      x: 185,
+      y: H - 122,
+      w: 112,
+      h: 58,
+      col1: '#f472b6',
+      col2: '#db2777',
+      border: '#fbcfe8',
+    },
+    {
+      id: 'roulette',
+      icon: '🌀',
+      title: 'ルーレット',
+      sub: '360°回転抜き',
+      x: 300,
+      y: H - 122,
+      w: 104,
+      h: 58,
+      col1: '#c084fc',
+      col2: '#7e22ce',
+      border: '#fde047',
+    },
+  ];
 
   const state = {
     phase: SHORTS_MODE ? 'dribble' : 'title', // 'title' | 'dribble' | 'aim_shot' | 'shot_flight' | 'loose_ball' | 'goal' | 'gameover'
@@ -261,13 +347,14 @@
     bannerColor: '#a3e635',
     bannerTimer: 0,
 
-    // Player Free 2D Movement State
+    // Player Free 2D Movement & Special Skill Moves State
     player: {
       x: 0,
       z: 0,
       vx: 0,
       vz: 16.5,
-      yaw: 0,         // Horizontal viewing/facing angle in radians
+      yaw: 0,           // Horizontal viewing/facing angle in radians
+      rouletteYaw: 0,   // 360-degree spin offset during Marseille Roulette!
       camRoll: 0,
       bobPhase: 0,
       stepSide: 1,
@@ -277,6 +364,11 @@
       boostTimer: 0,
       dashActive: false,
       pullBackActive: false,
+      skillType: '',    // '' | 'accel_burst' | 'double_touch' | 'roulette'
+      skillTimer: 0,
+      skillDuration: 0.5,
+      skillDir: 1,      // +1 (right) or -1 (left)
+      skillTouch2Fired: false,
     },
 
     // 3D Ball State (Dribbling at feet, or free 3D flight, or loose rebound ball)
@@ -310,6 +402,7 @@
     defenders: [],
     gk: null,
     particles: [],
+    skillEffects: [],   // 3D turf visual rings & L-paths for Accel Burst, Double Touch, Roulette
     stadiumLights: [],
   };
 
@@ -452,6 +545,7 @@
     state.player.vx = 0;
     state.player.vz = 15.5;
     state.player.yaw = 0;
+    state.player.rouletteYaw = 0;
     state.player.camRoll = 0;
     state.player.bobPhase = 0;
     state.player.footKickTimer = 0;
@@ -459,6 +553,11 @@
     state.player.boostTimer = 0;
     state.player.dashActive = false;
     state.player.pullBackActive = false;
+    state.player.skillType = '';
+    state.player.skillTimer = 0;
+    state.player.skillDuration = 0.5;
+    state.player.skillDir = 1;
+    state.player.skillTouch2Fired = false;
 
     state.ball.x = 0;
     state.ball.y = 0.44;
@@ -474,16 +573,142 @@
     state.shotDraft.points = [];
     state.shotDraft.previewBeads = [];
     state.particles = [];
+    state.skillEffects = [];
 
     buildDefenders(stage);
     showBanner(
       'KICK OFF!',
-      '自由ドリブル（上下左右）＆ いつでもボールをスワイプでシュート！',
+      'バースト・ダブルタッチ・ルーレット＆自由軌道シュート！',
       '#a3e635',
       1.6
     );
     playSfx('whistle');
     emitEvent('kickoff', { stage });
+  }
+
+  // Pick smart lateral evade direction away from the closest oncoming defender!
+  function chooseSmartDodgeDir(preferredDir = 0) {
+    if (preferredDir !== 0) {
+      if (state.player.x > PLAYER_MAX_X - 3.2 && preferredDir > 0) return -1;
+      if (state.player.x < -PLAYER_MAX_X + 3.2 && preferredDir < 0) return 1;
+      return Math.sign(preferredDir);
+    }
+
+    let nearest = null;
+    let bestDist = 999;
+    for (let i = 0; i < state.defenders.length; i++) {
+      const d = state.defenders[i];
+      if (d.passed) continue;
+      const dz = d.z - state.player.z;
+      const dx = d.x - state.player.x;
+      if (dz > -1.0 && dz < 24) {
+        const dist = Math.hypot(dx, dz);
+        if (dist < bestDist) {
+          bestDist = dist;
+          nearest = d;
+        }
+      }
+    }
+
+    let dir = 1;
+    if (nearest) {
+      // Cut away from defender's X position (or toward center if near touchline)
+      dir = nearest.x >= state.player.x ? -1 : 1;
+    } else if (Math.abs(state.player.vx) > 1.2) {
+      dir = Math.sign(state.player.vx);
+    } else {
+      dir = state.player.x > 0 ? -1 : 1;
+    }
+
+    if (state.player.x > PLAYER_MAX_X - 4.0) dir = -1;
+    if (state.player.x < -PLAYER_MAX_X + 4.0) dir = 1;
+    return dir;
+  }
+
+  // Trigger 3 Iconic Football Dribble Skills:
+  // 1) 'accel_burst' (⚡ アクセルバースト: Knock ball ahead + 34m/s turbo dash!)
+  // 2) 'double_touch' (👟 ダブルタッチ / La Croqueta: Rapid inside-outside 2-touch lateral shift + forward push!)
+  // 3) 'roulette' (🌀 マルセイユ・ルーレット: First-person 360° spin turn around oncoming defenders!)
+  function triggerDribbleSkill(skillType, preferredDir = 0) {
+    if (state.phase !== 'dribble' && state.phase !== 'loose_ball') return;
+    if (state.phase === 'loose_ball') state.phase = 'dribble';
+
+    const dir = chooseSmartDodgeDir(preferredDir);
+    state.player.skillType = skillType;
+    state.player.skillDir = dir;
+    state.player.skillTouch2Fired = false;
+
+    if (skillType === 'accel_burst') {
+      state.player.skillDuration = 0.56;
+      state.player.skillTimer = 0.56;
+      state.player.boostTimer = 0.95;
+      state.invulnTimer = Math.max(state.invulnTimer, 0.58);
+      state.player.feintTimer = 0.56;
+      state.player.footKickTimer = 0.28;
+      state.player.rouletteYaw = 0;
+
+      // Spawn 3D Sonic Shockwave Ring on turf
+      state.skillEffects.push({
+        type: 'accel_burst',
+        x: state.ball.x,
+        z: state.ball.z,
+        dir,
+        life: 0.58,
+        maxLife: 0.58,
+      });
+
+      playSfx('accel_burst');
+      emitEvent('skill', { type: 'accel_burst' });
+      spawnTurfParticles(state.ball.x, 0.25, state.ball.z, '#22d3ee', 22);
+      showBanner('⚡ アクセルバースト!!', 'ボールを蹴り出して爆発的縦突破！', '#22d3ee', 0.95);
+    } else if (skillType === 'double_touch') {
+      state.player.skillDuration = 0.44;
+      state.player.skillTimer = 0.44;
+      state.player.boostTimer = 0.72;
+      state.invulnTimer = Math.max(state.invulnTimer, 0.52);
+      state.player.feintTimer = 0.52;
+      state.player.feintDir = dir;
+      state.player.footKickTimer = 0.42;
+      state.player.rouletteYaw = 0;
+
+      // Spawn 3D L-Shaped Double Touch Neon Path on turf
+      state.skillEffects.push({
+        type: 'double_touch',
+        x: state.ball.x,
+        z: state.ball.z,
+        dir,
+        life: 0.65,
+        maxLife: 0.65,
+      });
+
+      playSfx('double_touch');
+      emitEvent('skill', { type: 'double_touch', dir });
+      spawnTurfParticles(state.ball.x, 0.25, state.ball.z, '#f472b6', 20);
+      showBanner('👟 ダブルタッチ!!', '高速インサイド2タッチで横をすり抜ける！', '#f472b6', 0.95);
+    } else if (skillType === 'roulette') {
+      state.player.skillDuration = 0.54;
+      state.player.skillTimer = 0.54;
+      state.player.boostTimer = 0.82;
+      state.invulnTimer = Math.max(state.invulnTimer, 0.62);
+      state.player.feintTimer = 0.62;
+      state.player.feintDir = dir;
+      state.player.footKickTimer = 0.50;
+
+      // Spawn 3D Swirling Golden-Violet Vortex Ring on turf
+      state.skillEffects.push({
+        type: 'roulette',
+        x: state.ball.x,
+        z: state.ball.z,
+        dir,
+        life: 0.68,
+        maxLife: 0.68,
+      });
+
+      playSfx('roulette');
+      emitEvent('skill', { type: 'roulette', dir });
+      spawnTurfParticles(state.ball.x, 0.25, state.ball.z, '#c084fc', 24);
+      showBanner('🌀 マルセイユ・ルーレット!!', '華麗なる360°足裏回転ターン突破！', '#c084fc', 1.0);
+    }
   }
 
   if (SHORTS_MODE) {
@@ -492,7 +717,7 @@
     buildDefenders(1);
   }
 
-  // 3D First-Person Camera Projection with Free Yaw & Roll
+  // 3D First-Person Camera Projection with Free Yaw, 360° Roulette Spin & Accel Burst FOV
   function project3D(wx, wy, wz) {
     const camX = state.player.x;
     const camY = 2.25 + Math.sin(state.player.bobPhase * 2) * 0.06;
@@ -502,9 +727,10 @@
     const dyW = wy - camY;
     const dzW = wz - camZ;
 
-    // Rotate world coordinates by player's horizontal camera yaw
-    const cosY = Math.cos(state.player.yaw);
-    const sinY = Math.sin(state.player.yaw);
+    // Rotate world coordinates by player's horizontal camera yaw + 360° Roulette Spin!
+    const totalYaw = state.player.yaw + (state.player.rouletteYaw || 0);
+    const cosY = Math.cos(totalYaw);
+    const sinY = Math.sin(totalYaw);
     const dx = dxW * cosY - dzW * sinY;
     const dz = dxW * sinY + dzW * cosY;
     const dy = dyW;
@@ -524,7 +750,11 @@
     const rx = dx * cosR - yCam * sinR;
     const ry = dx * sinR + yCam * cosR;
 
-    const fov = 510;
+    // Subtle wide-angle speed zoom during Accel Burst!
+    const burstZoom = state.player.skillType === 'accel_burst' && state.player.skillTimer > 0
+      ? Math.sin((state.player.skillTimer / state.player.skillDuration) * Math.PI) * 55
+      : 0;
+    const fov = 510 - burstZoom;
     const scale = fov / zCam;
     return {
       x: W * 0.5 + rx * scale,
@@ -711,10 +941,12 @@
     id: null,
     startX: 0,
     startY: 0,
+    startTime: 0,
     currX: 0,
     currY: 0,
     lastX: 0,
     lastY: 0,
+    history: [], // Recent points [{x, y, t}] for circular Roulette & flick detection
   };
 
   const shotTouch = {
@@ -730,15 +962,30 @@
     };
   }
 
+  function getTouchedSkillButton(pt) {
+    for (let i = 0; i < SKILL_BTNS.length; i++) {
+      const b = SKILL_BTNS[i];
+      if (
+        pt.x >= b.x - b.w * 0.5 - 6 &&
+        pt.x <= b.x + b.w * 0.5 + 6 &&
+        pt.y >= b.y - b.h * 0.5 - 8 &&
+        pt.y <= b.y + b.h * 0.5 + 8
+      ) {
+        return b;
+      }
+    }
+    return null;
+  }
+
   function isTouchOnShootZoneOrBall(pt) {
     // Check bottom-right ⚽ SHOOT button
     const distBtn = Math.hypot(pt.x - SHOOT_BTN.x, pt.y - SHOOT_BTN.y);
-    if (distBtn <= SHOOT_BTN.r + 18) return true;
+    if (distBtn <= SHOOT_BTN.r + 16) return true;
 
     // Also check if player touched directly on the 3D Soccer Ball at their feet!
     const ballScreen = project3D(state.ball.x, state.ball.y, state.ball.z);
     if (ballScreen) {
-      const ballR = Math.max(44, 0.5 * ballScreen.scale);
+      const ballR = Math.max(42, 0.48 * ballScreen.scale);
       if (Math.hypot(pt.x - ballScreen.x, pt.y - ballScreen.y) <= ballR) {
         return true;
       }
@@ -764,7 +1011,16 @@
       return;
     }
 
-    // Check if touching Shoot Button or Ball to start Free Trajectory Shot!
+    // 1. Check if tapping one of the 3 Special Dribble Skill Buttons (⚡バースト / 👟ダブルタッチ / 🌀ルーレット)!
+    if (state.phase === 'dribble' || state.phase === 'loose_ball') {
+      const skillBtn = getTouchedSkillButton(pt);
+      if (skillBtn) {
+        triggerDribbleSkill(skillBtn.id, 0);
+        return;
+      }
+    }
+
+    // 2. Check if touching Shoot Button or Ball to start Free Trajectory Shot!
     if ((state.phase === 'dribble' || state.phase === 'aim_shot') && isTouchOnShootZoneOrBall(pt)) {
       shotTouch.active = true;
       shotTouch.id = e.pointerId;
@@ -775,16 +1031,19 @@
       return;
     }
 
-    // Otherwise, start Free 360° 2D Dribble control!
+    // 3. Otherwise, start Free 360° 2D Dribble control (+ gesture recognition)!
     if (!dribbleTouch.active) {
+      const nowMs = performance.now();
       dribbleTouch.active = true;
       dribbleTouch.id = e.pointerId;
       dribbleTouch.startX = pt.x;
       dribbleTouch.startY = pt.y;
+      dribbleTouch.startTime = nowMs;
       dribbleTouch.currX = pt.x;
       dribbleTouch.currY = pt.y;
       dribbleTouch.lastX = pt.x;
       dribbleTouch.lastY = pt.y;
+      dribbleTouch.history = [{ x: pt.x, y: pt.y, t: nowMs }];
     }
   });
 
@@ -804,6 +1063,7 @@
     }
 
     if (dribbleTouch.active && e.pointerId === dribbleTouch.id) {
+      const nowMs = performance.now();
       const dx = pt.x - dribbleTouch.lastX;
       const dy = pt.y - dribbleTouch.lastY;
       dribbleTouch.currX = pt.x;
@@ -811,14 +1071,42 @@
       dribbleTouch.lastX = pt.x;
       dribbleTouch.lastY = pt.y;
 
+      const hist = dribbleTouch.history;
+      const lastH = hist[hist.length - 1];
+      if (!lastH || Math.hypot(pt.x - lastH.x, pt.y - lastH.y) >= 10) {
+        hist.push({ x: pt.x, y: pt.y, t: nowMs });
+        if (hist.length > 18) hist.shift();
+
+        // Gesture Detection while dragging:
+        // A) Circular thumb swirl -> triggers 🌀 ROULETTE!
+        if (state.player.skillTimer <= 0 && hist.length >= 7) {
+          let totalTurn = 0;
+          for (let i = 2; i < hist.length; i++) {
+            const a1 = Math.atan2(hist[i - 1].y - hist[i - 2].y, hist[i - 1].x - hist[i - 2].x);
+            const a2 = Math.atan2(hist[i].y - hist[i - 1].y, hist[i].x - hist[i - 1].x);
+            let da = a2 - a1;
+            while (da > Math.PI) da -= Math.PI * 2;
+            while (da < -Math.PI) da += Math.PI * 2;
+            totalTurn += da;
+          }
+          if (Math.abs(totalTurn) > 3.7) {
+            dribbleTouch.history = [{ x: pt.x, y: pt.y, t: nowMs }];
+            triggerDribbleSkill('roulette', totalTurn > 0 ? 1 : -1);
+            return;
+          }
+        }
+      }
+
       if (state.phase === 'dribble' || state.phase === 'loose_ball') {
         // Direct horizontal responsiveness + 2D joystick vector
         const prevVx = state.player.vx;
         const instantDeltaX = (dx / W) * 28.0;
         state.player.x = clamp(state.player.x + instantDeltaX, -PLAYER_MAX_X, PLAYER_MAX_X);
 
-        // Detect sharp lateral cut-in or pull-back feint!
-        if ((Math.abs(dx) > 14 && prevVx * dx < 0) || dy > 16) {
+        // B) Sharp horizontal snap reversal -> triggers 👟 DOUBLE TOUCH!
+        if (state.player.skillTimer <= 0 && Math.abs(dx) > 24 && prevVx * dx < -35) {
+          triggerDribbleSkill('double_touch', Math.sign(dx));
+        } else if ((Math.abs(dx) > 14 && prevVx * dx < 0) || dy > 16) {
           if (state.player.feintTimer <= 0) {
             state.player.feintTimer = 0.36;
             state.player.feintDir = Math.sign(dx) || 1;
@@ -839,15 +1127,26 @@
       return;
     }
     if (dribbleTouch.active && e.pointerId === dribbleTouch.id) {
+      // Check if user performed a quick upward flick -> triggers ⚡ ACCEL BURST!
+      const dtMs = performance.now() - dribbleTouch.startTime;
+      const totalDx = dribbleTouch.currX - dribbleTouch.startX;
+      const totalDy = dribbleTouch.currY - dribbleTouch.startY;
+      if (state.player.skillTimer <= 0 && dtMs < 240 && totalDy < -44 && Math.abs(totalDx) < 55) {
+        triggerDribbleSkill('accel_burst', 0);
+      } else if (state.player.skillTimer <= 0 && dtMs < 210 && Math.abs(totalDx) > 48 && Math.abs(totalDy) < 42) {
+        // Quick horizontal flick -> triggers 👟 DOUBLE TOUCH in flick direction!
+        triggerDribbleSkill('double_touch', Math.sign(totalDx));
+      }
       dribbleTouch.active = false;
       dribbleTouch.id = null;
+      dribbleTouch.history = [];
     }
   }
 
   window.addEventListener('pointerup', handlePointerUp);
   window.addEventListener('pointercancel', handlePointerUp);
 
-  // PC Keyboard Support (WASD / Arrows for 2D Free Dribble + Space to Aim/Shoot + Q/E for Curve)
+  // PC Keyboard Support (WASD / Arrows + 1/Shift=Accel Burst, 2/C=Double Touch, 3/R=Roulette + Space=Shoot)
   const keys = { left: false, right: false, up: false, down: false, curveL: false, curveR: false };
   window.addEventListener('keydown', (e) => {
     if (SHORTS_MODE) return;
@@ -857,6 +1156,15 @@
     if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') keys.down = true;
     if (e.key === 'q' || e.key === 'Q') keys.curveL = true;
     if (e.key === 'e' || e.key === 'E') keys.curveR = true;
+
+    // Special Dribble Skill Shortcuts
+    if (e.key === '1' || e.key === 'Shift') {
+      triggerDribbleSkill('accel_burst', 0);
+    } else if (e.key === '2' || e.key === 'c' || e.key === 'C') {
+      triggerDribbleSkill('double_touch', keys.left ? -1 : (keys.right ? 1 : 0));
+    } else if (e.key === '3' || e.key === 'r' || e.key === 'R') {
+      triggerDribbleSkill('roulette', keys.left ? -1 : (keys.right ? 1 : 0));
+    }
 
     if (e.key === ' ' || e.key === 'Enter') {
       if (state.phase === 'title' || state.phase === 'gameover') {
@@ -919,6 +1227,13 @@
       }
       p.life -= dt;
       if (p.life <= 0) state.particles.splice(i, 1);
+    }
+
+    // Update 3D turf skill visual rings & L-paths
+    for (let i = state.skillEffects.length - 1; i >= 0; i--) {
+      const se = state.skillEffects[i];
+      se.life -= dt;
+      if (se.life <= 0) state.skillEffects.splice(i, 1);
     }
 
     if (state.phase === 'title') {
@@ -1187,8 +1502,49 @@
           }
         }
 
-        state.player.vx += (targetVx - state.player.vx) * 12 * effDt;
-        state.player.vz += (targetVz * boostMul - state.player.vz) * 10 * effDt;
+        // Active Special Dribble Skill Kinematics (Accel Burst / Double Touch / Marseille Roulette)
+        if (state.player.skillTimer > 0) {
+          state.player.skillTimer = Math.max(0, state.player.skillTimer - effDt);
+          const progress = clamp(1 - state.player.skillTimer / Math.max(0.01, state.player.skillDuration), 0, 1);
+
+          if (state.player.skillType === 'accel_burst') {
+            targetVz = 33.5;
+            state.player.dashActive = true;
+            state.player.rouletteYaw = 0;
+            state.player.vx += (targetVx - state.player.vx) * 14 * effDt;
+            state.player.vz = 33.5;
+          } else if (state.player.skillType === 'double_touch') {
+            state.player.rouletteYaw = 0;
+            if (progress < 0.48) {
+              // Touch 1: Crisp lateral inside-foot shift across defender's tackle zone!
+              state.player.vx = state.player.skillDir * 25.5;
+              state.player.vz = 15.5;
+            } else {
+              // Touch 2: Opposite-foot straight forward acceleration past the defender!
+              if (!state.player.skillTouch2Fired) {
+                state.player.skillTouch2Fired = true;
+                spawnTurfParticles(state.ball.x, 0.2, state.ball.z, '#22d3ee', 14);
+              }
+              state.player.vx = state.player.skillDir * 2.5;
+              state.player.vz = 28.5;
+            }
+          } else if (state.player.skillType === 'roulette') {
+            // Full 360-degree first-person spin turn!
+            const spinEase = 0.5 - 0.5 * Math.cos(progress * Math.PI);
+            state.player.rouletteYaw = spinEase * Math.PI * 2 * state.player.skillDir;
+            state.player.vx = state.player.skillDir * Math.cos(progress * Math.PI * 0.85) * 19.5;
+            state.player.vz = 22.0;
+          }
+
+          if (state.player.skillTimer <= 0) {
+            state.player.skillType = '';
+            state.player.rouletteYaw = 0;
+          }
+        } else {
+          state.player.rouletteYaw = 0;
+          state.player.vx += (targetVx - state.player.vx) * 12 * effDt;
+          state.player.vz += (targetVz * boostMul - state.player.vz) * 10 * effDt;
+        }
 
         state.player.x = clamp(state.player.x + state.player.vx * effDt, -PLAYER_MAX_X, PLAYER_MAX_X);
         state.player.z = clamp(state.player.z + state.player.vz * effDt, 0, GOAL_Z - 6);
@@ -1208,24 +1564,44 @@
       const moveSpeed = Math.hypot(state.player.vx, state.player.vz);
       state.player.bobPhase += effDt * (3.5 + moveSpeed * 0.45);
 
-      // Keep Ball at Player's Feet in 2D Direction during Dribble / Aim
+      // Keep Ball at Player's Feet in 2D Direction during Dribble / Aim (+ Special Skill Ball Footwork!)
       if (state.phase === 'dribble' || state.phase === 'aim_shot') {
-        const touchForward = state.player.pullBackActive
+        let touchForward = state.player.pullBackActive
           ? 1.55
           : 2.1 + Math.abs(Math.sin(state.player.bobPhase)) * 0.45 + (state.player.boostTimer > 0 ? 0.35 : 0);
+        let skillLatOffset = 0;
+
+        if (state.player.skillTimer > 0) {
+          const prog = clamp(1 - state.player.skillTimer / Math.max(0.01, state.player.skillDuration), 0, 1);
+          if (state.player.skillType === 'accel_burst') {
+            // Ball is knocked further out ahead on the turf and player sprints up to it!
+            touchForward = 2.25 + Math.sin(prog * Math.PI) * 1.45;
+          } else if (state.player.skillType === 'double_touch') {
+            // Crisp inside-to-outside lateral shift across the boots!
+            skillLatOffset = prog < 0.48
+              ? state.player.skillDir * (prog / 0.48) * 1.15
+              : state.player.skillDir * (1 - (prog - 0.48) / 0.52) * 0.65;
+            touchForward = 2.15 + (prog >= 0.48 ? 0.55 : 0);
+          } else if (state.player.skillType === 'roulette') {
+            // Ball orbits closely under the sole during the 360° Marseille turn!
+            touchForward = 1.85;
+            skillLatOffset = Math.sin(prog * Math.PI * 2) * state.player.skillDir * 0.75;
+          }
+        }
+
         const targetBallX = clamp(
-          state.player.x + Math.sin(state.player.yaw) * touchForward + state.player.vx * 0.04,
+          state.player.x + Math.sin(state.player.yaw) * touchForward + state.player.vx * 0.04 + skillLatOffset,
           -PLAYER_MAX_X,
           PLAYER_MAX_X
         );
         const targetBallZ = state.player.z + Math.cos(state.player.yaw) * touchForward;
-        state.ball.x += (targetBallX - state.ball.x) * 20 * dt;
-        state.ball.z += (targetBallZ - state.ball.z) * 20 * dt;
+        state.ball.x += (targetBallX - state.ball.x) * 24 * dt;
+        state.ball.z += (targetBallZ - state.ball.z) * 24 * dt;
         state.ball.y = 0.44 + Math.abs(Math.sin(state.player.bobPhase * 2)) * 0.08;
         state.ball.spin += moveSpeed * effDt * 1.6;
 
         state.ball.trail.push({ x: state.ball.x, y: state.ball.y, z: state.ball.z });
-        if (state.ball.trail.length > 14) state.ball.trail.shift();
+        if (state.ball.trail.length > 16) state.ball.trail.shift();
 
         if (state.phase === 'aim_shot') {
           updateShotPreviewBeads();
@@ -1242,9 +1618,9 @@
           const dz = d.z - state.ball.z;
           const dist2D = Math.hypot(dx, dz);
 
-          // Direct Tackle Hitbox
+          // Direct Tackle Hitbox (Skill Moves grant full evade / tackle-break!)
           const hitRadius = d.sliding ? 1.25 : 1.05;
-          if (!SHORTS_MODE && dist2D < hitRadius && state.invulnTimer <= 0) {
+          if (!SHORTS_MODE && dist2D < hitRadius && state.invulnTimer <= 0 && state.player.skillTimer <= 0) {
             if (state.shields > 1) {
               state.shields--;
               state.invulnTimer = 1.15;
@@ -1267,28 +1643,49 @@
               return;
             }
           } else if (!d.passed) {
-            // Did we juke/ankle-break this defender in 2D (cut-back / feint near them) OR pass their Z plane?
-            const jukedNear = dist2D < 4.8 && (state.player.feintTimer > 0 || state.player.pullBackActive || d.sliding);
+            // Did we juke/ankle-break this defender with a Special Skill Move, feint, or pass their Z plane?
+            const skillBreak = state.player.skillTimer > 0 && dist2D < 6.0 && dz < 4.8;
+            const jukedNear = skillBreak || (dist2D < 4.8 && (state.player.feintTimer > 0 || state.player.pullBackActive || d.sliding));
             const passedZ = dz <= -0.4;
 
             if (jukedNear || passedZ) {
               d.passed = true;
-              d.stunTimer = 1.35;
+              d.stunTimer = skillBreak ? 1.75 : 1.35;
               state.passedCount++;
               state.combo++;
 
               const isAnkleBreaker = jukedNear || dist2D < 3.6;
               if (isAnkleBreaker) {
                 state.ankleBreakers++;
-                state.player.boostTimer = 0.7;
-                state.score += 250 * state.combo;
+                state.player.boostTimer = Math.max(state.player.boostTimer, 0.75);
+                let basePts = 250;
+                let moveName = 'ANKLE BREAKER! 切り返し突破！';
+                let bannerCol = '#22d3ee';
+
+                if (state.player.skillTimer > 0 && state.player.skillType === 'accel_burst') {
+                  basePts = 350;
+                  moveName = '⚡ ACCEL BURST! 爆速置き去り突破！';
+                  bannerCol = '#22d3ee';
+                } else if (state.player.skillTimer > 0 && state.player.skillType === 'double_touch') {
+                  basePts = 400;
+                  moveName = '👟 DOUBLE TOUCH! 華麗2タッチ突破！';
+                  bannerCol = '#f472b6';
+                } else if (state.player.skillTimer > 0 && state.player.skillType === 'roulette') {
+                  basePts = 450;
+                  moveName = '🌀 ROULETTE! 360°マルセイユ突破！';
+                  bannerCol = '#c084fc';
+                } else if (state.player.pullBackActive) {
+                  moveName = 'DRAG BACK! 引き技で相手が空振り！';
+                } else if (d.sliding) {
+                  moveName = 'JUMP & CUT! スライディング神回避！';
+                }
+
+                const ptsEarned = basePts * state.combo;
+                state.score += ptsEarned;
                 playSfx('ankle_breaker');
-                emitEvent('ankle_breaker', { num: d.num, count: state.passedCount });
-                const moveName = state.player.pullBackActive
-                  ? 'DRAG BACK! 引き技で相手が空振り！'
-                  : (d.sliding ? 'JUMP & CUT! スライディング神回避！' : 'ANKLE BREAKER! 切り返し突破！');
-                showBanner(`${state.passedCount}人抜き！！`, `${moveName} +${250 * state.combo}`, '#22d3ee', 0.95);
-                spawnTurfParticles(state.ball.x, 0.3, state.ball.z, '#22d3ee', 18);
+                emitEvent('ankle_breaker', { num: d.num, count: state.passedCount, skill: state.player.skillType });
+                showBanner(`${state.passedCount}人抜き！！`, `${moveName} +${ptsEarned}`, bannerCol, 0.95);
+                spawnTurfParticles(state.ball.x, 0.3, state.ball.z, bannerCol, 18);
               } else {
                 state.score += 150 * state.combo;
                 playSfx('pass');
@@ -1765,14 +2162,127 @@
     }
   }
 
+  // Render 3D Turf Visual Effects for Accel Burst, Double Touch, and Marseille Roulette!
+  function drawSkillEffects3D() {
+    for (let i = 0; i < state.skillEffects.length; i++) {
+      const se = state.skillEffects[i];
+      const prog = clamp(1 - se.life / se.maxLife, 0, 1);
+      const alpha = clamp(1 - prog * 0.85, 0.08, 0.95);
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+
+      if (se.type === 'accel_burst') {
+        // Expanding 3D Sonic Shockwave Ring + Twin Turbo Turf Streaks!
+        const r = 1.2 + prog * 3.8;
+        const segs = 18;
+        for (let k = 0; k < segs; k++) {
+          const a1 = (k / segs) * Math.PI * 2;
+          const a2 = ((k + 1) / segs) * Math.PI * 2;
+          drawLine3D(
+            se.x + Math.cos(a1) * r,
+            0.06,
+            se.z + Math.sin(a1) * r,
+            se.x + Math.cos(a2) * r,
+            0.06,
+            se.z + Math.sin(a2) * r,
+            '#22d3ee',
+            4
+          );
+        }
+        drawLine3D(se.x - 1.1, 0.05, se.z, se.x - 1.1, 0.05, se.z + 11 * prog, '#a3e635', 5);
+        drawLine3D(se.x + 1.1, 0.05, se.z, se.x + 1.1, 0.05, se.z + 11 * prog, '#22d3ee', 5);
+      } else if (se.type === 'double_touch') {
+        // Glowing Neon L-Shaped Double-Touch Vector Path on Turf (Touch 1 Lateral -> Touch 2 Forward!)
+        const x1 = se.x;
+        const z1 = se.z;
+        const x2 = clamp(se.x + se.dir * 3.1, -PLAYER_MAX_X, PLAYER_MAX_X);
+        const z2 = se.z + 2.4;
+        const x3 = x2;
+        const z3 = z2 + 7.5;
+
+        // Touch 1 segment (Inside-foot lateral cut)
+        drawLine3D(x1, 0.07, z1, x2, 0.07, z2, '#f472b6', 6);
+        // Touch 2 segment (Opposite-foot forward push)
+        drawLine3D(x2, 0.07, z2, x3, 0.07, z3, '#22d3ee', 6);
+
+        // Glowing touch nodes on turf
+        const pTouch1 = project3D(x1, 0.08, z1);
+        const pTouch2 = project3D(x2, 0.08, z2);
+        if (pTouch1) {
+          ctx.beginPath();
+          ctx.arc(pTouch1.x, pTouch1.y, Math.max(5, 0.22 * pTouch1.scale), 0, Math.PI * 2);
+          ctx.fillStyle = '#f472b6';
+          ctx.fill();
+        }
+        if (pTouch2) {
+          ctx.beginPath();
+          ctx.arc(pTouch2.x, pTouch2.y, Math.max(6, 0.26 * pTouch2.scale), 0, Math.PI * 2);
+          ctx.fillStyle = '#22d3ee';
+          ctx.fill();
+        }
+      } else if (se.type === 'roulette') {
+        // Swirling 360° Golden-Violet Vortex Circle around the player & ball!
+        const cx = state.ball.x;
+        const cz = state.ball.z;
+        const segs = 20;
+        for (let ring = 0; ring < 2; ring++) {
+          const r = 1.45 + ring * 0.85 + prog * 1.1;
+          const col = ring === 0 ? '#fde047' : '#c084fc';
+          for (let k = 0; k < segs; k++) {
+            if ((k + ring) % 2 === 1) continue;
+            const a1 = (k / segs) * Math.PI * 2 + prog * Math.PI * 4 * se.dir;
+            const a2 = ((k + 0.8) / segs) * Math.PI * 2 + prog * Math.PI * 4 * se.dir;
+            drawLine3D(
+              cx + Math.cos(a1) * r,
+              0.08 + ring * 0.05,
+              cz + Math.sin(a1) * r,
+              cx + Math.cos(a2) * r,
+              0.08 + ring * 0.05,
+              cz + Math.sin(a2) * r,
+              col,
+              4.5
+            );
+          }
+        }
+      }
+
+      ctx.restore();
+    }
+  }
+
   function drawPOVBoot(side, stride, ballPt) {
-    const forwardAmt = Math.max(-0.2, stride);
-    const baseX = W * 0.5 + side * 88 + (ballPt ? clamp((ballPt.x - W * 0.5) * 0.35, -75, 75) : 0);
+    let forwardAmt = Math.max(-0.2, stride);
+    let extraShiftX = 0;
+    let extraRot = 0;
+
+    // First-Person Boot Footwork Animations for Double Touch & Roulette!
+    if (state.player.skillTimer > 0) {
+      const prog = clamp(1 - state.player.skillTimer / Math.max(0.01, state.player.skillDuration), 0, 1);
+      if (state.player.skillType === 'double_touch') {
+        // Touch 1: First boot swings inward across the ball; Touch 2: Opposite boot snaps forward!
+        const activeBootSide = prog < 0.48 ? -state.player.skillDir : state.player.skillDir;
+        if (side === activeBootSide) {
+          forwardAmt = 0.85;
+          extraShiftX = -side * 54;
+          extraRot = -side * 0.42;
+        }
+      } else if (state.player.skillType === 'roulette') {
+        // Sole drag & spin footwork!
+        forwardAmt = 0.65 + Math.sin(prog * Math.PI * 2 + side) * 0.35;
+        extraShiftX = Math.cos(prog * Math.PI * 2) * 45 * state.player.skillDir;
+        extraRot = Math.sin(prog * Math.PI * 2) * 0.5 * state.player.skillDir;
+      } else if (state.player.skillType === 'accel_burst') {
+        forwardAmt = Math.sin(state.player.bobPhase * 1.8 + (side > 0 ? 0 : Math.PI)) * 0.95;
+      }
+    }
+
+    const baseX = W * 0.5 + side * 88 + extraShiftX + (ballPt ? clamp((ballPt.x - W * 0.5) * 0.35, -75, 75) : 0);
     const baseY = H + 28 - forwardAmt * 88;
 
     ctx.save();
     ctx.translate(baseX, baseY);
-    ctx.rotate(side * -0.18 + (state.player.vx * 0.008));
+    ctx.rotate(side * -0.18 + (state.player.vx * 0.008) + extraRot);
 
     ctx.fillStyle = '#0ea5e9';
     ctx.fillRect(-20, 15, 40, 80);
@@ -1816,8 +2326,9 @@
     ctx.fillStyle = '#091526';
     ctx.fillRect(0, horizonY - 58, W, 62);
 
+    const totalCamYaw = state.player.yaw + (state.player.rouletteYaw || 0);
     [W * 0.14, W * 0.38, W * 0.62, W * 0.86].forEach((lx) => {
-      const shiftX = lx - state.player.yaw * 220;
+      const shiftX = lx - Math.sin(totalCamYaw) * 220;
       const glow = ctx.createRadialGradient(shiftX, horizonY - 52, 2, shiftX, horizonY - 52, 72);
       glow.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
       glow.addColorStop(0.3, 'rgba(186, 230, 253, 0.35)');
@@ -1829,7 +2340,7 @@
     });
 
     state.stadiumLights.forEach((sl) => {
-      const sx = W * 0.5 + (sl.ang - state.player.yaw * 0.45) * W * 1.1;
+      const sx = W * 0.5 + (sl.ang - Math.sin(totalCamYaw) * 0.45) * W * 1.1;
       const sy = horizonY - 10 - sl.row * 42;
       const alpha = 0.25 + 0.75 * Math.max(0, Math.sin(state.elapsed * 7 + sl.twinkle));
       ctx.fillStyle = sl.col;
@@ -1904,6 +2415,7 @@
     drawLine3D(-PITCH_HALF_W, 0.03, GOAL_Z, PITCH_HALF_W, 0.03, GOAL_Z, '#ffffff', 4);
 
     drawGoal3D();
+    drawSkillEffects3D();
 
     // Free 3D Shot Trajectory Preview Beads & Finger Curve Line!
     if (state.phase === 'aim_shot' && state.shotDraft.previewBeads.length > 0) {
@@ -1980,14 +2492,17 @@
 
     drawFirstPersonBallAndFeet();
 
-    if (state.player.boostTimer > 0 || state.player.dashActive || state.phase === 'shot_flight') {
+    if (state.player.boostTimer > 0 || state.player.dashActive || state.player.skillTimer > 0 || state.phase === 'shot_flight') {
       ctx.save();
-      ctx.strokeStyle = 'rgba(34, 211, 238, 0.35)';
-      ctx.lineWidth = 2.5;
+      const lineCol = state.player.skillType === 'double_touch'
+        ? 'rgba(244, 114, 182, 0.42)'
+        : (state.player.skillType === 'roulette' ? 'rgba(192, 132, 252, 0.42)' : 'rgba(34, 211, 238, 0.38)');
+      ctx.strokeStyle = lineCol;
+      ctx.lineWidth = state.player.skillTimer > 0 ? 3.5 : 2.5;
       for (let i = 0; i < 16; i++) {
         const ang = (i / 16) * Math.PI * 2 + state.elapsed * 3;
-        const r1 = 210 + ((i * 37) % 60);
-        const r2 = 460;
+        const r1 = 200 + ((i * 37) % 60);
+        const r2 = 465;
         ctx.beginPath();
         ctx.moveTo(W * 0.5 + Math.cos(ang) * r1, H * 0.45 + Math.sin(ang) * r1);
         ctx.lineTo(W * 0.5 + Math.cos(ang) * r2, H * 0.45 + Math.sin(ang) * r2);
@@ -2142,7 +2657,8 @@
 
     // Interactive Controls HUD:
     // 1) Floating 360° Dribble Joystick feedback when dragging
-    // 2) Bottom-Right "⚽ SHOOT (どこからでも自由軌道シュート)" Pad!
+    // 2) 3 One-Tap Special Skill Buttons: ⚡バースト / 👟ダブルタッチ / 🌀ルーレット
+    // 3) Bottom-Right "⚽ SHOOT (なぞって自由軌道)" Pad!
     if (!SHORTS_MODE && (state.phase === 'dribble' || state.phase === 'aim_shot' || state.phase === 'loose_ball')) {
       if (dribbleTouch.active) {
         ctx.save();
@@ -2168,6 +2684,39 @@
         ctx.restore();
       }
 
+      // Draw 3 Special Dribble Skill Buttons (⚡バースト / 👟ダブルタッチ / 🌀ルーレット)
+      SKILL_BTNS.forEach((b) => {
+        const isActive = state.player.skillTimer > 0 && state.player.skillType === b.id;
+        ctx.save();
+        ctx.translate(b.x, b.y);
+        if (isActive) {
+          ctx.scale(1.08, 1.08);
+          ctx.shadowColor = b.col1;
+          ctx.shadowBlur = 16;
+        }
+
+        const g = ctx.createLinearGradient(0, -b.h * 0.5, 0, b.h * 0.5);
+        g.addColorStop(0, b.col1);
+        g.addColorStop(1, b.col2);
+
+        ctx.beginPath();
+        ctx.roundRect(-b.w * 0.5, -b.h * 0.5, b.w, b.h, 15);
+        ctx.fillStyle = g;
+        ctx.fill();
+        ctx.lineWidth = isActive ? 3.5 : 2;
+        ctx.strokeStyle = isActive ? '#ffffff' : b.border;
+        ctx.stroke();
+
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '900 13px sans-serif';
+        ctx.fillText(`${b.icon}${b.title}`, 0, -5);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.font = '800 10px sans-serif';
+        ctx.fillText(b.sub, 0, 13);
+        ctx.restore();
+      });
+
       // Ergonomic Bottom-Right ⚽ SHOOT Pad
       ctx.save();
       const pulse = 1 + Math.sin(state.elapsed * 6) * 0.04;
@@ -2188,40 +2737,40 @@
 
       ctx.fillStyle = '#0f172a';
       ctx.textAlign = 'center';
-      ctx.font = '900 18px sans-serif';
+      ctx.font = '900 17px sans-serif';
       ctx.fillText('⚽ SHOOT', 0, -4);
-      ctx.font = '800 11px sans-serif';
-      ctx.fillText('なぞって自由軌道', 0, 16);
+      ctx.font = '800 10.5px sans-serif';
+      ctx.fillText('なぞって自由軌道', 0, 15);
       ctx.restore();
 
       // Bottom Control Guide Pill
-      const guideY = H - 38;
+      const guideY = H - 36;
       ctx.save();
-      ctx.fillStyle = 'rgba(6, 18, 14, 0.78)';
+      ctx.fillStyle = 'rgba(6, 18, 14, 0.82)';
       ctx.strokeStyle = 'rgba(34, 211, 238, 0.45)';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.roundRect(22, guideY - 17, W - 150, 34, 999);
+      ctx.roundRect(18, guideY - 15, W - 36, 30, 999);
       ctx.fill();
       ctx.stroke();
 
       ctx.fillStyle = '#e2e8f0';
-      ctx.font = '800 12px sans-serif';
+      ctx.font = '800 11.5px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('🕹️ 上下左右ドラッグで自由ドリブル ｜ ⚽ なぞっていつでもシュート', 22 + (W - 150) * 0.5, guideY);
+      ctx.fillText('⚡バースト・👟ダブルタッチ・🌀ルーレット ｜ ⚽なぞって自由軌道シュート', W * 0.5, guideY);
       ctx.restore();
     }
 
     if (!SHORTS_MODE && state.phase === 'title') {
       drawModalCard(
         'ELEVEN DRIBBLE',
-        '一人称3D・自由ドリブル＆自由軌道シュートサッカー',
+        '一人称3D・必殺スキル＆自由軌道シュートサッカー',
         [
-          '🕹️ 【自由ドリブル】上下左右ドラッグでダッシュ・切り返し・引き技！',
-          '🏃 【自由CPU 11人】ピッチ中を駆け回る相手をかわして突破！',
-          '⚽ 【自由軌道シュート】ボールか右下ボタンから軌道をなぞる！',
-          '🔥 直線＝弾丸 / 弧＝バナナカーブ / 高く描く＝ループシュート！'
+          '⚡ 【アクセルバースト】ボールを蹴り出して爆発的縦突破！',
+          '👟 【ダブルタッチ】高速インサイド2タッチで相手の横をすり抜ける！',
+          '🌀 【ルーレット】華麗な360°回転マルセイユターンで相手を置き去り！',
+          '⚽ 【自由軌道シュート】いつでもボールか右下から軌道をなぞって発射！'
         ],
         'タップしてキックオフ！',
         '#a3e635'
@@ -2246,11 +2795,11 @@
     if (!SHORTS_MODE && state.phase === 'gameover') {
       drawModalCard(
         `${state.passedCount} / 11人突破！`,
-        '下ドラッグの「引き技ストップ」や遠目からのループシュートも有効！',
+        'バースト・ダブルタッチ・ルーレットで相手を翻弄しよう！',
         [
           `⚽ 今回の記録: ${state.passedCount}人抜き`,
           `🏆 スコア: ${state.score.toLocaleString()} PTS (ベスト: ${state.bestScore.toLocaleString()})`,
-          `💡 コツ: いつでも右下「⚽ SHOOT」からカーブシュートが打てます！`
+          `💡 下の3つのスキルボタンかフリック操作でいつでも必殺フェイント発動！`
         ],
         'タップですぐリトライ！',
         '#fb7185'
@@ -2286,10 +2835,10 @@
     ctx.fillText(subtitle, W * 0.5, cardY + 94);
 
     ctx.textAlign = 'left';
-    ctx.font = '700 13.5px sans-serif';
+    ctx.font = '700 13.2px sans-serif';
     ctx.fillStyle = '#e2e8f0';
     bullets.forEach((b, idx) => {
-      ctx.fillText(b, cardX + 20, cardY + 148 + idx * 42);
+      ctx.fillText(b, cardX + 18, cardY + 148 + idx * 42);
     });
 
     const btnW = cardW - 56;
@@ -2330,6 +2879,7 @@
   window.__test = {
     state,
     startMatch,
+    triggerDribbleSkill,
     updateShotPreviewBeads,
     fireDraftedShot,
     update,
