@@ -737,7 +737,7 @@
         state.blocksCleared = 0;
 
         state.px = 0;
-        state.py = FLOOR_D * 0.36;
+        state.py = customLayout ? FLOOR_D * 0.36 : -FLOOR_D * 0.36;
         state.targetX = state.px;
         state.targetY = state.py;
         state.angle = -Math.PI / 2;
@@ -804,16 +804,15 @@
             });
           });
         } else {
-          // Procedural dense toy-block room per stage
+          // Procedural dense toy-block room per stage (piles spread from center to back/top)
           const countTarget = Math.min(185, 95 + stageNum * 22);
           let id = 1;
-          // Create 3-5 colorful toy piles across the room
           const numPiles = 3 + Math.min(3, Math.floor(stageNum / 2));
           const piles = [];
           for (let p = 0; p < numPiles; p++) {
             piles.push({
               x: (Math.random() - 0.5) * (FLOOR_W - 140),
-              y: -FLOOR_D * 0.34 + (p / Math.max(1, numPiles - 1)) * (FLOOR_D * 0.52),
+              y: -FLOOR_D * 0.14 + (p / Math.max(1, numPiles - 1)) * (FLOOR_D * 0.50),
               colIdx: (p + stageNum) % CUBE_COLORS.length,
             });
           }
@@ -823,7 +822,7 @@
             const ang = Math.random() * Math.PI * 2;
             const dist = Math.pow(Math.random(), 0.65) * 115;
             const bx = Math.max(-FLOOR_W / 2 + 28, Math.min(FLOOR_W / 2 - 28, pile.x + Math.cos(ang) * dist));
-            const by = Math.max(-FLOOR_D / 2 + 28, Math.min(FLOOR_D * 0.28, pile.y + Math.sin(ang) * dist));
+            const by = Math.max(-FLOOR_D * 0.24, Math.min(FLOOR_D / 2 - 28, pile.y + Math.sin(ang) * dist));
             const stackLevel = Math.random() < 0.28 ? 1 : 0;
             const col = CUBE_COLORS[(pile.colIdx + (Math.random() < 0.3 ? 1 : 0)) % CUBE_COLORS.length];
             state.blocks.push({
@@ -871,7 +870,7 @@
               state.blocks.push({
                 id: id++,
                 x: (Math.random() - 0.5) * (FLOOR_W - 140),
-                y: -FLOOR_D * 0.25 + Math.random() * (FLOOR_D * 0.4),
+                y: -FLOOR_D * 0.08 + Math.random() * (FLOOR_D * 0.38),
                 z: 0,
                 size: 26,
                 kind: 'hazard',
@@ -1349,8 +1348,8 @@
         let ky = 0;
         if (keys['arrowleft'] || keys['a']) kx -= 1;
         if (keys['arrowright'] || keys['d']) kx += 1;
-        if (keys['arrowup'] || keys['w']) ky -= 1;
-        if (keys['arrowdown'] || keys['s']) ky += 1;
+        if (keys['arrowup'] || keys['w']) ky += 1;
+        if (keys['arrowdown'] || keys['s']) ky -= 1;
 
         if (kx !== 0 || ky !== 0) {
           const len = Math.hypot(kx, ky);
@@ -1361,7 +1360,7 @@
           state.angle = Math.atan2(state.vy, state.vx);
         } else if (!SHORTS_MODE && joy.active && (joy.dx !== 0 || joy.dy !== 0)) {
           state.vx = joy.dx * spd;
-          state.vy = joy.dy * spd;
+          state.vy = -joy.dy * spd;
           state.px += state.vx * dt;
           state.py += state.vy * dt;
           state.angle = Math.atan2(state.vy, state.vx);
@@ -1534,20 +1533,20 @@
 
         // Soft cast shadow on floor
         if (wz < 40) {
-          const sh = project3D(wx + 6, wy + 8, 0);
+          const sh = project3D(wx + 6, wy - 8, 0);
           ctx.fillStyle = 'rgba(27, 45, 78, 0.14)';
           ctx.beginPath();
           ctx.ellipse(sh.x, sh.y, h * sh.scale * 1.15, h * sh.scale * 0.72, 0, 0, Math.PI * 2);
           ctx.fill();
         }
 
-        // Front face (y + h)
+        // Front face (y - h, facing camera)
         ctx.fillStyle = highlight ? '#ffffff' : col.front;
         ctx.beginPath();
-        ctx.moveTo(t3.x, t3.y);
-        ctx.lineTo(t2.x, t2.y);
-        ctx.lineTo(b2.x, b2.y);
-        ctx.lineTo(b3.x, b3.y);
+        ctx.moveTo(t0.x, t0.y);
+        ctx.lineTo(t1.x, t1.y);
+        ctx.lineTo(b1.x, b1.y);
+        ctx.lineTo(b0.x, b0.y);
         ctx.closePath();
         ctx.fill();
 
@@ -1673,26 +1672,26 @@
         const fl2 = project3D(FLOOR_W / 2, FLOOR_D / 2, 0);
         const fl3 = project3D(-FLOOR_W / 2, FLOOR_D / 2, 0);
 
-        const fb2 = project3D(FLOOR_W / 2, FLOOR_D / 2, -32);
-        const fb3 = project3D(-FLOOR_W / 2, FLOOR_D / 2, -32);
+        const fb0 = project3D(-FLOOR_W / 2, -FLOOR_D / 2, -32);
+        const fb1 = project3D(FLOOR_W / 2, -FLOOR_D / 2, -32);
 
         // Floor drop shadow
         ctx.fillStyle = 'rgba(27, 45, 78, 0.12)';
         ctx.beginPath();
-        ctx.moveTo(fb3.x - 16, fb3.y + 18);
-        ctx.lineTo(fb2.x + 16, fb2.y + 18);
-        ctx.lineTo(fl2.x + 12, fl2.y + 10);
-        ctx.lineTo(fl3.x - 12, fl3.y + 10);
+        ctx.moveTo(fb0.x - 16, fb0.y + 18);
+        ctx.lineTo(fb1.x + 16, fb1.y + 18);
+        ctx.lineTo(fl1.x + 12, fl1.y + 10);
+        ctx.lineTo(fl0.x - 12, fl0.y + 10);
         ctx.closePath();
         ctx.fill();
 
         // Floor front slab thickness
         ctx.fillStyle = '#c5d6ec';
         ctx.beginPath();
-        ctx.moveTo(fl3.x, fl3.y);
-        ctx.lineTo(fl2.x, fl2.y);
-        ctx.lineTo(fb2.x, fb2.y);
-        ctx.lineTo(fb3.x, fb3.y);
+        ctx.moveTo(fl0.x, fl0.y);
+        ctx.lineTo(fl1.x, fl1.y);
+        ctx.lineTo(fb1.x, fb1.y);
+        ctx.lineTo(fb0.x, fb0.y);
         ctx.closePath();
         ctx.fill();
 
@@ -1781,19 +1780,19 @@
           ctx.restore();
         }
 
-        // Depth-sort all 3D entities (blocks + sweeper + debris) back-to-front
+        // Depth-sort all 3D entities (blocks + sweeper + debris) back-to-front (+Y back -> -Y front)
         const drawQueue = [];
         for (const b of state.blocks) {
-          drawQueue.push({ sortY: b.y + b.z * 0.05, kind: 'block', obj: b });
+          drawQueue.push({ sortY: b.y - b.z * 0.05, kind: 'block', obj: b });
         }
         if (state.phase !== 'title') {
-          drawQueue.push({ sortY: state.py + 8, kind: 'sweeper' });
+          drawQueue.push({ sortY: state.py - 8, kind: 'sweeper' });
         }
         for (const d of state.debris) {
-          drawQueue.push({ sortY: d.y + 4, kind: 'debris', obj: d });
+          drawQueue.push({ sortY: d.y - 4, kind: 'debris', obj: d });
         }
 
-        drawQueue.sort((a, b) => a.sortY - b.sortY);
+        drawQueue.sort((a, b) => b.sortY - a.sortY);
 
         for (const item of drawQueue) {
           if (item.kind === 'sweeper') {
