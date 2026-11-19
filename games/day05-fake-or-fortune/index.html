@@ -1,0 +1,3756 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>FAKE OR FORTUNE｜闇の骨董鑑定士 — UV・X線透視×億超えオークション</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Noto+Sans+JP:wght@500;700;900&family=Shippori+Mincho:wght@700;800&display=swap" rel="stylesheet" />
+<style>
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #120b07;
+    font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', system-ui, -apple-system, sans-serif;
+    touch-action: none;
+  }
+  #game-wrap {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: radial-gradient(circle at 50% 25%, #2b1a10 0%, #110a06 72%, #080402 100%);
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    max-width: 540px;
+    max-height: 960px;
+    aspect-ratio: 9 / 16;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(212, 168, 83, 0.22);
+    cursor: crosshair;
+  }
+  body.shorts-mode canvas {
+    max-width: 100vw;
+    max-height: 100vh;
+    width: 100vw;
+    height: 100vh;
+    box-shadow: none;
+  }
+  .back-link {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    z-index: 50;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: rgba(28, 17, 10, 0.84);
+    border: 1px solid rgba(212, 168, 83, 0.45);
+    color: #f6e7c1;
+    font-size: 12px;
+    font-weight: 800;
+    text-decoration: none;
+    backdrop-filter: blur(6px);
+  }
+  body.shorts-mode .back-link {
+    display: none;
+  }
+</style>
+</head>
+<body>
+<a class="back-link" href="../../index.html">← ゲーム一覧</a>
+<div id="game-wrap">
+  <canvas id="game" width="540" height="960"></canvas>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  const params = new URLSearchParams(window.location.search);
+  const SHORTS_MODE = params.get('shorts') === '1';
+  if (SHORTS_MODE) document.body.classList.add('shorts-mode');
+
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const W = 540;
+  const H = 960;
+
+  // High-DPI crispness
+  const DPR = SHORTS_MODE ? 2 : Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = W * DPR;
+  canvas.height = H * DPR;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+
+  // Event hook for Shorts audio/caption sync
+  window.__gameEvents = [];
+  function emitEvent(type, extra = {}) {
+    window.__gameEvents.push({ type, t: +(state.elapsed).toFixed(3), ...extra });
+  }
+
+  // Deterministic PRNG for Shorts, random for live play
+  let rngSeed = SHORTS_MODE ? 20261119 : ((Date.now() ^ (Math.random() * 0xffffffff)) >>> 0);
+  function rand() {
+    rngSeed = (rngSeed * 1664525 + 1013904223) >>> 0;
+    return rngSeed / 4294967296;
+  }
+  function randRange(a, b) { return a + (b - a) * rand(); }
+  function randInt(a, b) { return Math.floor(randRange(a, b + 1)); }
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function easeOutCubic(t) { return 1 - Math.pow(1 - clamp(t, 0, 1), 3); }
+  function easeOutBack(t) {
+    const c1 = 1.70158, c3 = c1 + 1;
+    const x = clamp(t, 0, 1);
+    return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
+  }
+
+  // Persistent storage
+  const SAVE_KEY = 'fake_or_fortune_v1';
+  function loadSave() {
+    try {
+      const raw = localStorage.getItem(SAVE_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (_) {}
+    return { bestProfit: 0, bestEndless: 0, discovered: [] };
+  }
+  function writeSave(data) {
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (_) {}
+  }
+  const saveData = loadSave();
+
+  // =========================================================================
+  // WEB AUDIO TACTILE SOUND SYNTHESIZER
+  // =========================================================================
+  let audioCtx = null;
+  let muted = false;
+  function ensureAudio() {
+    if (SHORTS_MODE || muted) return null;
+    if (!audioCtx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) audioCtx = new AC();
+    }
+    if (audioCtx && audioCtx.state === 'suspended') {
+      audioCtx.resume().catch(() => {});
+    }
+    return audioCtx;
+  }
+
+  function playTone(freq, dur, type = 'sine', vol = 0.14, slideTo = null, delay = 0) {
+    const ac = ensureAudio();
+    if (!ac) return;
+    const t0 = ac.currentTime + delay;
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t0);
+    if (slideTo) osc.frequency.exponentialRampToValueAtTime(Math.max(20, slideTo), t0 + dur);
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.linearRampToValueAtTime(vol, t0 + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    osc.connect(gain);
+    gain.connect(ac.destination);
+    osc.start(t0);
+    osc.stop(t0 + dur + 0.02);
+  }
+
+  function playNoise(dur, vol = 0.1, filterFreq = 1200, filterType = 'bandpass', delay = 0) {
+    const ac = ensureAudio();
+    if (!ac) return;
+    const t0 = ac.currentTime + delay;
+    const bufferSize = Math.max(1, Math.floor(ac.sampleRate * dur));
+    const buf = ac.createBuffer(1, bufferSize, ac.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+    const src = ac.createBufferSource();
+    src.buffer = buf;
+    const filt = ac.createBiquadFilter();
+    filt.type = filterType;
+    filt.frequency.setValueAtTime(filterFreq, t0);
+    const gain = ac.createGain();
+    gain.gain.setValueAtTime(vol, t0);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(filt);
+    filt.connect(gain);
+    gain.connect(ac.destination);
+    src.start(t0);
+    src.stop(t0 + dur + 0.02);
+  }
+
+  const SFX = {
+    toolClick(tool) {
+      playNoise(0.045, 0.09, 2400, 'bandpass');
+      if (tool === 'loupe') playTone(640, 0.07, 'triangle', 0.1, 880);
+      else if (tool === 'uv') playTone(310, 0.14, 'sine', 0.09, 520);
+      else if (tool === 'xray') { playTone(880, 0.08, 'sine', 0.08, 1320); playTone(440, 0.12, 'triangle', 0.06, 660, 0.03); }
+      else if (tool === 'scale') playTone(420, 0.12, 'triangle', 0.12, 280);
+    },
+    clueFound(isSecret) {
+      if (isSecret) {
+        playTone(784, 0.16, 'sine', 0.16, 1046);
+        playTone(1046, 0.22, 'triangle', 0.16, 1568, 0.09);
+        playTone(1568, 0.35, 'sine', 0.14, 2093, 0.18);
+      } else {
+        playTone(620, 0.1, 'sawtooth', 0.09, 880);
+        playTone(930, 0.18, 'triangle', 0.14, 1240, 0.07);
+      }
+    },
+    scaleTap(isGenuine) {
+      if (isGenuine) {
+        // Pure resonant metallic/ceramic ring
+        playTone(1180, 0.55, 'sine', 0.14, 1170);
+        playTone(2360, 0.32, 'sine', 0.06, 2340);
+      } else {
+        // Dull hollow plastic/resin thud
+        playTone(170, 0.14, 'triangle', 0.16, 95);
+        playNoise(0.08, 0.12, 420, 'lowpass');
+      }
+    },
+    stamp(isBuy) {
+      // Heavy wooden desk thud + ink slap
+      playTone(125, 0.18, 'sine', 0.24, 42);
+      playNoise(0.09, 0.18, 700, 'lowpass');
+      if (isBuy) playTone(523, 0.15, 'triangle', 0.1, 659, 0.04);
+      else playTone(330, 0.16, 'sawtooth', 0.08, 220, 0.04);
+    },
+    gavel() {
+      playTone(190, 0.16, 'triangle', 0.22, 75);
+      playNoise(0.06, 0.2, 1600, 'bandpass');
+    },
+    bidTick(step) {
+      const base = 440 * Math.pow(1.07, Math.min(step, 16));
+      playTone(base, 0.09, 'triangle', 0.11, base * 1.04);
+    },
+    win(isJackpot) {
+      const notes = isJackpot ? [523, 659, 784, 1046, 1318, 1568] : [523, 659, 784, 1046];
+      notes.forEach((n, i) => playTone(n, 0.28, 'triangle', 0.14, null, i * 0.07));
+      if (isJackpot) {
+        for (let i = 0; i < 6; i++) playTone(1800 + i * 260, 0.12, 'sine', 0.06, 2400, 0.18 + i * 0.05);
+      }
+    },
+    fail() {
+      playTone(220, 0.28, 'sawtooth', 0.13, 155);
+      playTone(155, 0.45, 'sawtooth', 0.14, 98, 0.18);
+      playNoise(0.22, 0.12, 500, 'lowpass', 0.05);
+    },
+    slideIn() {
+      playNoise(0.22, 0.07, 900, 'bandpass');
+      playTone(240, 0.14, 'sine', 0.05, 340);
+    },
+    scanTick() {
+      playTone(1450 + Math.random() * 350, 0.025, 'sine', 0.025);
+    }
+  };
+
+  // =========================================================================
+  // MONEY FORMATTER (Japanese 億円 / 万円)
+  // =========================================================================
+  function formatYen(man) {
+    const sign = man < 0 ? '-' : '';
+    const abs = Math.round(Math.abs(man));
+    if (abs >= 10000) {
+      const oku = Math.floor(abs / 10000);
+      const rem = abs % 10000;
+      if (rem === 0) return `${sign}¥${oku}億`;
+      return `${sign}¥${oku}億${rem.toLocaleString()}万`;
+    }
+    if (abs === 0) return '¥0';
+    return `${sign}¥${abs.toLocaleString()}万`;
+  }
+
+  // =========================================================================
+  // ARTIFACT CATALOG (10 Museum-Grade Multi-Layer Artifacts)
+  // =========================================================================
+  const CLIENTS = [
+    { name: '富豪の未亡人', icon: '👒', quote: '亡き夫の金庫から出た逸品よ。高く買ってね？' },
+    { name: '謎の古美術商', icon: '🎩', quote: 'ワケありの品だ。あんたの目利きに任せるよ…' },
+    { name: '旧家の執事', icon: '🧐', quote: '屋敷の蔵から発見された家宝でございます。' },
+    { name: '怪しいブローカー', icon: '🕶️', quote: '掘り出し物だぜ？今すぐ現金にしてくれ！' },
+    { name: '考古学マニア', icon: '🧭', quote: '海外の闇市で競り落とした超一級品さ！' },
+    { name: '夜会の収集家', icon: '🎭', quote: '本物なら億は下らない…さあ、見抜けるかな？' },
+  ];
+
+  const ARTIFACT_DEFS = [
+    {
+      id: 'watch',
+      name: '皇帝の黄金懐中時計',
+      era: '1888年 スイス製',
+      specShort: '1888年 機械式歯車',
+      realWeight: 185,
+      fakeWeight: 74,
+      askMin: 900, askMax: 1600,
+      sellMult: 2.8,
+      clueSpots: {
+        xray: { x: 0, y: 18, r: 62, label: 'X線: 内部に現代の乾電池＆IC基板！' },
+        loupe: { x: 0, y: 66, r: 44, label: 'ルーペ: 文字盤に「QUARTZ 2024」の印字！' },
+        uv: { x: 34, y: -14, r: 54, label: 'UV: 針に現代の蛍光蓄光塗料が反応！' },
+        scale: { x: 0, y: 0, r: 90, label: '電子秤: 74g…純金にしては異常に軽い！' },
+      },
+      secretSpot: { tool: 'xray', x: -46, y: 42, r: 46, label: '✨超国宝: 蓋裏に皇帝シリアル「No.001」刻印！' }
+    },
+    {
+      id: 'vase',
+      name: '龍紋・青磁の大壺',
+      era: '1620年 明朝',
+      specShort: '底銘「大明」・無垢磁器',
+      realWeight: 1420,
+      fakeWeight: 640,
+      askMin: 1200, askMax: 2400,
+      sellMult: 3.1,
+      clueSpots: {
+        uv: { x: 0, y: -74, r: 64, label: 'UV: 首元に現代エポキシ接着剤の亀裂発光！' },
+        xray: { x: 0, y: 20, r: 66, label: 'X線: 内部が針金フレームと石膏のハリボテ！' },
+        loupe: { x: 0, y: 138, r: 44, label: 'ルーペ: 底面の銘が「大明 2025」と偽造！' },
+        scale: { x: 0, y: 0, r: 90, label: '電子秤: 640g…樹脂製の安物レプリカ！' },
+      },
+      secretSpot: { tool: 'xray', x: 0, y: 60, r: 52, label: '✨超国宝: 壺底に封印された「純金の秘宝玉」発見！' }
+    },
+    {
+      id: 'pharaoh',
+      name: '黄金のファラオ仮面',
+      era: 'BC1323年 古代エジプト',
+      specShort: '純金無垢・ヒエログリフ',
+      realWeight: 3200,
+      fakeWeight: 1080,
+      askMin: 2200, askMax: 3800,
+      sellMult: 3.2,
+      clueSpots: {
+        xray: { x: 0, y: -6, r: 68, label: 'X線: 空洞内部に現代ボルト＆鉛の重り！' },
+        uv: { x: -78, y: -28, r: 62, label: 'UV: 青帯に現代アクリル蛍光塗料の反応！' },
+        loupe: { x: 0, y: 118, r: 46, label: 'ルーペ: 顎裏に「SOUVENIR」の微細刻印！' },
+        scale: { x: 0, y: 0, r: 90, label: '電子秤: 1,080g…純金ではなく薄メッキ！' },
+      },
+      secretSpot: { tool: 'uv', x: 0, y: -88, r: 48, label: '✨超国宝: 額に古代王家の黄金スカラベ紋章！' }
+    },
+    {
+      id: 'painting',
+      name: '謎の貴婦人・油彩名画',
+      era: '1680年 バロック油彩',
+      specShort: '署名「V.M.」・天然油彩',
+      realWeight: 2400,
+      fakeWeight: 960,
+      askMin: 1800, askMax: 3400,
+      sellMult: 3.3,
+      clueSpots: {
+        xray: { x: 0, y: 4, r: 68, label: 'X線: 下絵に現代の落書きスマイルを発見！' },
+        uv: { x: 10, y: -22, r: 64, label: 'UV: 現代蛍光塗料の雑な上塗り＋QR跡！' },
+        loupe: { x: 74, y: 108, r: 46, label: 'ルーペ: 隅の署名が「PRINT #042」の印刷！' },
+        scale: { x: 0, y: 0, r: 90, label: '電子秤: 960g…発泡プラの偽アンティーク額！' },
+      },
+      secretSpot: { tool: 'uv', x: -64, y: -74, r: 50, label: '✨超国宝: 絵具の下に王家献上紋章が発光！' }
+    },
+    {
+      id: 'katana',
+      name: '妖刀・村正の短刀',
+      era: '1540年 室町時代',
+      specShort: '玉鋼鍛造・銘「村正」',
+      realWeight: 540,
+      fakeWeight: 265,
+      askMin: 1400, askMax: 2600,
+      sellMult: 3.0,
+      clueSpots: {
+        xray: { x: -78, y: 74, r: 62, label: 'X線: 柄の中が現代ネジ棒＆ナット留め！' },
+        loupe: { x: -16, y: 12, r: 48, label: 'ルーペ: 刀身に「STAINLESS」のレーザー印字！' },
+        uv: { x: -84, y: 80, r: 58, label: 'UV: 柄糸に化学繊維の蛍光＆瞬間接着剤！' },
+        scale: { x: 0, y: 0, r: 90, label: '電子秤: 265g…模造刀用のアルミ合金！' },
+      },
+      secretSpot: { tool: 'xray', x: 52, y: -50, r: 50, label: '✨超国宝: 刀身内部に伝説の金象嵌「昇り龍」！' }
+    },
+    {
+      id: 'diamond',
+      name: '秘宝「ブラッドスター」',
+      era: '42ct 天然紅ダイヤ',
+      specShort: '天然結晶・Pt950枠',
+      realWeight: 95,
+      fakeWeight: 42,
+      askMin: 2600, askMax: 4500,
+      sellMult: 3.4,
+      clueSpots: {
+        uv: { x: 0, y: -6, r: 64, label: 'UV: 合成石特有の異常シアン発光＋接着線！' },
+        xray: { x: 14, y: -12, r: 58, label: 'X線: 内部にガラス特有の気泡＆貼り合わせ線！' },
+        loupe: { x: 0, y: 66, r: 44, label: 'ルーペ: 側面に「CZ-SYNTH」のレーザー刻印！' },
+        scale: { x: 0, y: 0, r: 90, label: '電子秤: 42g…比重が軽すぎるアクリル偽石！' },
+      },
+      secretSpot: { tool: 'uv', x: 0, y: -8, r: 52, label: '✨超国宝: 奇跡の6条「インペリアル・スター」出現！' }
+    },
+    {
+      id: 'crown',
+      name: '失われた王家の王冠',
+      era: '1740年 18K純金',
+      specShort: '刻印「♔750」・天然石',
+      realWeight: 1850,
+      fakeWeight: 460,
+      askMin: 2400, askMax: 4200,
+      sellMult: 3.1,
+      clueSpots: {
+        uv: { x: -52, y: 54, r: 62, label: 'UV: プラ宝石が蛍光発光＋接着剤はみ出し！' },
+        xray: { x: 0, y: -14, r: 66, label: 'X線: 中身スカスカの針金骨組み＆ホットボンド！' },
+        loupe: { x: 0, y: 74, r: 46, label: 'ルーペ: 内側刻印が「18K GP（金メッキ）」！' },
+        scale: { x: 0, y: 0, r: 90, label: '電子秤: 460g…舞台用の軽量プラスチック王冠！' },
+      },
+      secretSpot: { tool: 'uv', x: 0, y: -22, r: 50, label: '✨超国宝: ベルベット裏に初代国王の金糸刺繍！' }
+    },
+    {
+      id: 'amber',
+      name: '白亜紀の太古琥珀',
+      era: '6500万年前 天然琥珀',
+      specShort: '天然包有・継ぎ目なし',
+      realWeight: 240,
+      fakeWeight: 495,
+      askMin: 1100, askMax: 2100,
+      sellMult: 2.9,
+      clueSpots: {
+        xray: { x: 0, y: -4, r: 58, label: 'X線: 昆虫の胴体を現代の金属ピンが貫通！' },
+        uv: { x: 0, y: 0, r: 64, label: 'UV: 中央に真っ赤な2枚貼り合わせ接着ライン！' },
+        loupe: { x: 34, y: 46, r: 46, label: 'ルーペ: 型抜きのパーティング線＋「RESIN」！' },
+        scale: { x: 0, y: 0, r: 90, label: '電子秤: 495g…琥珀にしては重すぎる偽ガラス！' },
+      },
+      secretSpot: { tool: 'uv', x: 0, y: -68, r: 46, label: '✨超国宝: 恐竜羽毛の化石結晶が黄金発光！' }
+    },
+    {
+      id: 'jade',
+      name: '古代マヤ・翡翠の太陽盤',
+      era: 'BC300年 天然翡翠',
+      specShort: '一枚岩彫刻・無垢翡翠',
+      realWeight: 2100,
+      fakeWeight: 840,
+      askMin: 1600, askMax: 2900,
+      sellMult: 3.0,
+      clueSpots: {
+        xray: { x: 0, y: 8, r: 70, label: 'X線: 内部に現代コンクリートの鉄筋メッシュ！' },
+        uv: { x: 46, y: -32, r: 62, label: 'UV: 亀裂に染み込んだ着色緑レジンの蛍光反応！' },
+        loupe: { x: 0, y: 112, r: 46, label: 'ルーペ: 紋様の中に「REPLICA」＋電動ドリル痕！' },
+        scale: { x: 0, y: 0, r: 90, label: '電子秤: 840g…石膏に緑塗装した偽造品！' },
+      },
+      secretSpot: { tool: 'uv', x: 0, y: -22, r: 48, label: '✨超国宝: 太陽神の額に古代辰砂の秘紋！' }
+    },
+    {
+      id: 'violin',
+      name: '幻のストラディバリウス',
+      era: '1715年 クレモナ製',
+      specShort: '内部ラベル1715・木釘組',
+      realWeight: 430,
+      fakeWeight: 695,
+      askMin: 2800, askMax: 4800,
+      sellMult: 3.5,
+      clueSpots: {
+        xray: { x: 0, y: 40, r: 68, label: 'X線: 胴体内部に現代の鉄釘と金属プレート！' },
+        loupe: { x: -34, y: 34, r: 46, label: 'ルーペ: F字孔の奥に「2024」バーコードラベル！' },
+        uv: { x: 34, y: 66, r: 62, label: 'UV: 現代ポリウレタン工場塗装の強烈な青発光！' },
+        scale: { x: 0, y: 0, r: 90, label: '電子秤: 695g…名器にしては重すぎる合板製！' },
+      },
+      secretSpot: { tool: 'uv', x: 0, y: -8, r: 48, label: '✨超国宝: ニス層下に巨匠の直筆金サイン「A.S.」！' }
+    },
+  ];
+
+  // =========================================================================
+  // OFFSCREEN ARTIFACT BUFFER SYSTEM (840x840 for ultra-crisp 2.6x Loupe!)
+  // =========================================================================
+  const BUF_SIZE = 840;
+  const BUF_SCALE = 2; // logical artifact space is -210..+210 (420x420)
+  const ART_CENTER_X = W / 2;
+  const ART_CENTER_Y = 428;
+  const ART_DRAW_SIZE = 400; // drawn as 400x400 on main canvas (centered at ART_CENTER)
+
+  function createOffscreen() {
+    const c = document.createElement('canvas');
+    c.width = BUF_SIZE;
+    c.height = BUF_SIZE;
+    return c;
+  }
+  const layerNormal = createOffscreen();
+  const layerUV = createOffscreen();
+  const layerXRay = createOffscreen();
+
+  // Helper to draw into a layer with origin at center and logical coords (-210..210)
+  function withLayer(c, fn) {
+    const g = c.getContext('2d');
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.clearRect(0, 0, BUF_SIZE, BUF_SIZE);
+    g.save();
+    g.translate(BUF_SIZE / 2, BUF_SIZE / 2);
+    g.scale(BUF_SCALE, BUF_SCALE);
+    fn(g);
+    g.restore();
+  }
+
+  // =========================================================================
+  // PROCEDURAL MUSEUM-QUALITY ARTIFACT RENDERER (10 Artifacts × 3 Layers!)
+  // =========================================================================
+  function renderArtifactLayers(item) {
+    const id = item.def.id;
+    const clues = item.activeClues; // array of tool strings ('xray','uv','loupe','scale')
+    const hasClue = (t) => clues.includes(t);
+    const isSecret = item.isSecret;
+    const secretTool = item.def.secretSpot.tool;
+
+    // 1. NORMAL + MICRO-DETAIL LAYER
+    withLayer(layerNormal, (g) => {
+      g.save();
+      g.shadowColor = 'rgba(0,0,0,0.52)';
+      g.shadowBlur = 22;
+      g.shadowOffsetY = 12;
+      drawArtifactBase(g, id, 'normal', hasClue('loupe'));
+      g.restore();
+      drawArtifactDetails(g, id, hasClue('loupe'));
+    });
+
+    // 2. UV BLACKLIGHT LAYER
+    withLayer(layerUV, (g) => {
+      // Dark violet ambient UV backdrop over artifact shape
+      g.fillStyle = '#090418';
+      g.fillRect(-210, -210, 420, 420);
+      // Draw darkened artifact silhouette under UV
+      g.save();
+      g.globalAlpha = 0.24;
+      g.filter = 'brightness(0.45) contrast(1.2) hue-rotate(210deg) saturate(1.8)';
+      g.drawImage(layerNormal, -210, -210, 420, 420);
+      g.restore();
+      // Natural subtle UV sheen
+      drawArtifactUVOverlay(g, id, hasClue('uv'), isSecret && secretTool === 'uv');
+    });
+
+    // 3. X-RAY RADIOGRAPH LAYER
+    withLayer(layerXRay, (g) => {
+      // Deep clinical blue-black radiograph film
+      g.fillStyle = '#04121d';
+      g.fillRect(-210, -210, 420, 420);
+      drawArtifactXRay(g, id, hasClue('xray'), isSecret && secretTool === 'xray');
+    });
+  }
+
+  function drawArtifactBase(g, id, mode, fakeLoupe) {
+    if (id === 'watch') {
+      // Top crown & chain bow
+      g.strokeStyle = '#d4a138';
+      g.lineWidth = 8;
+      g.beginPath();
+      g.arc(0, -142, 22, Math.PI * 0.85, Math.PI * 0.15, false);
+      g.stroke();
+      g.fillStyle = '#e8bd58';
+      g.fillRect(-11, -130, 22, 24);
+      g.fillStyle = '#b48224';
+      g.fillRect(-15, -135, 30, 8);
+
+      // Outer gold case
+      const caseGrad = g.createRadialGradient(-35, -35, 20, 0, 12, 136);
+      caseGrad.addColorStop(0, '#fff2b2');
+      caseGrad.addColorStop(0.45, '#e2b144');
+      caseGrad.addColorStop(0.82, '#9a6b18');
+      caseGrad.addColorStop(1, '#5d3d08');
+      g.fillStyle = caseGrad;
+      g.beginPath();
+      g.arc(0, 12, 128, 0, Math.PI * 2);
+      g.fill();
+
+      // Inner bezel
+      g.strokeStyle = '#fff0a8';
+      g.lineWidth = 4;
+      g.beginPath();
+      g.arc(0, 12, 112, 0, Math.PI * 2);
+      g.stroke();
+
+      // Enamel dial
+      const dialGrad = g.createRadialGradient(-20, -10, 10, 0, 12, 108);
+      dialGrad.addColorStop(0, '#fffdf5');
+      dialGrad.addColorStop(0.75, '#f2e5c6');
+      dialGrad.addColorStop(1, '#d4be8e');
+      g.fillStyle = dialGrad;
+      g.beginPath();
+      g.arc(0, 12, 106, 0, Math.PI * 2);
+      g.fill();
+    } else if (id === 'vase') {
+      // Elegant Ming baluster porcelain vase
+      const vasePath = (ctx2) => {
+        ctx2.beginPath();
+        ctx2.moveTo(-48, -148);
+        ctx2.bezierCurveTo(-56, -136, -34, -108, -36, -78);
+        ctx2.bezierCurveTo(-96, -54, -112, 12, -88, 78);
+        ctx2.bezierCurveTo(-72, 118, -58, 134, -62, 152);
+        ctx2.lineTo(62, 152);
+        ctx2.bezierCurveTo(58, 134, 72, 118, 88, 78);
+        ctx2.bezierCurveTo(112, 12, 96, -54, 36, -78);
+        ctx2.bezierCurveTo(34, -108, 56, -136, 48, -148);
+        ctx2.closePath();
+      };
+      const grad = g.createLinearGradient(-105, 0, 105, 0);
+      grad.addColorStop(0, '#a8bec8');
+      grad.addColorStop(0.24, '#f6fbff');
+      grad.addColorStop(0.55, '#dce8ef');
+      grad.addColorStop(0.85, '#9bb4c2');
+      grad.addColorStop(1, '#6d8796');
+      vasePath(g);
+      g.fillStyle = grad;
+      g.fill();
+
+      // Rim ellipse
+      g.fillStyle = '#384d62';
+      g.beginPath();
+      g.ellipse(0, -148, 48, 10, 0, 0, Math.PI * 2);
+      g.fill();
+      g.strokeStyle = '#d4a853';
+      g.lineWidth = 4;
+      g.stroke();
+    } else if (id === 'pharaoh') {
+      // Nemes Headdress
+      const headGrad = g.createLinearGradient(-135, -140, 135, 130);
+      headGrad.addColorStop(0, '#ffe885');
+      headGrad.addColorStop(0.45, '#e2ac2d');
+      headGrad.addColorStop(1, '#8c5e0c');
+      g.fillStyle = headGrad;
+      g.beginPath();
+      g.moveTo(0, -145);
+      g.bezierCurveTo(95, -145, 138, -82, 128, 18);
+      g.bezierCurveTo(122, 72, 116, 118, 86, 134);
+      g.lineTo(-86, 134);
+      g.bezierCurveTo(-116, 118, -122, 72, -128, 18);
+      g.bezierCurveTo(-138, -82, -95, -145, 0, -145);
+      g.closePath();
+      g.fill();
+
+      // Lapis stripes on headdress
+      g.save();
+      g.clip();
+      g.fillStyle = '#183c82';
+      for (let y = -126; y <= 125; y += 22) {
+        g.fillRect(-145, y, 290, 10);
+      }
+      g.restore();
+
+      // Golden Face
+      const faceGrad = g.createRadialGradient(-16, -24, 10, 0, -5, 86);
+      faceGrad.addColorStop(0, '#fff5b8');
+      faceGrad.addColorStop(0.55, '#eab535');
+      faceGrad.addColorStop(1, '#9d6a10');
+      g.fillStyle = faceGrad;
+      g.beginPath();
+      g.moveTo(-58, -72);
+      g.quadraticCurveTo(0, -86, 58, -72);
+      g.quadraticCurveTo(64, 15, 38, 66);
+      g.quadraticCurveTo(0, 96, -38, 66);
+      g.quadraticCurveTo(-64, 15, -58, -72);
+      g.closePath();
+      g.fill();
+      g.strokeStyle = '#754b07';
+      g.lineWidth = 2.5;
+      g.stroke();
+
+      // Ceremonial braided beard
+      g.fillStyle = '#1b3f82';
+      g.beginPath();
+      g.moveTo(-16, 78);
+      g.lineTo(16, 78);
+      g.lineTo(12, 154);
+      g.quadraticCurveTo(0, 162, -12, 154);
+      g.closePath();
+      g.fill();
+      g.strokeStyle = '#f5cb5c';
+      g.lineWidth = 3;
+      g.stroke();
+    } else if (id === 'painting') {
+      // Ornate Baroque Gold Frame
+      const frGrad = g.createLinearGradient(-135, -155, 135, 155);
+      frGrad.addColorStop(0, '#f3cf73');
+      frGrad.addColorStop(0.3, '#b88326');
+      frGrad.addColorStop(0.65, '#ffe79e');
+      frGrad.addColorStop(1, '#6e470c');
+      g.fillStyle = frGrad;
+      roundRectPath(g, -134, -158, 268, 316, 12);
+      g.fill();
+      g.strokeStyle = '#472a05';
+      g.lineWidth = 4;
+      g.stroke();
+
+      // Inner bevel
+      g.fillStyle = '#5c3a0b';
+      g.fillRect(-108, -132, 216, 264);
+
+      // Oil Canvas Background
+      const bgGrad = g.createRadialGradient(-25, -45, 20, 0, 0, 165);
+      bgGrad.addColorStop(0, '#463322');
+      bgGrad.addColorStop(0.6, '#23170f');
+      bgGrad.addColorStop(1, '#100a06');
+      g.fillStyle = bgGrad;
+      g.fillRect(-102, -126, 204, 252);
+    } else if (id === 'katana') {
+      g.save();
+      g.rotate(-Math.PI / 4);
+      // Curved Steel Blade
+      const bladeGrad = g.createLinearGradient(0, -18, 0, 18);
+      bladeGrad.addColorStop(0, '#8d9aa6');
+      bladeGrad.addColorStop(0.4, '#f3f8fc');
+      bladeGrad.addColorStop(0.55, '#c6d2dc');
+      bladeGrad.addColorStop(1, '#ffffff');
+      g.fillStyle = bladeGrad;
+      g.beginPath();
+      g.moveTo(-25, -14);
+      g.quadraticCurveTo(75, -20, 165, -8);
+      g.lineTo(182, 5);
+      g.quadraticCurveTo(75, 14, -25, 14);
+      g.closePath();
+      g.fill();
+
+      // Gold Habaki collar
+      g.fillStyle = '#e6b843';
+      g.fillRect(-44, -15, 22, 30);
+      g.strokeStyle = '#7d560c';
+      g.lineWidth = 2;
+      g.strokeRect(-44, -15, 22, 30);
+
+      // Ornate Tsuba guard
+      g.fillStyle = '#2d2520';
+      g.beginPath();
+      g.ellipse(-48, 0, 7, 36, 0, 0, Math.PI * 2);
+      g.fill();
+      g.strokeStyle = '#d8aa43';
+      g.lineWidth = 3;
+      g.stroke();
+
+      // Handle (Tsuka)
+      g.fillStyle = '#221b18';
+      roundRectPath(g, -172, -14, 122, 28, 6);
+      g.fill();
+      g.restore();
+    } else if (id === 'diamond') {
+      // Antique Platinum Setting Bezel
+      const ptGrad = g.createRadialGradient(-20, -20, 30, 0, 0, 140);
+      ptGrad.addColorStop(0, '#ffffff');
+      ptGrad.addColorStop(0.5, '#b8c4cf');
+      ptGrad.addColorStop(1, '#5b6672');
+      g.fillStyle = ptGrad;
+      g.beginPath();
+      for (let i = 0; i < 8; i++) {
+        const a = (i * Math.PI) / 4 - Math.PI / 8;
+        const r = 132;
+        if (i === 0) g.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+        else g.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+      }
+      g.closePath();
+      g.fill();
+
+      // Huge Faceted Crimson Diamond
+      const gemGrad = g.createRadialGradient(-24, -30, 12, 0, 0, 115);
+      gemGrad.addColorStop(0, '#ff8aa3');
+      gemGrad.addColorStop(0.32, '#e11d48');
+      gemGrad.addColorStop(0.72, '#880e2f');
+      gemGrad.addColorStop(1, '#3d0413');
+      g.fillStyle = gemGrad;
+      g.beginPath();
+      for (let i = 0; i < 8; i++) {
+        const a = (i * Math.PI) / 4 - Math.PI / 8;
+        const r = 114;
+        if (i === 0) g.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+        else g.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+      }
+      g.closePath();
+      g.fill();
+    } else if (id === 'crown') {
+      // Crimson velvet inner cap
+      const velGrad = g.createRadialGradient(-18, -32, 12, 0, 0, 110);
+      velGrad.addColorStop(0, '#b91c3a');
+      velGrad.addColorStop(0.7, '#6b0b1f');
+      velGrad.addColorStop(1, '#36040f');
+      g.fillStyle = velGrad;
+      g.beginPath();
+      g.ellipse(0, 6, 108, 72, 0, Math.PI, 0, false);
+      g.lineTo(108, 56);
+      g.lineTo(-108, 56);
+      g.closePath();
+      g.fill();
+
+      // Gold arches
+      g.strokeStyle = '#f2c34b';
+      g.lineWidth = 14;
+      g.beginPath();
+      g.moveTo(-102, 46);
+      g.bezierCurveTo(-115, -90, -25, -108, 0, -96);
+      g.bezierCurveTo(25, -108, 115, -90, 102, 46);
+      g.stroke();
+
+      // Central cross orb
+      g.fillStyle = '#f5ca56';
+      g.beginPath();
+      g.arc(0, -108, 16, 0, Math.PI * 2);
+      g.fill();
+      g.fillRect(-4, -148, 8, 32);
+      g.fillRect(-14, -138, 28, 7);
+
+      // Gold Crown Band
+      const bandGrad = g.createLinearGradient(-122, 0, 122, 0);
+      bandGrad.addColorStop(0, '#9a6b14');
+      bandGrad.addColorStop(0.28, '#ffe792');
+      bandGrad.addColorStop(0.55, '#dfa832');
+      bandGrad.addColorStop(0.82, '#fff1b5');
+      bandGrad.addColorStop(1, '#84580d');
+      g.fillStyle = bandGrad;
+      roundRectPath(g, -118, 34, 236, 68, 10);
+      g.fill();
+      g.strokeStyle = '#6c4608';
+      g.lineWidth = 3;
+      g.stroke();
+    } else if (id === 'amber') {
+      // Teardrop Honey Amber
+      const ambGrad = g.createRadialGradient(-26, -34, 15, 0, 10, 148);
+      ambGrad.addColorStop(0, '#fff3ad');
+      ambGrad.addColorStop(0.28, '#f59e0b');
+      ambGrad.addColorStop(0.68, '#b45309');
+      ambGrad.addColorStop(1, '#5c2105');
+      g.fillStyle = ambGrad;
+      g.beginPath();
+      g.moveTo(0, -148);
+      g.bezierCurveTo(72, -96, 118, -14, 106, 64);
+      g.bezierCurveTo(96, 124, 52, 152, 0, 152);
+      g.bezierCurveTo(-52, 152, -96, 124, -106, 64);
+      g.bezierCurveTo(-118, -14, -72, -96, 0, -148);
+      g.closePath();
+      g.fill();
+      g.strokeStyle = '#fde68a';
+      g.lineWidth = 3;
+      g.stroke();
+    } else if (id === 'jade') {
+      // Carved Imperial Jade Sun Disc
+      const jdGrad = g.createRadialGradient(-30, -34, 18, 0, 0, 142);
+      jdGrad.addColorStop(0, '#86efac');
+      jdGrad.addColorStop(0.35, '#16a34a');
+      jdGrad.addColorStop(0.75, '#0f5d32');
+      jdGrad.addColorStop(1, '#062c18');
+      g.fillStyle = jdGrad;
+      g.beginPath();
+      g.arc(0, 0, 138, 0, Math.PI * 2);
+      g.fill();
+      g.strokeStyle = '#bbf7d0';
+      g.lineWidth = 4;
+      g.stroke();
+    } else if (id === 'violin') {
+      // Scroll & Neck
+      g.fillStyle = '#6c2910';
+      g.fillRect(-10, -166, 20, 88);
+      g.fillStyle = '#3b1507';
+      g.beginPath();
+      g.arc(0, -168, 14, 0, Math.PI * 2);
+      g.fill();
+      // Pegs
+      g.fillStyle = '#1d1410';
+      g.fillRect(-26, -158, 52, 5);
+      g.fillRect(-24, -144, 48, 5);
+
+      // Violin Body (Upper + C-bout + Lower bout)
+      const vGrad = g.createRadialGradient(-16, 20, 14, 0, 42, 132);
+      vGrad.addColorStop(0, '#f59e0b');
+      vGrad.addColorStop(0.45, '#b43b11');
+      vGrad.addColorStop(0.82, '#691709');
+      vGrad.addColorStop(1, '#320803');
+      g.fillStyle = vGrad;
+      g.beginPath();
+      g.moveTo(0, -82);
+      g.bezierCurveTo(64, -82, 74, -22, 46, 4);
+      g.bezierCurveTo(36, 16, 42, 34, 58, 46);
+      g.bezierCurveTo(96, 70, 92, 152, 0, 154);
+      g.bezierCurveTo(-92, 152, -96, 70, -58, 46);
+      g.bezierCurveTo(-42, 34, -36, 16, -46, 4);
+      g.bezierCurveTo(-74, -22, -64, -82, 0, -82);
+      g.closePath();
+      g.fill();
+      g.strokeStyle = '#2b0904';
+      g.lineWidth = 4;
+      g.stroke();
+    }
+  }
+
+  function drawArtifactDetails(g, id, fakeLoupe) {
+    if (id === 'watch') {
+      // Minute track & Roman numerals
+      g.strokeStyle = '#2d2417';
+      g.lineWidth = 1.5;
+      g.beginPath();
+      g.arc(0, 12, 95, 0, Math.PI * 2);
+      g.stroke();
+      const romans = ['XII', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI'];
+      g.fillStyle = '#1f170d';
+      g.font = 'bold 16px "Cinzel", Georgia, serif';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      romans.forEach((rm, i) => {
+        const a = (i * Math.PI) / 6 - Math.PI / 2;
+        g.fillText(rm, Math.cos(a) * 80, 12 + Math.sin(a) * 80);
+      });
+      // Subdial
+      g.strokeStyle = '#756244';
+      g.lineWidth = 1;
+      g.beginPath();
+      g.arc(0, 44, 18, 0, Math.PI * 2);
+      g.stroke();
+
+      // MICRO-DETAIL (Loupe Target at (0, +66))
+      g.fillStyle = fakeLoupe ? '#4a1b1b' : '#3a2d1b';
+      g.font = 'bold 7.2px monospace';
+      g.fillText(fakeLoupe ? 'QUARTZ 2024' : 'GENÈVE 1888', 0, 68);
+
+      // Blued steel hands
+      g.strokeStyle = '#102a5c';
+      g.lineCap = 'round';
+      g.lineWidth = 5;
+      g.beginPath(); g.moveTo(0, 12); g.lineTo(-42, -16); g.stroke();
+      g.lineWidth = 3.5;
+      g.beginPath(); g.moveTo(0, 12); g.lineTo(54, -28); g.stroke();
+      g.fillStyle = '#d4a138';
+      g.beginPath(); g.arc(0, 12, 7, 0, Math.PI * 2); g.fill();
+      // Glass reflection arc
+      g.strokeStyle = 'rgba(255,255,255,0.42)';
+      g.lineWidth = 6;
+      g.beginPath(); g.arc(-10, 4, 86, Math.PI * 1.1, Math.PI * 1.48); g.stroke();
+    } else if (id === 'vase') {
+      // Cobalt floral neck bands
+      g.strokeStyle = '#1d4ed8';
+      g.lineWidth = 3;
+      g.beginPath(); g.moveTo(-36, -86); g.quadraticCurveTo(0, -76, 36, -86); g.stroke();
+      g.beginPath(); g.moveTo(-40, -112); g.quadraticCurveTo(0, -104, 40, -112); g.stroke();
+      for (let i = -2; i <= 2; i++) {
+        g.fillStyle = '#1e40af';
+        g.beginPath(); g.arc(i * 14, -98, 4.5, 0, Math.PI * 2); g.fill();
+      }
+      // Coiling Blue Dragon across belly
+      g.strokeStyle = '#1e3a8a';
+      g.lineWidth = 10;
+      g.lineCap = 'round';
+      g.beginPath();
+      g.moveTo(-66, 26);
+      g.bezierCurveTo(-48, -42, 48, -46, 62, 12);
+      g.bezierCurveTo(72, 58, -12, 74, -44, 96);
+      g.stroke();
+      // Dragon dorsal scales & head
+      g.strokeStyle = '#3b82f6';
+      g.lineWidth = 4;
+      g.setLineDash([4, 6]);
+      g.stroke();
+      g.setLineDash([]);
+      // Dragon head
+      g.fillStyle = '#1e3a8a';
+      g.beginPath(); g.arc(-58, 12, 13, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#fbbf24';
+      g.beginPath(); g.arc(-62, 9, 3, 0, Math.PI * 2); g.fill();
+      // Cloud swirls
+      g.strokeStyle = '#2563eb';
+      g.lineWidth = 2.5;
+      [[-45, -40], [48, -32], [52, 68]].forEach(([cx, cy]) => {
+        g.beginPath(); g.arc(cx, cy, 10, 0, Math.PI * 1.5); g.stroke();
+      });
+
+      // Foot gold trim & MICRO-DETAIL Seal at (0, +138)
+      g.strokeStyle = '#1e3a8a';
+      g.lineWidth = 2.5;
+      g.beginPath(); g.moveTo(-58, 124); g.lineTo(58, 124); g.stroke();
+      g.strokeStyle = '#b91c1c';
+      g.lineWidth = 1.2;
+      g.strokeRect(-24, 130, 48, 16);
+      g.fillStyle = '#991b1b';
+      g.font = 'bold 8px "Shippori Mincho", serif';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillText(fakeLoupe ? '大明2025' : '大明宣徳', 0, 138);
+
+      // Porcelain glossy highlight
+      g.strokeStyle = 'rgba(255,255,255,0.55)';
+      g.lineWidth = 8;
+      g.lineCap = 'round';
+      g.beginPath();
+      g.moveTo(-58, -30);
+      g.quadraticCurveTo(-76, 15, -56, 68);
+      g.stroke();
+    } else if (id === 'pharaoh') {
+      // Cobra Uraeus on forehead
+      g.fillStyle = '#facc15';
+      g.beginPath();
+      g.moveTo(0, -118);
+      g.bezierCurveTo(18, -102, 14, -76, 0, -68);
+      g.bezierCurveTo(-14, -76, -18, -102, 0, -118);
+      g.fill();
+      g.fillStyle = '#dc2626';
+      g.beginPath(); g.arc(0, -96, 5, 0, Math.PI * 2); g.fill();
+
+      // Kohl-lined obsidian eyes & eyebrows
+      [-24, 24].forEach((ex, idx) => {
+        const dir = idx === 0 ? -1 : 1;
+        g.strokeStyle = '#172554';
+        g.lineWidth = 4.5;
+        g.beginPath();
+        g.moveTo(ex - dir * 16, -34);
+        g.quadraticCurveTo(ex, -44, ex + dir * 22, -32);
+        g.stroke();
+        g.fillStyle = '#fefce8';
+        g.beginPath();
+        g.ellipse(ex, -20, 14, 7, 0, 0, Math.PI * 2);
+        g.fill();
+        g.strokeStyle = '#0f172a';
+        g.lineWidth = 3;
+        g.stroke();
+        g.fillStyle = '#09090b';
+        g.beginPath(); g.arc(ex, -20, 5.5, 0, Math.PI * 2); g.fill();
+      });
+      // Nose & sculpted lips
+      g.strokeStyle = '#925e0a';
+      g.lineWidth = 3;
+      g.beginPath(); g.moveTo(0, -18); g.lineTo(-5, 16); g.lineTo(5, 16); g.stroke();
+      g.fillStyle = '#c28416';
+      g.beginPath();
+      g.ellipse(0, 38, 18, 6, 0, 0, Math.PI * 2);
+      g.fill();
+      g.strokeStyle = '#784c06';
+      g.lineWidth = 1.8;
+      g.beginPath(); g.moveTo(-18, 38); g.lineTo(18, 38); g.stroke();
+
+      // Jeweled Collar & MICRO-DETAIL at (0, +118)
+      const colors = ['#dc2626', '#2563eb', '#16a34a', '#facc15'];
+      for (let i = -4; i <= 4; i++) {
+        g.fillStyle = colors[Math.abs(i) % colors.length];
+        g.beginPath();
+        g.arc(i * 18, 102 - Math.abs(i) * 3, 6, 0, Math.PI * 2);
+        g.fill();
+      }
+      g.fillStyle = '#573605';
+      g.font = 'bold 7.4px monospace';
+      g.textAlign = 'center';
+      g.fillText(fakeLoupe ? 'SOUVENIR SHOP' : '☥ 𓂀 𓆣 ☥', 0, 120);
+    } else if (id === 'painting') {
+      // Renaissance Noblewoman Portrait
+      // Crimson velvet dress & shoulders
+      g.fillStyle = '#7f1d1d';
+      g.beginPath();
+      g.moveTo(-74, 126);
+      g.quadraticCurveTo(-68, 42, 0, 34);
+      g.quadraticCurveTo(68, 42, 74, 126);
+      g.closePath();
+      g.fill();
+      // White lace collar
+      g.fillStyle = '#f5f0e1';
+      g.beginPath();
+      g.moveTo(-34, 42);
+      g.quadraticCurveTo(0, 68, 34, 42);
+      g.quadraticCurveTo(0, 26, -34, 42);
+      g.fill();
+      // Neck & Face
+      g.fillStyle = '#e5be9e';
+      g.fillRect(-13, 8, 26, 32);
+      const skinGrad = g.createRadialGradient(-10, -34, 6, 0, -24, 48);
+      skinGrad.addColorStop(0, '#fae0c8');
+      skinGrad.addColorStop(1, '#c48f6b');
+      g.fillStyle = skinGrad;
+      g.beginPath();
+      g.ellipse(0, -26, 36, 46, 0, 0, Math.PI * 2);
+      g.fill();
+      // Hair & Blue Headscarf
+      g.fillStyle = '#1e3a5f';
+      g.beginPath();
+      g.arc(0, -34, 42, Math.PI * 0.92, Math.PI * 2.08);
+      g.lineTo(44, 16);
+      g.quadraticCurveTo(22, -40, 0, -54);
+      g.quadraticCurveTo(-28, -42, -38, 0);
+      g.closePath();
+      g.fill();
+      // Eyes, brows, subtle Mona Lisa smile
+      g.fillStyle = '#291810';
+      g.beginPath(); g.ellipse(-13, -28, 5, 3, 0, 0, Math.PI * 2); g.fill();
+      g.beginPath(); g.ellipse(13, -28, 5, 3, 0, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#9f3b3b';
+      g.beginPath(); g.arc(0, -2, 9, 0.1 * Math.PI, 0.9 * Math.PI); g.stroke();
+      // Luminous Pearl Earring
+      g.fillStyle = '#fffdf7';
+      g.beginPath(); g.arc(-32, 0, 6.5, 0, Math.PI * 2); g.fill();
+      // Aged oil craquelure lines
+      g.strokeStyle = 'rgba(255,240,200,0.09)';
+      g.lineWidth = 1;
+      for (let i = -3; i <= 3; i++) {
+        g.beginPath(); g.moveTo(-95, i * 32); g.lineTo(95, i * 32 + 12); g.stroke();
+      }
+      // MICRO-DETAIL Signature at (+74, +108)
+      g.fillStyle = '#e7d5a8';
+      g.font = fakeLoupe ? 'bold 7.2px monospace' : 'italic 9px Georgia, serif';
+      g.textAlign = 'right';
+      g.fillText(fakeLoupe ? 'PRINT #042' : 'V.M. 1680', 92, 114);
+      // Frame corner ornaments
+      g.fillStyle = '#ffe58f';
+      [[-120, -144], [120, -144], [-120, 144], [120, 144]].forEach(([x, y]) => {
+        g.beginPath(); g.arc(x, y, 7, 0, Math.PI * 2); g.fill();
+      });
+    } else if (id === 'katana') {
+      g.save();
+      g.rotate(-Math.PI / 4);
+      // Wavy Hamon temper wave on blade
+      g.strokeStyle = 'rgba(255,255,255,0.88)';
+      g.lineWidth = 2.5;
+      g.beginPath();
+      g.moveTo(-20, 6);
+      for (let x = -15; x <= 165; x += 15) {
+        g.quadraticCurveTo(x + 7, (x % 30 === 0 ? -1 : 10), x + 15, 6);
+      }
+      g.stroke();
+      // Diamond crimson silk wrap (Tsuka-ito)
+      g.fillStyle = '#991b1b';
+      for (let x = -164; x <= -64; x += 18) {
+        g.beginPath();
+        g.moveTo(x, -14); g.lineTo(x + 9, 0); g.lineTo(x, 14); g.lineTo(x + 7, 14);
+        g.lineTo(x + 16, 0); g.lineTo(x + 7, -14); g.closePath();
+        g.fill();
+      }
+      // Gold Menuki charm
+      g.fillStyle = '#facc15';
+      g.beginPath(); g.ellipse(-110, 0, 10, 5, 0, 0, Math.PI * 2); g.fill();
+      // MICRO-DETAIL engraving near blade base
+      g.fillStyle = '#2d3748';
+      g.font = fakeLoupe ? 'bold 7px monospace' : 'bold 10px "Shippori Mincho", serif';
+      g.textAlign = 'center';
+      g.fillText(fakeLoupe ? 'STAINLESS' : '村 正', 4, 2);
+      g.restore();
+    } else if (id === 'diamond') {
+      // Internal diamond facets
+      g.strokeStyle = 'rgba(255, 220, 230, 0.55)';
+      g.lineWidth = 1.8;
+      g.beginPath();
+      for (let i = 0; i < 8; i++) {
+        const a = (i * Math.PI) / 4 - Math.PI / 8;
+        const r = 64;
+        if (i === 0) g.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+        else g.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+      }
+      g.closePath();
+      g.stroke();
+      for (let i = 0; i < 8; i++) {
+        const a = (i * Math.PI) / 4 - Math.PI / 8;
+        g.beginPath();
+        g.moveTo(Math.cos(a) * 64, Math.sin(a) * 64);
+        g.lineTo(Math.cos(a) * 114, Math.sin(a) * 114);
+        g.stroke();
+      }
+      // Bright facet table highlight
+      g.fillStyle = 'rgba(255,255,255,0.24)';
+      g.beginPath();
+      g.moveTo(-36, -48); g.lineTo(20, -58); g.lineTo(42, -14); g.lineTo(-18, -6);
+      g.closePath();
+      g.fill();
+      // Platinum prongs
+      for (let i = 0; i < 8; i++) {
+        const a = (i * Math.PI) / 4 - Math.PI / 8;
+        g.fillStyle = '#e2e8f0';
+        g.beginPath();
+        g.arc(Math.cos(a) * 116, Math.sin(a) * 116, 8, 0, Math.PI * 2);
+        g.fill();
+      }
+      // MICRO-DETAIL on lower girdle at (0, +66)
+      g.fillStyle = 'rgba(255,245,245,0.85)';
+      g.font = 'bold 7.2px monospace';
+      g.textAlign = 'center';
+      g.fillText(fakeLoupe ? 'CZ-SYNTH' : 'Pt950 42ct', 0, 72);
+    } else if (id === 'crown') {
+      // Gems across crown band
+      const gems = [
+        { x: -78, c: '#2563eb' }, { x: -39, c: '#16a34a' },
+        { x: 0, c: '#dc2626' },
+        { x: 39, c: '#16a34a' }, { x: 78, c: '#2563eb' }
+      ];
+      gems.forEach((gm) => {
+        g.fillStyle = '#5c3b09';
+        g.beginPath(); g.ellipse(gm.x, 62, 14, 17, 0, 0, Math.PI * 2); g.fill();
+        g.fillStyle = gm.c;
+        g.beginPath(); g.ellipse(gm.x, 62, 11, 14, 0, 0, Math.PI * 2); g.fill();
+        g.fillStyle = 'rgba(255,255,255,0.6)';
+        g.beginPath(); g.ellipse(gm.x - 3, 57, 3, 5, -0.3, 0, Math.PI * 2); g.fill();
+      });
+      // Pearl top rim
+      for (let x = -108; x <= 108; x += 18) {
+        g.fillStyle = '#fffef5';
+        g.beginPath(); g.arc(x, 36, 5.5, 0, Math.PI * 2); g.fill();
+      }
+      // MICRO-DETAIL Hallmark at (0, +88)
+      g.fillStyle = '#5c3b09';
+      g.font = 'bold 7.4px monospace';
+      g.textAlign = 'center';
+      g.fillText(fakeLoupe ? '18K GP TOY' : '♔ 750 PURE', 0, 91);
+    } else if (id === 'amber') {
+      // Ancient Prehistoric Dragonfly inside Amber
+      g.save();
+      g.translate(0, 6);
+      // Translucent veined wings
+      g.fillStyle = 'rgba(255, 248, 220, 0.36)';
+      g.strokeStyle = 'rgba(92, 33, 5, 0.65)';
+      g.lineWidth = 1.5;
+      [[-48, -22, -0.35], [48, -22, 0.35], [-42, 8, 0.25], [42, 8, -0.25]].forEach(([wx, wy, rot]) => {
+        g.save();
+        g.translate(wx * 0.55, wy);
+        g.rotate(rot);
+        g.beginPath();
+        g.ellipse(0, 0, 38, 11, 0, 0, Math.PI * 2);
+        g.fill();
+        g.stroke();
+        g.restore();
+      });
+      // Segmented insect body
+      g.fillStyle = '#3b1506';
+      g.beginPath(); g.ellipse(0, -28, 9, 11, 0, 0, Math.PI * 2); g.fill();
+      g.beginPath(); g.ellipse(0, -6, 11, 16, 0, 0, Math.PI * 2); g.fill();
+      for (let i = 0; i < 5; i++) {
+        g.beginPath(); g.ellipse(0, 18 + i * 13, 7 - i * 0.6, 8, 0, 0, Math.PI * 2); g.fill();
+      }
+      g.restore();
+      // Natural tiny amber bubbles
+      g.fillStyle = 'rgba(255, 250, 200, 0.55)';
+      [[-45, 76, 4], [52, -45, 3], [-28, -88, 3.5]].forEach(([bx, by, br]) => {
+        g.beginPath(); g.arc(bx, by, br, 0, Math.PI * 2); g.fill();
+      });
+      // Glossy highlight
+      g.strokeStyle = 'rgba(255,255,255,0.48)';
+      g.lineWidth = 8;
+      g.lineCap = 'round';
+      g.beginPath(); g.moveTo(-64, -22); g.quadraticCurveTo(-80, 26, -62, 78); g.stroke();
+      // MICRO-DETAIL at (+34, +46)
+      if (fakeLoupe) {
+        g.strokeStyle = 'rgba(255,255,255,0.5)';
+        g.lineWidth = 1;
+        g.beginPath(); g.moveTo(18, 34); g.lineTo(56, 62); g.stroke();
+        g.fillStyle = '#431407';
+        g.font = 'bold 7.2px monospace';
+        g.textAlign = 'center';
+        g.fillText('RESIN 2026', 36, 50);
+      }
+    } else if (id === 'jade') {
+      // Concentric Mayan Calendar Rings
+      [118, 92, 54].forEach((r) => {
+        g.strokeStyle = '#052e16';
+        g.lineWidth = 3;
+        g.beginPath(); g.arc(0, 0, r, 0, Math.PI * 2); g.stroke();
+      });
+      // Radial glyph ticks
+      for (let i = 0; i < 16; i++) {
+        const a = (i * Math.PI) / 8;
+        g.strokeStyle = '#86efac';
+        g.lineWidth = 2.2;
+        g.beginPath();
+        g.moveTo(Math.cos(a) * 56, Math.sin(a) * 56);
+        g.lineTo(Math.cos(a) * 90, Math.sin(a) * 90);
+        g.stroke();
+      }
+      // Central Sun Deity Face
+      g.fillStyle = '#064e3b';
+      g.beginPath(); g.arc(0, 0, 44, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#4ade80';
+      g.fillRect(-20, -14, 12, 8);
+      g.fillRect(8, -14, 12, 8);
+      g.fillRect(-16, 10, 32, 10);
+      g.fillStyle = '#052e16';
+      g.fillRect(-8, 12, 4, 6); g.fillRect(4, 12, 4, 6);
+      // MICRO-DETAIL on bottom ring at (0, +106)
+      g.fillStyle = '#dcfce7';
+      g.font = 'bold 7.4px monospace';
+      g.textAlign = 'center';
+      g.fillText(fakeLoupe ? 'REPLICA' : '◈ ☉ ◈', 0, 108);
+    } else if (id === 'violin') {
+      // Ebony fingerboard & tailpiece
+      g.fillStyle = '#18110e';
+      g.beginPath();
+      g.moveTo(-9, -120); g.lineTo(9, -120); g.lineTo(14, 24); g.lineTo(-14, 24);
+      g.closePath();
+      g.fill();
+      g.beginPath();
+      g.moveTo(-12, 84); g.lineTo(12, 84); g.lineTo(7, 146); g.lineTo(-7, 146);
+      g.closePath();
+      g.fill();
+      // Bridge
+      g.fillStyle = '#f3d5a5';
+      g.fillRect(-22, 48, 44, 7);
+      // F-holes
+      [-34, 34].forEach((fx) => {
+        g.strokeStyle = '#1a0602';
+        g.lineWidth = 4.5;
+        g.beginPath();
+        g.moveTo(fx, 10);
+        g.bezierCurveTo(fx - 10, 26, fx + 10, 48, fx, 66);
+        g.stroke();
+      });
+      // Inner label visible inside left f-hole! (Loupe target at (-34, +34))
+      g.fillStyle = '#efe3c6';
+      g.fillRect(-46, 28, 24, 14);
+      g.fillStyle = '#291c10';
+      g.font = 'bold 6.8px monospace';
+      g.textAlign = 'center';
+      g.fillText(fakeLoupe ? '2024' : '1715', -34, 37);
+
+      // 4 Gleaming Strings
+      g.strokeStyle = 'rgba(255,248,225,0.75)';
+      g.lineWidth = 1.2;
+      [-6, -2, 2, 6].forEach((sx) => {
+        g.beginPath(); g.moveTo(sx * 0.7, -148); g.lineTo(sx, 118); g.stroke();
+      });
+    }
+  }
+
+  function drawArtifactUVOverlay(g, id, hasFakeUV, hasSecretUV) {
+    // Subtle genuine UV edge outline
+    g.save();
+    g.strokeStyle = 'rgba(139, 92, 246, 0.35)';
+    g.lineWidth = 2;
+    g.beginPath();
+    g.arc(0, 0, 140, 0, Math.PI * 2);
+    g.stroke();
+
+    if (hasFakeUV) {
+      g.shadowColor = '#00f5ff';
+      g.shadowBlur = 18;
+      if (id === 'vase') {
+        // Blinding neon-cyan epoxy glue fracture across neck
+        g.strokeStyle = '#22f7ff';
+        g.lineWidth = 5;
+        g.beginPath();
+        g.moveTo(-42, -78); g.lineTo(-18, -68); g.lineTo(4, -84); g.lineTo(24, -66); g.lineTo(40, -78);
+        g.stroke();
+        g.strokeStyle = '#a5f3fc';
+        g.lineWidth = 2;
+        g.stroke();
+        g.fillStyle = '#22f7ff';
+        g.font = 'bold 10px monospace';
+        g.textAlign = 'center';
+        g.fillText('EPOXY GLUE', 0, -92);
+      } else if (id === 'watch') {
+        // Blinding neon-green modern phosphor paint on hands
+        g.shadowColor = '#4ade80';
+        g.strokeStyle = '#4ade80';
+        g.lineCap = 'round';
+        g.lineWidth = 8;
+        g.beginPath(); g.moveTo(0, 12); g.lineTo(54, -28); g.stroke();
+        g.beginPath(); g.moveTo(0, 12); g.lineTo(-42, -16); g.stroke();
+        g.fillStyle = '#86efac';
+        g.font = 'bold 9.5px monospace';
+        g.textAlign = 'center';
+        g.fillText('MODERN LUMI-INK', 26, -38);
+      } else if (id === 'pharaoh') {
+        // Electric acrylic paint streaks on headdress
+        g.shadowColor = '#38bdf8';
+        g.fillStyle = '#38bdf8';
+        g.fillRect(-118, -62, 62, 12);
+        g.fillRect(-124, -36, 68, 12);
+        g.fillRect(-120, -10, 60, 12);
+        g.fillStyle = '#e0f2fe';
+        g.font = 'bold 9.5px monospace';
+        g.textAlign = 'center';
+        g.fillText('ACRYLIC SPRAY', -78, -68);
+      } else if (id === 'painting') {
+        // Blinding fluorescent retouch blotches + QR tag
+        g.shadowColor = '#f43f5e';
+        g.fillStyle = 'rgba(244, 63, 94, 0.85)';
+        g.beginPath(); g.ellipse(8, -22, 34, 24, 0.2, 0, Math.PI * 2); g.fill();
+        g.shadowColor = '#39ff14';
+        g.strokeStyle = '#39ff14';
+        g.lineWidth = 2.5;
+        g.strokeRect(24, -56, 26, 26);
+        g.fillStyle = '#39ff14';
+        g.fillRect(28, -52, 7, 7); g.fillRect(39, -52, 7, 7); g.fillRect(28, -41, 7, 7);
+        g.font = 'bold 9px monospace';
+        g.textAlign = 'center';
+        g.fillText('SYNTH RETOUCH', 8, 16);
+      } else if (id === 'katana') {
+        // Fluorescent nylon handle wrap & glue
+        g.save();
+        g.rotate(-Math.PI / 4);
+        g.shadowColor = '#fb923c';
+        g.fillStyle = '#ff6b00';
+        g.fillRect(-158, -14, 108, 28);
+        g.fillStyle = '#ffedd5';
+        g.font = 'bold 9px monospace';
+        g.textAlign = 'center';
+        g.fillText('NYLON + GLUE', -104, 3);
+        g.restore();
+      } else if (id === 'diamond') {
+        // Blinding synthetic cyan CZ glow + glued doublet seam
+        g.shadowColor = '#00ffff';
+        g.fillStyle = 'rgba(0, 245, 255, 0.65)';
+        g.beginPath(); g.arc(0, -4, 78, 0, Math.PI * 2); g.fill();
+        g.strokeStyle = '#fde047';
+        g.lineWidth = 4;
+        g.beginPath(); g.moveTo(-90, -4); g.lineTo(90, -4); g.stroke();
+        g.fillStyle = '#ffffff';
+        g.font = 'bold 10px monospace';
+        g.textAlign = 'center';
+        g.fillText('SYNTHETIC GLOW', 0, -24);
+      } else if (id === 'crown') {
+        // Plastic gems glowing magenta + glue blobs
+        g.shadowColor = '#f472b6';
+        [-78, -39, 0, 39, 78].forEach((gx) => {
+          g.fillStyle = '#ff2aad';
+          g.beginPath(); g.arc(gx, 62, 16, 0, Math.PI * 2); g.fill();
+          g.strokeStyle = '#38bdf8';
+          g.lineWidth = 3;
+          g.beginPath(); g.arc(gx, 62, 20, 0, Math.PI * 2); g.stroke();
+        });
+        g.fillStyle = '#fdf2f8';
+        g.font = 'bold 9.5px monospace';
+        g.textAlign = 'center';
+        g.fillText('PLASTIC + SUPERGLUE', 0, 34);
+      } else if (id === 'amber') {
+        // Blinding split seam down the middle
+        g.shadowColor = '#ff006e';
+        g.strokeStyle = '#ff2a85';
+        g.lineWidth = 6;
+        g.beginPath(); g.moveTo(0, -138); g.lineTo(0, 144); g.stroke();
+        g.fillStyle = '#ffd1e3';
+        g.font = 'bold 10px monospace';
+        g.textAlign = 'center';
+        g.fillText('GLUED SEAM', 0, -56);
+      } else if (id === 'jade') {
+        // Toxic lime dyed resin fissures
+        g.shadowColor = '#84cc16';
+        g.strokeStyle = '#a3e635';
+        g.lineWidth = 5;
+        g.beginPath();
+        g.moveTo(15, -75); g.lineTo(48, -32); g.lineTo(86, -42);
+        g.moveTo(48, -32); g.lineTo(64, 24);
+        g.stroke();
+        g.fillStyle = '#ecfccb';
+        g.font = 'bold 9.5px monospace';
+        g.textAlign = 'center';
+        g.fillText('DYED RESIN', 48, -52);
+      } else if (id === 'violin') {
+        // Uniform electric blue polyurethane factory coat
+        g.shadowColor = '#38bdf8';
+        g.fillStyle = 'rgba(56, 189, 248, 0.55)';
+        g.beginPath(); g.ellipse(24, 68, 52, 46, 0, 0, Math.PI * 2); g.fill();
+        g.strokeStyle = '#ffffff';
+        g.lineWidth = 2;
+        g.strokeRect(14, 52, 34, 20);
+        g.fillStyle = '#e0f2fe';
+        g.font = 'bold 9px monospace';
+        g.textAlign = 'center';
+        g.fillText('POLY-SPRAY', 31, 90);
+      }
+    }
+
+    if (hasSecretUV) {
+      const sp = ARTIFACT_DEFS.find(d => d.id === id).secretSpot;
+      g.shadowColor = '#facc15';
+      g.shadowBlur = 22;
+      g.strokeStyle = '#fde047';
+      g.lineWidth = 3;
+      g.beginPath(); g.arc(sp.x, sp.y, 28, 0, Math.PI * 2); g.stroke();
+      g.beginPath(); g.arc(sp.x, sp.y, 21, 0, Math.PI * 2); g.stroke();
+      g.fillStyle = '#fef08a';
+      g.font = 'bold 14px "Shippori Mincho", serif';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillText('皇', sp.x, sp.y - 2);
+      g.font = 'bold 8px monospace';
+      g.fillText('ROYAL SEAL', sp.x, sp.y + 38);
+    }
+    g.restore();
+  }
+
+  function drawArtifactXRay(g, id, hasFakeXRay, hasSecretXRay) {
+    // Ghostly translucent radiographic silhouette from Normal layer
+    g.save();
+    g.globalAlpha = 0.28;
+    g.filter = 'grayscale(1) brightness(1.4) contrast(1.6)';
+    g.drawImage(layerNormal, -210, -210, 420, 420);
+    g.restore();
+
+    // Cyan radiographic tint over silhouette
+    g.save();
+    g.globalCompositeOperation = 'screen';
+    g.fillStyle = 'rgba(14, 165, 233, 0.22)';
+    g.fillRect(-210, -210, 420, 420);
+    g.restore();
+
+    g.save();
+    g.strokeStyle = 'rgba(186, 230, 253, 0.85)';
+    g.fillStyle = 'rgba(224, 242, 254, 0.88)';
+    g.shadowColor = '#38bdf8';
+    g.shadowBlur = 10;
+
+    if (id === 'watch') {
+      if (hasFakeXRay) {
+        // HILARIOUS FAKE: Modern CR2032 Coin Battery + PCB Microchip!
+        g.strokeStyle = '#7dd3fc';
+        g.lineWidth = 3;
+        g.strokeRect(-54, -30, 108, 86);
+        // Battery circle
+        g.fillStyle = '#e0f2fe';
+        g.beginPath(); g.arc(-18, 12, 26, 0, Math.PI * 2); g.fill();
+        g.fillStyle = '#0c4a6e';
+        g.font = 'bold 9px monospace';
+        g.textAlign = 'center';
+        g.fillText('CR2032', -18, 10);
+        g.fillText('3V +', -18, 21);
+        // Microchip IC with legs
+        g.fillStyle = '#bae6fd';
+        g.fillRect(18, -8, 28, 34);
+        for (let y = -4; y <= 22; y += 7) {
+          g.fillRect(12, y, 6, 3);
+          g.fillRect(46, y, 6, 3);
+        }
+        g.fillStyle = '#ff6b6b';
+        g.font = 'bold 10px monospace';
+        g.fillText('PCB CIRCUIT', 0, 74);
+      } else {
+        // GENUINE: Intricate Swiss mechanical gears!
+        drawGear(g, -22, -4, 30, 12);
+        drawGear(g, 28, 12, 22, 10);
+        drawGear(g, -8, 42, 18, 9);
+        drawGear(g, 18, -32, 16, 8);
+      }
+    } else if (id === 'vase') {
+      if (hasFakeXRay) {
+        // FAKE: Chicken wire mesh + iron bolts inside plaster
+        g.strokeStyle = '#bae6fd';
+        g.lineWidth = 2.5;
+        for (let y = -55; y <= 105; y += 22) {
+          g.beginPath(); g.moveTo(-55, y); g.lineTo(55, y + 18); g.stroke();
+          g.beginPath(); g.moveTo(55, y); g.lineTo(-55, y + 18); g.stroke();
+        }
+        g.fillStyle = '#ffffff';
+        g.fillRect(-10, 62, 20, 46);
+        g.font = 'bold 10px monospace';
+        g.textAlign = 'center';
+        g.fillText('WIRE FRAME', 0, -68);
+      } else {
+        // GENUINE: Smooth thick hollow ceramic walls
+        g.strokeStyle = 'rgba(224,242,254,0.75)';
+        g.lineWidth = 10;
+        g.beginPath();
+        g.ellipse(0, 14, 72, 102, 0, 0, Math.PI * 2);
+        g.stroke();
+      }
+    } else if (id === 'pharaoh') {
+      if (hasFakeXRay) {
+        // FAKE: Modern hex bolts + lead ballast bars
+        g.fillStyle = '#ffffff';
+        [[-36, -24], [34, -18], [0, 34]].forEach(([bx, by]) => {
+          g.fillRect(bx - 16, by - 6, 32, 12);
+          g.beginPath(); g.arc(bx - 16, by, 10, 0, Math.PI * 2); g.fill();
+        });
+        g.strokeStyle = '#bae6fd';
+        g.lineWidth = 2;
+        g.strokeRect(-42, -52, 84, 112);
+        g.font = 'bold 10px monospace';
+        g.textAlign = 'center';
+        g.fillText('BOLTS & LEAD', 0, 78);
+      } else {
+        // GENUINE: Dense uniform cast solid gold silhouette
+        g.fillStyle = 'rgba(186, 230, 253, 0.35)';
+        g.beginPath(); g.ellipse(0, -4, 54, 74, 0, 0, Math.PI * 2); g.fill();
+      }
+    } else if (id === 'painting') {
+      if (hasFakeXRay) {
+        // HILARIOUS FAKE: Goofy cartoon smiley hidden under portrait + modern staples!
+        g.strokeStyle = '#ffffff';
+        g.lineWidth = 4;
+        g.beginPath(); g.arc(0, 0, 48, 0, Math.PI * 2); g.stroke();
+        g.fillStyle = '#ffffff';
+        g.beginPath(); g.arc(-18, -14, 7, 0, Math.PI * 2); g.fill();
+        g.beginPath(); g.arc(18, -14, 7, 0, Math.PI * 2); g.fill();
+        g.beginPath(); g.arc(0, 4, 24, 0.15 * Math.PI, 0.85 * Math.PI); g.stroke();
+        // Modern steel staples on frame
+        g.lineWidth = 3;
+        [[-118, -90], [118, -90], [-118, 90], [118, 90]].forEach(([sx, sy]) => {
+          g.strokeRect(sx - 6, sy - 3, 12, 6);
+        });
+      } else {
+        // GENUINE: Faint lead-white portrait sketch + wooden dowel corners
+        g.strokeStyle = 'rgba(224,242,254,0.55)';
+        g.lineWidth = 2.5;
+        g.beginPath(); g.ellipse(0, -24, 34, 44, 0, 0, Math.PI * 2); g.stroke();
+        g.beginPath(); g.moveTo(-62, 110); g.quadraticCurveTo(0, 32, 62, 110); g.stroke();
+      }
+    } else if (id === 'katana') {
+      g.save();
+      g.rotate(-Math.PI / 4);
+      // Blade metal density
+      g.fillStyle = 'rgba(224, 242, 254, 0.55)';
+      g.fillRect(-28, -10, 192, 20);
+      if (hasFakeXRay) {
+        // FAKE: Skinny threaded bolt + hex nut inside hollow handle
+        g.strokeStyle = '#ffffff';
+        g.lineWidth = 4;
+        g.beginPath(); g.moveTo(-48, 0); g.lineTo(-155, 0); g.stroke();
+        for (let x = -148; x <= -60; x += 8) {
+          g.beginPath(); g.moveTo(x, -5); g.lineTo(x + 3, 5); g.stroke();
+        }
+        g.fillStyle = '#ffffff';
+        g.fillRect(-162, -9, 12, 18);
+        g.font = 'bold 9px monospace';
+        g.textAlign = 'center';
+        g.fillText('BOLT + NUT', -105, -20);
+      } else {
+        // GENUINE: Full forged tang (nakago) with mekugi peg hole
+        g.fillStyle = 'rgba(224,242,254,0.85)';
+        g.beginPath();
+        g.moveTo(-48, -10); g.lineTo(-154, -6); g.lineTo(-162, 0); g.lineTo(-154, 6); g.lineTo(-48, 10);
+        g.closePath();
+        g.fill();
+        g.fillStyle = '#04121d';
+        g.beginPath(); g.arc(-84, 0, 4.5, 0, Math.PI * 2); g.fill();
+      }
+      g.restore();
+    } else if (id === 'diamond') {
+      if (hasFakeXRay) {
+        // FAKE: Glass air bubbles + glued doublet line
+        g.strokeStyle = '#ffffff';
+        g.lineWidth = 3;
+        [[18, -18, 13], [-24, 10, 9], [6, 22, 11], [36, 8, 7]].forEach(([bx, by, br]) => {
+          g.beginPath(); g.arc(bx, by, br, 0, Math.PI * 2); g.stroke();
+        });
+        g.setLineDash([6, 4]);
+        g.beginPath(); g.moveTo(-88, -6); g.lineTo(88, -6); g.stroke();
+        g.setLineDash([]);
+        g.fillStyle = '#ffffff';
+        g.font = 'bold 9.5px monospace';
+        g.textAlign = 'center';
+        g.fillText('GLASS BUBBLES', 10, -40);
+      } else {
+        // GENUINE: Pure radiolucent diamond core + dense white platinum prongs
+        g.strokeStyle = 'rgba(186,230,253,0.45)';
+        g.lineWidth = 2;
+        g.beginPath(); g.arc(0, 0, 112, 0, Math.PI * 2); g.stroke();
+      }
+    } else if (id === 'crown') {
+      if (hasFakeXRay) {
+        // FAKE: Thin bent wire coat-hanger frame & hollow plastic beads
+        g.strokeStyle = '#ffffff';
+        g.lineWidth = 2.5;
+        g.beginPath();
+        g.moveTo(-104, 58); g.lineTo(-64, -48); g.lineTo(0, -82); g.lineTo(64, -48); g.lineTo(104, 58);
+        g.stroke();
+        g.setLineDash([5, 5]);
+        g.strokeRect(-104, 42, 208, 48);
+        g.setLineDash([]);
+        g.fillStyle = '#ffffff';
+        g.font = 'bold 10px monospace';
+        g.textAlign = 'center';
+        g.fillText('HOLLOW WIRE', 0, -18);
+      } else {
+        // GENUINE: Dense solid cast gold band
+        g.fillStyle = 'rgba(224,242,254,0.68)';
+        g.fillRect(-114, 38, 228, 60);
+      }
+    } else if (id === 'amber') {
+      if (hasFakeXRay) {
+        // FAKE: Straight metal sewing pin skewering the bug!
+        g.strokeStyle = '#ffffff';
+        g.lineWidth = 4;
+        g.beginPath(); g.moveTo(-58, -42); g.lineTo(54, 34); g.stroke();
+        g.fillStyle = '#ffffff';
+        g.beginPath(); g.arc(-58, -42, 8, 0, Math.PI * 2); g.fill();
+        g.font = 'bold 9.5px monospace';
+        g.textAlign = 'center';
+        g.fillText('METAL PIN', 0, -56);
+      } else {
+        // GENUINE: Delicate faint organic exoskeleton
+        g.strokeStyle = 'rgba(186,230,253,0.6)';
+        g.lineWidth = 2;
+        g.beginPath(); g.ellipse(0, 6, 8, 48, 0, 0, Math.PI * 2); g.stroke();
+      }
+    } else if (id === 'jade') {
+      if (hasFakeXRay) {
+        // FAKE: Concrete steel rebar grid inside!
+        g.strokeStyle = '#ffffff';
+        g.lineWidth = 4;
+        for (let k = -80; k <= 80; k += 40) {
+          g.beginPath(); g.moveTo(k, -95); g.lineTo(k, 95); g.stroke();
+          g.beginPath(); g.moveTo(-95, k); g.lineTo(95, k); g.stroke();
+        }
+        g.fillStyle = '#ffffff';
+        g.font = 'bold 10px monospace';
+        g.textAlign = 'center';
+        g.fillText('STEEL REBAR', 0, 114);
+      } else {
+        // GENUINE: Solid mineral stone veining
+        g.strokeStyle = 'rgba(186,230,253,0.45)';
+        g.lineWidth = 2;
+        g.beginPath(); g.moveTo(-90, -40); g.bezierCurveTo(-20, -10, 30, 40, 88, 12); g.stroke();
+      }
+    } else if (id === 'violin') {
+      if (hasFakeXRay) {
+        // FAKE: Iron nails & metal corner L-brackets!
+        g.fillStyle = '#ffffff';
+        [[-36, 18], [36, 18], [-44, 96], [44, 96]].forEach(([nx, ny]) => {
+          g.fillRect(nx - 14, ny - 3, 28, 6);
+          g.fillRect(nx - 3, ny - 14, 6, 28);
+        });
+        g.font = 'bold 10px monospace';
+        g.textAlign = 'center';
+        g.fillText('IRON NAILS', 0, 62);
+      } else {
+        // GENUINE: Graceful wooden bass bar & soundpost
+        g.strokeStyle = 'rgba(224,242,254,0.8)';
+        g.lineWidth = 5;
+        g.beginPath(); g.moveTo(-18, -52); g.lineTo(-18, 122); g.stroke();
+        g.beginPath(); g.arc(20, 56, 6, 0, Math.PI * 2); g.stroke();
+      }
+    }
+
+    // SECRET JACKPOT X-RAY TREASURE!
+    if (hasSecretXRay) {
+      const sp = ARTIFACT_DEFS.find(d => d.id === id).secretSpot;
+      g.shadowColor = '#facc15';
+      g.shadowBlur = 22;
+      g.fillStyle = '#fef08a';
+      g.strokeStyle = '#ffffff';
+      g.lineWidth = 3;
+      if (id === 'vase') {
+        g.beginPath(); g.arc(sp.x, sp.y, 24, 0, Math.PI * 2); g.fill(); g.stroke();
+        g.fillStyle = '#854d0e';
+        g.font = 'bold 16px serif';
+        g.textAlign = 'center';
+        g.textBaseline = 'middle';
+        g.fillText('秘', sp.x, sp.y);
+      } else if (id === 'katana') {
+        g.font = 'bold 18px serif';
+        g.textAlign = 'center';
+        g.fillText('★昇龍★', sp.x, sp.y);
+      } else {
+        g.beginPath(); g.arc(sp.x, sp.y, 20, 0, Math.PI * 2); g.stroke();
+        g.font = 'bold 11px monospace';
+        g.textAlign = 'center';
+        g.fillText('No.001', sp.x, sp.y + 4);
+      }
+    }
+    g.restore();
+  }
+
+  function drawGear(g, cx, cy, r, teeth) {
+    g.save();
+    g.translate(cx, cy);
+    g.strokeStyle = '#e0f2fe';
+    g.lineWidth = 2.6;
+    g.beginPath();
+    for (let i = 0; i < teeth * 2; i++) {
+      const a = (i * Math.PI) / teeth;
+      const rr = i % 2 === 0 ? r : r - 5;
+      if (i === 0) g.moveTo(Math.cos(a) * rr, Math.sin(a) * rr);
+      else g.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+    }
+    g.closePath();
+    g.stroke();
+    g.beginPath(); g.arc(0, 0, r * 0.35, 0, Math.PI * 2); g.stroke();
+    g.restore();
+  }
+
+  function roundRectPath(g, x, y, w, h, r) {
+    const rr = Math.min(r, w / 2, h / 2);
+    g.beginPath();
+    g.moveTo(x + rr, y);
+    g.arcTo(x + w, y, x + w, y + h, rr);
+    g.arcTo(x + w, y + h, x, y + h, rr);
+    g.arcTo(x, y + h, x, y, rr);
+    g.arcTo(x, y, x + w, y, rr);
+    g.closePath();
+  }
+
+  // =========================================================================
+  // GAME STATE & RUN GENERATION
+  // =========================================================================
+  const TOOLS = [
+    { id: 'loupe', name: 'ルーペ', icon: '🔍', desc: '2.6倍拡大', color: '#f59e0b' },
+    { id: 'uv', name: 'UVライト', icon: '🟣', desc: '蛍光透視', color: '#a855f7' },
+    { id: 'xray', name: 'X線', icon: '🩻', desc: '内部レントゲン', color: '#38bdf8' },
+    { id: 'scale', name: '電子秤', icon: '⚖️', desc: '重量＆打音', color: '#34d399' },
+  ];
+
+  const state = {
+    screen: 'title', // 'title' | 'play' | 'result'
+    mode: 'campaign', // 'campaign' (7 items, 3 lives) | 'endless' (1 life)
+    elapsed: 0,
+    phase: 'inspect', // 'inspect' | 'stamp' | 'auction' | 'verdict'
+    phaseTimer: 0,
+
+    // Economy & Progress
+    round: 0,
+    maxRounds: 7,
+    cash: 0,
+    displayCash: 0,
+    lives: 3,
+    maxLives: 3,
+    streak: 0,
+    maxStreak: 0,
+    correctCount: 0,
+    history: [], // { name, isReal, isSecret, correct, delta }
+    deckOrder: [],
+
+    // Current Item
+    item: null,
+    itemSlide: 0,
+    timeLeft: 35,
+    maxTime: 35,
+
+    // Active Tool & Pointer
+    tool: 'xray',
+    pointerDown: false,
+    pointerX: ART_CENTER_X,
+    pointerY: ART_CENTER_Y,
+    lensX: ART_CENTER_X,
+    lensY: ART_CENTER_Y,
+    lensActive: false,
+    hasEverScanned: false,
+    toolsUsed: {},
+    scaleAnim: 0,
+    scaleChecked: false,
+    scanTickCooldown: 0,
+
+    // Discovery
+    foundClues: [], // { tool, x, y, label, isSecret, anim }
+    clueHoldProgress: 0,
+
+    // Verdict & Auction
+    playerChoice: null, // 'buy' | 'reject'
+    stampAnim: 0,
+    verdictCorrect: false,
+    verdictTitle: '',
+    verdictSub: '',
+    verdictDelta: 0,
+    auctionCurrent: 0,
+    auctionTarget: 0,
+    auctionBids: [],
+    auctionStep: 0,
+
+    // FX
+    shake: 0,
+    flashColor: null,
+    flashAlpha: 0,
+    particles: [],
+    dustMotes: [],
+    floatingTexts: [],
+    titleDemoTime: 0,
+    showHelp: false,
+  };
+
+  // Init ambient golden lamp dust motes
+  for (let i = 0; i < 28; i++) {
+    state.dustMotes.push({
+      x: randRange(30, W - 30),
+      y: randRange(40, H - 40),
+      r: randRange(1, 2.6),
+      vx: randRange(-6, 6),
+      vy: randRange(-10, -2),
+      a: randRange(0.12, 0.45),
+      phase: randRange(0, Math.PI * 2),
+    });
+  }
+
+  function spawnParticles(x, y, count, colors, speed = 260, gravity = 420) {
+    for (let i = 0; i < count; i++) {
+      const a = randRange(0, Math.PI * 2);
+      const sp = randRange(speed * 0.35, speed);
+      state.particles.push({
+        x, y,
+        vx: Math.cos(a) * sp,
+        vy: Math.sin(a) * sp - randRange(40, 140),
+        size: randRange(3, 8),
+        color: colors[Math.floor(rand() * colors.length)],
+        rot: randRange(0, Math.PI * 2),
+        vrot: randRange(-9, 9),
+        life: randRange(0.55, 1.35),
+        maxLife: 1.35,
+        gravity,
+        shape: rand() > 0.4 ? 'rect' : 'circle',
+      });
+    }
+  }
+
+  function addFloatingText(x, y, text, color = '#fde047', size = 24) {
+    state.floatingTexts.push({ x, y, text, color, size, life: 1.35, maxLife: 1.35 });
+  }
+
+  // Generate a balanced, exciting deck of artifacts
+  function buildDeck() {
+    const indices = ARTIFACT_DEFS.map((_, i) => i);
+    for (let i = indices.length - 1; i > 0; i--) {
+      const j = Math.floor(rand() * (i + 1));
+      [indices[i], indices[j]] = [indices[j], indices[i]];
+    }
+    return indices;
+  }
+
+  function createItemForRound(roundIdx, forcedSpec = null) {
+    let def;
+    if (forcedSpec && forcedSpec.id) {
+      def = ARTIFACT_DEFS.find(d => d.id === forcedSpec.id) || ARTIFACT_DEFS[0];
+    } else {
+      if (state.deckOrder.length === 0) state.deckOrder = buildDeck();
+      const idx = state.deckOrder.shift();
+      def = ARTIFACT_DEFS[idx];
+    }
+
+    let isReal, isSecret, activeClues;
+    if (forcedSpec) {
+      isReal = forcedSpec.isReal;
+      isSecret = !!forcedSpec.isSecret;
+      activeClues = forcedSpec.clues || [];
+    } else {
+      // Balanced mix (~50% fake, ~50% real; ~30% of reals are SUPER JACKPOT secrets!)
+      isReal = rand() < 0.48;
+      // Avoid 3 identical outcomes in a row
+      if (state.history.length >= 2) {
+        const h1 = state.history[state.history.length - 1].isReal;
+        const h2 = state.history[state.history.length - 2].isReal;
+        if (h1 === h2) isReal = !h1;
+      }
+      isSecret = isReal && (roundIdx >= 1) && (rand() < 0.42);
+      activeClues = [];
+      if (!isReal) {
+        // Pick 1 primary visual clue (xray/uv/loupe) + optional secondary clue so scanning is always rewarding!
+        const visualTools = ['xray', 'uv', 'loupe'];
+        const primary = visualTools[Math.floor(rand() * visualTools.length)];
+        activeClues.push(primary);
+        // On early rounds, sometimes add a second clue (like scale or another visual tool)
+        if (roundIdx <= 2 || rand() < 0.45) {
+          const rest = ['xray', 'uv', 'loupe', 'scale'].filter(t => t !== primary);
+          activeClues.push(rest[Math.floor(rand() * rest.length)]);
+        }
+      }
+    }
+
+    const scaleEscalation = 1 + roundIdx * 0.22;
+    const askPrice = Math.round(randRange(def.askMin, def.askMax) * scaleEscalation / 100) * 100;
+    const baseMarket = Math.round(askPrice * def.sellMult / 100) * 100;
+    const realValue = isSecret ? Math.round(baseMarket * 2.6 / 100) * 100 : baseMarket;
+
+    const measuredWeight = activeClues.includes('scale')
+      ? def.fakeWeight + randInt(-12, 12)
+      : def.realWeight + randInt(-6, 6);
+
+    const client = CLIENTS[Math.floor(rand() * CLIENTS.length)];
+
+    const item = {
+      def,
+      client,
+      isReal,
+      isSecret,
+      activeClues,
+      askPrice,
+      baseMarket,
+      realValue,
+      measuredWeight,
+    };
+    renderArtifactLayers(item);
+    return item;
+  }
+
+  function startGame(mode = 'campaign') {
+    ensureAudio();
+    state.screen = 'play';
+    state.mode = mode;
+    state.round = 0;
+    state.maxRounds = mode === 'campaign' ? 7 : 999;
+    state.cash = 0;
+    state.displayCash = 0;
+    state.lives = mode === 'campaign' ? 3 : 1;
+    state.maxLives = state.lives;
+    state.streak = 0;
+    state.maxStreak = 0;
+    state.correctCount = 0;
+    state.history = [];
+    state.deckOrder = buildDeck();
+    state.particles = [];
+    state.floatingTexts = [];
+    state.showHelp = false;
+    nextRound();
+  }
+
+  function nextRound(forcedSpec = null) {
+    state.round++;
+    state.phase = 'inspect';
+    state.phaseTimer = 0;
+    state.item = createItemForRound(state.round - 1, forcedSpec);
+    state.itemSlide = 0;
+    state.maxTime = state.mode === 'endless' ? Math.max(20, 34 - state.round) : 35;
+    state.timeLeft = state.maxTime;
+    state.foundClues = [];
+    state.toolsUsed = {};
+    state.scaleAnim = 0;
+    state.scaleChecked = false;
+    state.playerChoice = null;
+    state.stampAnim = 0;
+    state.lensActive = false;
+    state.pointerDown = false;
+    state.tool = 'xray'; // Start on X-Ray because it feels immediately magical!
+    SFX.slideIn();
+
+    // Mark artifact seen in save collection
+    if (!saveData.discovered.includes(state.item.def.id)) {
+      saveData.discovered.push(state.item.def.id);
+      writeSave(saveData);
+    }
+  }
+
+  // =========================================================================
+  // JUDGMENT, STAMP & AUCTION LOGIC
+  // =========================================================================
+  function submitVerdict(choice) {
+    if (state.phase !== 'inspect') return;
+    ensureAudio();
+    state.playerChoice = choice;
+    state.phase = 'stamp';
+    state.phaseTimer = 0;
+    state.stampAnim = 0;
+    state.lensActive = false;
+    state.shake = 14;
+    SFX.stamp(choice === 'buy');
+    emitEvent('stamp', { choice, isReal: state.item.isReal, isSecret: state.item.isSecret });
+
+    const item = state.item;
+    const isBuy = choice === 'buy';
+    const correct = (isBuy && item.isReal) || (!isBuy && !item.isReal);
+    state.verdictCorrect = correct;
+
+    if (correct) {
+      state.correctCount++;
+      state.streak++;
+      state.maxStreak = Math.max(state.maxStreak, state.streak);
+    } else {
+      state.streak = 0;
+      state.lives--;
+    }
+
+    const streakMult = 1 + Math.min(state.streak - 1, 5) * 0.15;
+    const evidenceBonus = state.foundClues.length * 400;
+
+    if (isBuy && item.isReal) {
+      // Prepare thrilling Auction Frenzy!
+      const profit = Math.round((item.realValue - item.askPrice) * streakMult / 100) * 100 + evidenceBonus;
+      state.verdictDelta = profit;
+      state.auctionCurrent = item.askPrice;
+      state.auctionTarget = item.realValue;
+      state.auctionStep = 0;
+      state.auctionBids = buildAuctionBids(item.askPrice, item.realValue, item.isSecret);
+      state.verdictTitle = item.isSecret ? '★超国宝 落札!!★' : '真作 落札成功!!';
+      state.verdictSub = item.isSecret
+        ? `隠し秘宝で相場爆騰！純利益 +${formatYen(profit)}`
+        : `見事な目利き！純利益 +${formatYen(profit)}`;
+    } else if (!isBuy && !item.isReal) {
+      // Nailed a Forgery!
+      const reward = Math.round((500 + evidenceBonus) * streakMult / 50) * 50;
+      state.verdictDelta = reward;
+      state.verdictTitle = '贋作 看破!!';
+      state.verdictSub = state.foundClues.length > 0
+        ? `偽造の証拠を完全確保！鑑定報酬 +${formatYen(reward)}`
+        : `危機一髪で偽物を回避！鑑定料 +${formatYen(reward)}`;
+    } else if (isBuy && !item.isReal) {
+      // Bought a Fake -> Disaster!
+      const loss = -item.askPrice;
+      state.verdictDelta = loss;
+      state.verdictTitle = '偽物を掴んだ…!!';
+      const mainClueTool = item.activeClues[0];
+      state.verdictSub = item.def.clueSpots[mainClueTool].label;
+    } else {
+      // Rejected a Genuine Artifact -> Missed Fortune!
+      state.verdictDelta = 0;
+      state.verdictTitle = '痛恨の見逃し…!!';
+      state.verdictSub = `本物だった！他店で ${formatYen(item.realValue)} で落札…`;
+    }
+  }
+
+  function buildAuctionBids(start, target, isSecret) {
+    const bidders = ['欧州の貴族', 'ドバイ石油王', '闇の収集家', '国立博物館', '伝説の富豪VIP'];
+    const steps = isSecret ? 7 : 5;
+    const bids = [];
+    for (let i = 1; i <= steps; i++) {
+      const t = i / steps;
+      const eased = Math.pow(t, isSecret ? 1.35 : 1.05);
+      const val = Math.round(lerp(start, target, eased) / 100) * 100;
+      bids.push({
+        who: bidders[(i - 1) % bidders.length],
+        val,
+        isFinal: i === steps,
+      });
+    }
+    return bids;
+  }
+
+  function finalizeRoundCash() {
+    state.cash += state.verdictDelta;
+    state.history.push({
+      id: state.item.def.id,
+      name: state.item.def.name,
+      isReal: state.item.isReal,
+      isSecret: state.item.isSecret,
+      correct: state.verdictCorrect,
+      delta: state.verdictDelta,
+    });
+    if (state.verdictCorrect) {
+      SFX.win(state.item.isSecret && state.playerChoice === 'buy');
+      state.flashColor = state.item.isSecret ? '#fde047' : '#34d399';
+      state.flashAlpha = 0.28;
+      spawnParticles(W / 2, 420, state.item.isSecret ? 70 : 38,
+        ['#fde047', '#f59e0b', '#fef08a', '#ffffff', '#34d399'], 340, 380);
+      addFloatingText(W / 2, 134, `+${formatYen(state.verdictDelta)}`, '#fde047', 30);
+      emitEvent('win', { delta: state.verdictDelta, isSecret: state.item.isSecret });
+    } else {
+      SFX.fail();
+      state.shake = 18;
+      state.flashColor = '#ef4444';
+      state.flashAlpha = 0.32;
+      if (state.verdictDelta < 0) {
+        addFloatingText(W / 2, 134, formatYen(state.verdictDelta), '#fb7185', 30);
+      }
+      emitEvent('fail', { delta: state.verdictDelta });
+    }
+  }
+
+  function finishGame() {
+    state.screen = 'result';
+    if (state.mode === 'campaign' && state.cash > saveData.bestProfit) {
+      saveData.bestProfit = state.cash;
+      writeSave(saveData);
+    }
+    if (state.mode === 'endless' && state.correctCount > saveData.bestEndless) {
+      saveData.bestEndless = state.correctCount;
+      writeSave(saveData);
+    }
+    emitEvent('result', { cash: state.cash, correct: state.correctCount });
+  }
+
+  // =========================================================================
+  // SCANNER CLUE DETECTION
+  // =========================================================================
+  function checkScannerClues(dt) {
+    if (!state.item || state.phase !== 'inspect') return;
+    const item = state.item;
+
+    // Scale tool auto-checks weight when activated
+    if (state.tool === 'scale') {
+      if (!state.scaleChecked && state.scaleAnim > 0.65) {
+        state.scaleChecked = true;
+        state.toolsUsed.scale = true;
+        const isFakeWeight = item.activeClues.includes('scale');
+        SFX.scaleTap(!isFakeWeight);
+        if (isFakeWeight && !state.foundClues.some(c => c.tool === 'scale')) {
+          const sp = item.def.clueSpots.scale;
+          state.foundClues.push({ tool: 'scale', x: 0, y: 0, label: sp.label, isSecret: false, anim: 0 });
+          SFX.clueFound(false);
+          state.shake = 7;
+          addFloatingText(W / 2, 360, '⚠️ 重量異常を検知！', '#fb7185', 22);
+          emitEvent('clue', { tool: 'scale', isSecret: false });
+        } else if (!isFakeWeight) {
+          addFloatingText(W / 2, 360, '⚖️ 重量・打音 正常', '#34d399', 20);
+        }
+      }
+      return;
+    }
+
+    if (!state.lensActive) return;
+
+    // Convert lens canvas pos -> artifact local coords (-210..+210)
+    const scaleFactor = 420 / ART_DRAW_SIZE;
+    const lx = (state.lensX - ART_CENTER_X) * scaleFactor;
+    const ly = (state.lensY - ART_CENTER_Y) * scaleFactor;
+
+    if (Math.hypot(lx, ly) < 175) {
+      state.toolsUsed[state.tool] = true;
+      state.hasEverScanned = true;
+      state.scanTickCooldown -= dt;
+      if (state.scanTickCooldown <= 0 && (state.tool === 'xray' || state.tool === 'uv')) {
+        SFX.scanTick();
+        state.scanTickCooldown = 0.14;
+      }
+    }
+
+    // Check active fake clue for current tool
+    if (item.activeClues.includes(state.tool) && !state.foundClues.some(c => c.tool === state.tool)) {
+      const sp = item.def.clueSpots[state.tool];
+      const dist = Math.hypot(lx - sp.x, ly - sp.y);
+      if (dist < sp.r) {
+        state.clueHoldProgress += dt * 4.5;
+        if (state.clueHoldProgress >= 1) {
+          state.clueHoldProgress = 0;
+          state.foundClues.push({ tool: state.tool, x: sp.x, y: sp.y, label: sp.label, isSecret: false, anim: 0 });
+          SFX.clueFound(false);
+          state.shake = 8;
+          spawnParticles(state.lensX, state.lensY, 18, ['#fb7185', '#fde047', '#ffffff'], 180, 180);
+          addFloatingText(state.lensX, state.lensY - 58, '⚠️ 偽造の証拠を発見！', '#fb7185', 21);
+          emitEvent('clue', { tool: state.tool, isSecret: false });
+        }
+        return;
+      }
+    }
+
+    // Check secret jackpot clue for current tool
+    if (item.isSecret && item.def.secretSpot.tool === state.tool && !state.foundClues.some(c => c.isSecret)) {
+      const sp = item.def.secretSpot;
+      const dist = Math.hypot(lx - sp.x, ly - sp.y);
+      if (dist < sp.r) {
+        state.clueHoldProgress += dt * 4.2;
+        if (state.clueHoldProgress >= 1) {
+          state.clueHoldProgress = 0;
+          state.foundClues.push({ tool: state.tool, x: sp.x, y: sp.y, label: sp.label, isSecret: true, anim: 0 });
+          SFX.clueFound(true);
+          state.shake = 9;
+          spawnParticles(state.lensX, state.lensY, 26, ['#fde047', '#f59e0b', '#ffffff'], 220, 150);
+          addFloatingText(state.lensX, state.lensY - 58, '✨ 超国宝の秘宝を発見！', '#fde047', 22);
+          emitEvent('clue', { tool: state.tool, isSecret: true });
+        }
+        return;
+      }
+    }
+
+    state.clueHoldProgress = Math.max(0, state.clueHoldProgress - dt * 3);
+  }
+
+  // =========================================================================
+  // UI BUTTON HITBOX REGISTRY (Single source of truth for draw + pointer!)
+  // =========================================================================
+  let hitboxes = [];
+  function registerHitbox(id, x, y, w, h, onClick) {
+    hitboxes.push({ id, x, y, w, h, onClick });
+  }
+
+  function getCanvasPos(e) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: ((e.clientX - rect.left) / rect.width) * W,
+      y: ((e.clientY - rect.top) / rect.height) * H,
+    };
+  }
+
+  function handlePointerDown(e) {
+    if (SHORTS_MODE) return;
+    ensureAudio();
+    const pos = getCanvasPos(e);
+    const isTouch = e.pointerType === 'touch';
+
+    // Check UI buttons first (reverse order so top modals take priority)
+    for (let i = hitboxes.length - 1; i >= 0; i--) {
+      const hb = hitboxes[i];
+      if (pos.x >= hb.x && pos.x <= hb.x + hb.w && pos.y >= hb.y && pos.y <= hb.y + hb.h) {
+        hb.onClick();
+        return;
+      }
+    }
+
+    // Play screen: dragging over velvet mat activates scanner lens!
+    if (state.screen === 'play' && state.phase === 'inspect' && !state.showHelp) {
+      if (pos.y >= 175 && pos.y <= 650 && state.tool !== 'scale') {
+        state.pointerDown = true;
+        state.lensActive = true;
+        state.pointerX = pos.x;
+        state.pointerY = pos.y;
+        const offsetY = isTouch ? -44 : 0;
+        state.lensX = clamp(pos.x, 45, W - 45);
+        state.lensY = clamp(pos.y + offsetY, 200, 625);
+      }
+    }
+  }
+
+  function handlePointerMove(e) {
+    if (SHORTS_MODE) return;
+    const pos = getCanvasPos(e);
+    const isTouch = e.pointerType === 'touch';
+
+    if (state.screen === 'play' && state.phase === 'inspect' && state.tool !== 'scale' && !state.showHelp) {
+      if (state.pointerDown) {
+        state.pointerX = pos.x;
+        state.pointerY = pos.y;
+        const offsetY = isTouch ? -44 : 0;
+        state.lensX = clamp(pos.x, 45, W - 45);
+        state.lensY = clamp(pos.y + offsetY, 200, 625);
+        state.lensActive = true;
+      } else if (!isTouch && pos.y >= 205 && pos.y <= 635) {
+        // Desktop hover preview for effortless feel!
+        state.lensX = clamp(pos.x, 45, W - 45);
+        state.lensY = clamp(pos.y, 205, 635);
+        state.lensActive = true;
+      } else if (!isTouch) {
+        state.lensActive = false;
+      }
+    }
+  }
+
+  function handlePointerUp() {
+    if (SHORTS_MODE) return;
+    state.pointerDown = false;
+  }
+
+  canvas.addEventListener('pointerdown', handlePointerDown);
+  window.addEventListener('pointermove', handlePointerMove);
+  window.addEventListener('pointerup', handlePointerUp);
+  window.addEventListener('pointercancel', handlePointerUp);
+
+  // Keyboard shortcuts for PC power players
+  window.addEventListener('keydown', (e) => {
+    if (SHORTS_MODE) return;
+    if (state.screen === 'play' && state.phase === 'inspect') {
+      if (e.key === '1') selectTool('loupe');
+      if (e.key === '2') selectTool('uv');
+      if (e.key === '3') selectTool('xray');
+      if (e.key === '4') selectTool('scale');
+    } else if (state.screen === 'play' && state.phase === 'verdict' && (e.key === 'Enter' || e.key === ' ')) {
+      advanceAfterVerdict();
+    }
+  });
+
+  function selectTool(toolId) {
+    if (state.phase !== 'inspect') return;
+    state.tool = toolId;
+    state.clueHoldProgress = 0;
+    SFX.toolClick(toolId);
+    if (toolId === 'scale') {
+      state.scaleAnim = 0;
+      state.lensActive = false;
+    }
+  }
+
+  function advanceAfterVerdict() {
+    if (state.lives <= 0 || state.round >= state.maxRounds) {
+      finishGame();
+    } else {
+      nextRound();
+    }
+  }
+
+  // =========================================================================
+  // SHORTS AUTO-CHOREOGRAPHY (18.0s Viral Showcase!)
+  // =========================================================================
+  let shortsStage = 0;
+  function updateShortsChoreography(dt) {
+    const t = state.elapsed;
+    // Stage 0 (0.0s): Start right on Imperial Watch (FAKE with CR2032 Battery in X-Ray!)
+    if (shortsStage === 0) {
+      shortsStage = 1;
+      state.screen = 'play';
+      state.mode = 'campaign';
+      state.lives = 3;
+      state.cash = 1200;
+      state.displayCash = 1200;
+      state.hasEverScanned = true;
+      nextRound({ id: 'watch', isReal: false, isSecret: false, clues: ['xray'] });
+      state.tool = 'loupe';
+    }
+    // Stage 1 (0.4s..2.2s): Brief Loupe sweep on watch face
+    if (t >= 0.4 && t < 2.2) {
+      const p = (t - 0.4) / 1.8;
+      state.tool = 'loupe';
+      state.lensActive = true;
+      state.lensX = ART_CENTER_X + Math.sin(p * Math.PI * 1.4) * 78;
+      state.lensY = ART_CENTER_Y + Math.cos(p * Math.PI * 1.2) * 58;
+    }
+    // Stage 2 (2.2s..4.8s): Switch to X-RAY -> Sweep right over CR2032 Battery!!
+    if (t >= 2.2 && t < 4.9) {
+      if (shortsStage === 1) { shortsStage = 2; state.tool = 'xray'; emitEvent('tool', { tool: 'xray' }); }
+      const p = clamp((t - 2.2) / 1.6, 0, 1);
+      state.lensActive = true;
+      state.lensX = lerp(ART_CENTER_X - 115, ART_CENTER_X + 6, easeOutCubic(p));
+      state.lensY = lerp(ART_CENTER_Y - 70, ART_CENTER_Y + 14, easeOutCubic(p));
+    }
+    // Stage 3 (4.9s): Slam FAKE stamp!
+    if (t >= 4.9 && shortsStage === 2) {
+      shortsStage = 3;
+      submitVerdict('reject');
+    }
+    // Stage 4 (7.4s): Next Artifact -> Ming Dragon Vase (SUPER JACKPOT SECRET!)
+    if (t >= 7.4 && shortsStage === 3) {
+      shortsStage = 4;
+      nextRound({ id: 'vase', isReal: true, isSecret: true, clues: [] });
+      state.tool = 'uv';
+      emitEvent('next', { id: 'vase' });
+    }
+    // Stage 5 (7.9s..9.8s): Sweep UV Blacklight across vase neck -> Clean!
+    if (t >= 7.9 && t < 9.9 && shortsStage === 4) {
+      const p = (t - 7.9) / 2.0;
+      state.tool = 'uv';
+      state.lensActive = true;
+      state.lensX = ART_CENTER_X + Math.sin(p * Math.PI * 1.6) * 76;
+      state.lensY = ART_CENTER_Y - 70 + p * 55;
+    }
+    // Stage 6 (9.9s..12.5s): Switch to X-RAY -> Sweep to vase base -> SECRET GOLDEN TREASURE!!
+    if (t >= 9.9 && t < 12.6) {
+      if (shortsStage === 4) { shortsStage = 5; state.tool = 'xray'; emitEvent('tool', { tool: 'xray' }); }
+      const p = clamp((t - 9.9) / 1.5, 0, 1);
+      state.lensActive = true;
+      state.lensX = lerp(ART_CENTER_X + 88, ART_CENTER_X, easeOutCubic(p));
+      state.lensY = lerp(ART_CENTER_Y - 30, ART_CENTER_Y + 56, easeOutCubic(p));
+    }
+    // Stage 7 (12.6s): Slam BUY stamp -> MASSIVE ¥2億 AUCTION EXPLOSION!!
+    if (t >= 12.6 && shortsStage === 5) {
+      shortsStage = 6;
+      submitVerdict('buy');
+    }
+  }
+
+  // =========================================================================
+  // MAIN UPDATE LOOP
+  // =========================================================================
+  function update(dt) {
+    state.elapsed += dt;
+
+    if (SHORTS_MODE) {
+      updateShortsChoreography(dt);
+    }
+
+    // Smooth cash ticker
+    state.displayCash += (state.cash - state.displayCash) * Math.min(1, dt * 8);
+
+    // Decay screen shake & flash
+    state.shake = Math.max(0, state.shake - dt * 42);
+    state.flashAlpha = Math.max(0, state.flashAlpha - dt * 1.6);
+
+    // Ambient dust motes
+    for (const m of state.dustMotes) {
+      m.x += m.vx * dt + Math.sin(state.elapsed * 0.9 + m.phase) * 4 * dt;
+      m.y += m.vy * dt;
+      if (m.y < 10) { m.y = H - 20; m.x = randRange(30, W - 30); }
+      if (m.x < 10) m.x = W - 10;
+      if (m.x > W - 10) m.x = 10;
+    }
+
+    // Particles
+    for (let i = state.particles.length - 1; i >= 0; i--) {
+      const p = state.particles[i];
+      p.life -= dt;
+      if (p.life <= 0) { state.particles.splice(i, 1); continue; }
+      p.vy += p.gravity * dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.rot += p.vrot * dt;
+    }
+
+    // Floating texts
+    for (let i = state.floatingTexts.length - 1; i >= 0; i--) {
+      const f = state.floatingTexts[i];
+      f.life -= dt;
+      if (f.life <= 0) { state.floatingTexts.splice(i, 1); continue; }
+      f.y -= 48 * dt;
+    }
+
+    if (state.screen === 'title') {
+      state.titleDemoTime += dt;
+      return;
+    }
+
+    if (state.screen !== 'play') return;
+
+    // Play phases
+    state.itemSlide = Math.min(1, state.itemSlide + dt * 3.4);
+    state.phaseTimer += dt;
+
+    for (const c of state.foundClues) {
+      c.anim = Math.min(1, c.anim + dt * 4.5);
+    }
+
+    if (state.phase === 'inspect') {
+      if (state.tool === 'scale') {
+        state.scaleAnim = Math.min(1, state.scaleAnim + dt * 2.4);
+      }
+      checkScannerClues(dt);
+
+      if (!SHORTS_MODE && !state.showHelp) {
+        state.timeLeft -= dt;
+        if (state.timeLeft <= 0) {
+          state.timeLeft = 0;
+          // Auto-reject on timeout
+          submitVerdict('reject');
+        }
+      }
+    } else if (state.phase === 'stamp') {
+      state.stampAnim = Math.min(1, state.phaseTimer / 0.36);
+      if (state.phaseTimer >= 0.72) {
+        if (state.playerChoice === 'buy' && state.item.isReal) {
+          state.phase = 'auction';
+          state.phaseTimer = 0;
+          SFX.gavel();
+          emitEvent('auction_start');
+        } else {
+          state.phase = 'verdict';
+          state.phaseTimer = 0;
+          finalizeRoundCash();
+        }
+      }
+    } else if (state.phase === 'auction') {
+      const stepInterval = state.item.isSecret ? 0.34 : 0.36;
+      const targetStep = Math.floor(state.phaseTimer / stepInterval);
+      if (targetStep > state.auctionStep && state.auctionStep < state.auctionBids.length) {
+        const bid = state.auctionBids[state.auctionStep];
+        state.auctionStep++;
+        state.auctionCurrent = bid.val;
+        SFX.bidTick(state.auctionStep);
+        state.shake = bid.isFinal ? 12 : 4;
+        spawnParticles(W / 2, 360, bid.isFinal ? 36 : 8, ['#fde047', '#f59e0b', '#ffffff'], 240, 260);
+        if (bid.isFinal) {
+          SFX.gavel();
+          emitEvent('auction_sold', { val: bid.val });
+        }
+      }
+      const totalDur = state.auctionBids.length * stepInterval + 0.65;
+      if (state.phaseTimer >= totalDur) {
+        state.phase = 'verdict';
+        state.phaseTimer = 0;
+        finalizeRoundCash();
+      }
+    }
+  }
+
+  // =========================================================================
+  // RENDERING — ANTIQUE MAHOGANY APPRAISAL STUDIO
+  // =========================================================================
+  function drawDeskBackground() {
+    // Rich warm walnut/mahogany desk grain
+    const woodGrad = ctx.createLinearGradient(0, 0, 0, H);
+    woodGrad.addColorStop(0, '#1f120b');
+    woodGrad.addColorStop(0.22, '#2d1a10');
+    woodGrad.addColorStop(0.75, '#25150c');
+    woodGrad.addColorStop(1, '#140b06');
+    ctx.fillStyle = woodGrad;
+    ctx.fillRect(0, 0, W, H);
+
+    // Subtle horizontal wood grain streaks
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.16)';
+    ctx.lineWidth = 2;
+    for (let y = 18; y < H; y += 26) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.bezierCurveTo(180, y + ((y % 52) - 26) * 0.15, 360, y - 4, W, y + 2);
+      ctx.stroke();
+    }
+
+    // Overhead warm brass banker's lamp spotlight cone
+    const lampGrad = ctx.createRadialGradient(W / 2, 220, 30, W / 2, 410, 420);
+    lampGrad.addColorStop(0, 'rgba(255, 222, 150, 0.22)');
+    lampGrad.addColorStop(0.5, 'rgba(218, 152, 62, 0.08)');
+    lampGrad.addColorStop(1, 'rgba(0, 0, 0, 0.55)');
+    ctx.fillStyle = lampGrad;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  function drawVelvetMat() {
+    const mx = 22, my = 196, mw = W - 44, mh = 454;
+
+    // Outer mahogany frame shadow
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.65)';
+    ctx.shadowBlur = 24;
+    ctx.shadowOffsetY = 8;
+    const matGrad = ctx.createRadialGradient(W / 2, my + mh * 0.45, 30, W / 2, my + mh * 0.5, 320);
+    matGrad.addColorStop(0, '#164232'); // Deep emerald-velvet museum appraisal mat!
+    matGrad.addColorStop(0.7, '#0d2b20');
+    matGrad.addColorStop(1, '#081b14');
+    ctx.fillStyle = matGrad;
+    roundRectPath(ctx, mx, my, mw, mh, 18);
+    ctx.fill();
+    ctx.restore();
+
+    // Double antique brass embossed border
+    ctx.strokeStyle = 'rgba(218, 174, 88, 0.55)';
+    ctx.lineWidth = 2;
+    roundRectPath(ctx, mx + 6, my + 6, mw - 12, mh - 12, 14);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(218, 174, 88, 0.22)';
+    ctx.lineWidth = 1;
+    roundRectPath(ctx, mx + 12, my + 12, mw - 24, mh - 24, 10);
+    ctx.stroke();
+
+    // Subtle appraisal grid & millimeter ruler at bottom of mat
+    ctx.strokeStyle = 'rgba(218, 174, 88, 0.07)';
+    ctx.lineWidth = 1;
+    for (let x = mx + 44; x < mx + mw - 30; x += 36) {
+      ctx.beginPath(); ctx.moveTo(x, my + 24); ctx.lineTo(x, my + mh - 32); ctx.stroke();
+    }
+    for (let y = my + 44; y < my + mh - 36; y += 36) {
+      ctx.beginPath(); ctx.moveTo(mx + 24, y); ctx.lineTo(mx + mw - 24, y); ctx.stroke();
+    }
+
+    // Brass ruler ticks along bottom edge
+    ctx.strokeStyle = 'rgba(218, 174, 88, 0.35)';
+    ctx.fillStyle = 'rgba(218, 174, 88, 0.48)';
+    ctx.font = '600 9px monospace';
+    ctx.textAlign = 'center';
+    for (let i = 0; i <= 20; i++) {
+      const rx = mx + 38 + i * ((mw - 76) / 20);
+      const tall = i % 5 === 0 ? 9 : 5;
+      ctx.beginPath();
+      ctx.moveTo(rx, my + mh - 14);
+      ctx.lineTo(rx, my + mh - 14 - tall);
+      ctx.stroke();
+      if (i % 5 === 0) ctx.fillText(`${i}cm`, rx, my + mh - 26);
+    }
+  }
+
+  // =========================================================================
+  // TITLE SCREEN (Live Interactive Antique Preview!)
+  // =========================================================================
+  let titlePreviewBuilt = false;
+  function ensureTitlePreview() {
+    if (titlePreviewBuilt) return;
+    titlePreviewBuilt = true;
+    const demoItem = {
+      def: ARTIFACT_DEFS[0], // Imperial Pocket Watch with X-Ray battery!
+      isReal: false,
+      isSecret: false,
+      activeClues: ['xray'],
+    };
+    renderArtifactLayers(demoItem);
+  }
+
+  function drawTitleScreen() {
+    ensureTitlePreview();
+    drawDeskBackground();
+
+    // Ornamental header emblem
+    ctx.fillStyle = '#e5bd66';
+    ctx.font = '700 12px "Cinzel", Georgia, serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('✦ UNDERGROUND APPRAISAL & AUCTION ✦', W / 2, 74);
+
+    // Grand Title
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.8)';
+    ctx.shadowBlur = 16;
+    ctx.shadowOffsetY = 5;
+    const titleGrad = ctx.createLinearGradient(0, 92, 0, 148);
+    titleGrad.addColorStop(0, '#fff7cc');
+    titleGrad.addColorStop(0.5, '#f2c14e');
+    titleGrad.addColorStop(1, '#b67d1a');
+    ctx.fillStyle = titleGrad;
+    ctx.font = '900 44px "Cinzel", Georgia, serif';
+    ctx.fillText('FAKE OR FORTUNE', W / 2, 134);
+    ctx.restore();
+
+    ctx.fillStyle = '#f6e7c1';
+    ctx.font = '800 21px "Shippori Mincho", serif';
+    ctx.fillText('闇の骨董鑑定士 — 1億円を見抜け', W / 2, 174);
+
+    // Live Auto-Scanning Showcase Window on Title Screen!
+    const px = 46, py = 204, pw = W - 92, ph = 350;
+    const matGrad = ctx.createRadialGradient(W / 2, py + ph / 2, 20, W / 2, py + ph / 2, 240);
+    matGrad.addColorStop(0, '#164232');
+    matGrad.addColorStop(1, '#081b14');
+    ctx.fillStyle = matGrad;
+    roundRectPath(ctx, px, py, pw, ph, 20);
+    ctx.fill();
+    ctx.strokeStyle = '#d4a853';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    // Draw watch centered inside preview
+    const cx = W / 2, cy = py + ph / 2 - 4;
+    const drawS = 290;
+    ctx.drawImage(layerNormal, cx - drawS / 2, cy - drawS / 2, drawS, drawS);
+
+    // Auto-sweeping X-Ray lens on title preview!
+    const lx = cx + Math.sin(state.titleDemoTime * 1.15) * 76;
+    const ly = cy + Math.cos(state.titleDemoTime * 0.85) * 44;
+    const lr = 72;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(lx, ly, lr, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.fillStyle = '#04121d';
+    ctx.fillRect(lx - lr, ly - lr, lr * 2, lr * 2);
+    ctx.drawImage(layerXRay, cx - drawS / 2, cy - drawS / 2, drawS, drawS);
+    // Scanlines
+    ctx.fillStyle = 'rgba(56, 189, 248, 0.12)';
+    for (let sy = ly - lr; sy < ly + lr; sy += 4) ctx.fillRect(lx - lr, sy, lr * 2, 1.5);
+    ctx.restore();
+
+    // X-ray lens metallic rim
+    ctx.strokeStyle = '#38bdf8';
+    ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.arc(lx, ly, lr, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(lx, ly, lr - 5, 0, Math.PI * 2); ctx.stroke();
+
+    // Live caption tag inside preview
+    ctx.fillStyle = 'rgba(7, 19, 28, 0.86)';
+    roundRectPath(ctx, W / 2 - 148, py + ph - 44, 296, 30, 15);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.6)';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+    ctx.fillStyle = '#bae6fd';
+    ctx.font = '700 13px "Noto Sans JP", sans-serif';
+    ctx.fillText('🩻 X線・🟣UV・🔍ルーペで偽造を暴け！', W / 2, py + ph - 24);
+
+    // 3 Feature Pills
+    const pills = ['🩻 リアルタイム透視', '💎 隠し超国宝で×3倍', '🔨 億超えオークション'];
+    pills.forEach((txt, i) => {
+      const bx = 34 + i * 162;
+      ctx.fillStyle = 'rgba(34, 21, 13, 0.9)';
+      roundRectPath(ctx, bx, 574, 152, 34, 10);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(218, 174, 88, 0.35)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = '#f6e7c1';
+      ctx.font = '700 11.5px "Noto Sans JP", sans-serif';
+      ctx.fillText(txt, bx + 76, 596);
+    });
+
+    // Primary CTA Button: 7-Item Appraisal Campaign
+    const btn1 = { x: 46, y: 634, w: W - 92, h: 78 };
+    const b1Grad = ctx.createLinearGradient(btn1.x, btn1.y, btn1.x, btn1.y + btn1.h);
+    b1Grad.addColorStop(0, '#fcd34d');
+    b1Grad.addColorStop(0.5, '#d9961f');
+    b1Grad.addColorStop(1, '#9c630c');
+    ctx.save();
+    ctx.shadowColor = 'rgba(245, 158, 11, 0.4)';
+    ctx.shadowBlur = 22;
+    ctx.fillStyle = b1Grad;
+    roundRectPath(ctx, btn1.x, btn1.y, btn1.w, btn1.h, 16);
+    ctx.fill();
+    ctx.restore();
+    ctx.strokeStyle = '#fff5cc';
+    ctx.lineWidth = 2;
+    roundRectPath(ctx, btn1.x + 2, btn1.y + 2, btn1.w - 4, btn1.h - 4, 14);
+    ctx.stroke();
+
+    ctx.fillStyle = '#1c0f06';
+    ctx.font = '900 24px "Noto Sans JP", sans-serif';
+    ctx.fillText('鑑定をはじめる（全7品）', W / 2, btn1.y + 38);
+    ctx.font = '700 13px "Noto Sans JP", sans-serif';
+    ctx.fillStyle = '#3b2009';
+    ctx.fillText('本物を見極めて億超え落札を目指せ！', W / 2, btn1.y + 60);
+    registerHitbox('start_campaign', btn1.x, btn1.y, btn1.w, btn1.h, () => startGame('campaign'));
+
+    // Secondary Button: Endless Sudden-Death Mode
+    const btn2 = { x: 46, y: 728, w: W - 92, h: 64 };
+    ctx.fillStyle = 'rgba(28, 16, 10, 0.92)';
+    roundRectPath(ctx, btn2.x, btn2.y, btn2.w, btn2.h, 14);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(244, 63, 94, 0.65)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = '#fda4af';
+    ctx.font = '900 18px "Noto Sans JP", sans-serif';
+    ctx.fillText('🔥 限界エンドレス（1ミス即破産）', W / 2, btn2.y + 31);
+    ctx.fillStyle = '#cbd5e1';
+    ctx.font = '600 12px "Noto Sans JP", sans-serif';
+    ctx.fillText(`最高連続記録: ${saveData.bestEndless}品`, W / 2, btn2.y + 50);
+    registerHitbox('start_endless', btn2.x, btn2.y, btn2.w, btn2.h, () => startGame('endless'));
+
+    // Record Footer
+    ctx.fillStyle = 'rgba(246, 231, 193, 0.72)';
+    ctx.font = '700 13px "Noto Sans JP", sans-serif';
+    ctx.fillText(
+      `最高総資産: ${formatYen(saveData.bestProfit)}   ｜   鑑定図鑑: ${saveData.discovered.length} / ${ARTIFACT_DEFS.length} 種`,
+      W / 2, 842
+    );
+    ctx.fillStyle = 'rgba(246, 231, 193, 0.45)';
+    ctx.font = '500 12px "Noto Sans JP", sans-serif';
+    ctx.fillText('※スマホは指ドラッグで透視・PCはマウス移動またはドラッグ対応', W / 2, 876);
+  }
+
+  // =========================================================================
+  // PLAY SCREEN
+  // =========================================================================
+  function drawTopHUD() {
+    // Brass Ledger Bar
+    ctx.fillStyle = 'rgba(18, 10, 6, 0.92)';
+    ctx.fillRect(0, 0, W, 86);
+    ctx.strokeStyle = 'rgba(218, 174, 88, 0.45)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(0, 86); ctx.lineTo(W, 86); ctx.stroke();
+
+    // Left: Round & Lives (clear of fixed ← ゲーム一覧 pill in normal mode)
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#e5bd66';
+    ctx.font = '800 13px "Noto Sans JP", sans-serif';
+    const roundTxt = state.mode === 'campaign'
+      ? `鑑定 ${state.round} / ${state.maxRounds}`
+      : `エンドレス #${state.round}`;
+    ctx.fillText(roundTxt, 18, SHORTS_MODE ? 32 : 54);
+
+    // Lives (Wax Seal Hearts)
+    let hearts = '';
+    for (let i = 0; i < state.maxLives; i++) hearts += i < state.lives ? '❤️' : '🖤';
+    ctx.font = '15px sans-serif';
+    ctx.fillText(hearts, 16, SHORTS_MODE ? 62 : 76);
+
+    // Center: Vault Cash Display
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#b9a687';
+    ctx.font = '700 11px "Noto Sans JP", sans-serif';
+    ctx.fillText('総獲得資産', W / 2, 26);
+
+    ctx.fillStyle = state.displayCash < 0 ? '#fb7185' : '#fde047';
+    ctx.font = '900 28px "Cinzel", "Noto Sans JP", sans-serif';
+    ctx.fillText(formatYen(state.displayCash), W / 2, 58);
+
+    if (state.streak >= 2) {
+      ctx.fillStyle = '#34d399';
+      ctx.font = '800 11px "Noto Sans JP", sans-serif';
+      ctx.fillText(`🔥 ${state.streak}連続正解ボーナス中！`, W / 2, 76);
+    }
+
+    // Right: Timer & Mute/Help buttons
+    if (!SHORTS_MODE) {
+      // Mute button
+      ctx.fillStyle = 'rgba(42, 26, 16, 0.9)';
+      roundRectPath(ctx, W - 92, 16, 36, 32, 8);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(218, 174, 88, 0.4)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = '#f6e7c1';
+      ctx.font = '15px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(muted ? '🔇' : '🔊', W - 74, 38);
+      registerHitbox('mute', W - 92, 16, 36, 32, () => { muted = !muted; });
+
+      // Help button
+      ctx.fillStyle = 'rgba(42, 26, 16, 0.9)';
+      roundRectPath(ctx, W - 48, 16, 36, 32, 8);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(218, 174, 88, 0.4)';
+      ctx.stroke();
+      ctx.fillStyle = '#f6e7c1';
+      ctx.font = '900 15px sans-serif';
+      ctx.fillText('?', W - 30, 38);
+      registerHitbox('help', W - 48, 16, 36, 32, () => { state.showHelp = !state.showHelp; });
+
+      // Timer badge
+      const urgent = state.timeLeft <= 8 && state.phase === 'inspect';
+      ctx.fillStyle = urgent ? '#fb7185' : '#e5bd66';
+      ctx.font = '800 13px monospace';
+      ctx.textAlign = 'right';
+      ctx.fillText(`⏱ ${Math.ceil(state.timeLeft)}s`, W - 16, 72);
+    }
+  }
+
+  function drawSpecCard() {
+    if (!state.item) return;
+    const item = state.item;
+    const x = 22, y = 96, w = W - 44, h = 90;
+
+    // Cream Parchment Appraisal Slip
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.45)';
+    ctx.shadowBlur = 12;
+    ctx.shadowOffsetY = 4;
+    const paperGrad = ctx.createLinearGradient(x, y, x, y + h);
+    paperGrad.addColorStop(0, '#fcf6e8');
+    paperGrad.addColorStop(1, '#ecdcc0');
+    ctx.fillStyle = paperGrad;
+    roundRectPath(ctx, x, y, w, h, 12);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.strokeStyle = '#c8a86b';
+    ctx.lineWidth = 1.5;
+    roundRectPath(ctx, x + 3, y + 3, w - 6, h - 6, 9);
+    ctx.stroke();
+
+    // Item Title + Era
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#23140b';
+    ctx.font = '900 18px "Shippori Mincho", "Noto Sans JP", serif';
+    ctx.fillText(item.def.name, x + 14, y + 28);
+
+    // Asking Price & Potential Auction Price on top right
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#7c2d12';
+    ctx.font = '800 12px "Noto Sans JP", sans-serif';
+    ctx.fillText(`買取額 ${formatYen(item.askPrice)}`, x + w - 14, y + 23);
+    ctx.fillStyle = '#15803d';
+    ctx.font = '900 13px "Noto Sans JP", sans-serif';
+    ctx.fillText(`予想落札 ${formatYen(item.baseMarket)}〜`, x + w - 14, y + 42);
+
+    // Genuine Specs Reference Strip (Crucial for fair deduction!)
+    ctx.fillStyle = 'rgba(139, 94, 42, 0.14)';
+    roundRectPath(ctx, x + 12, y + 48, w - 24, 32, 8);
+    ctx.fill();
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#4a2c14';
+    ctx.font = '800 12px "Noto Sans JP", sans-serif';
+    ctx.fillText(`📋 真作基準： 規定 ${item.def.realWeight.toLocaleString()}g  ｜  ${item.def.specShort}`, x + 20, y + 68);
+  }
+
+  function drawArtifactAndScanner() {
+    if (!state.item) return;
+    const slideOff = (1 - easeOutCubic(state.itemSlide)) * 280;
+    const cx = ART_CENTER_X + slideOff;
+    let cy = ART_CENTER_Y;
+
+    // If Scale tool is active, draw Precision Brass/Digital Scale beneath the artifact!
+    let scaleLift = 0;
+    if (state.tool === 'scale' && state.phase === 'inspect') {
+      const bounce = easeOutBack(state.scaleAnim);
+      scaleLift = -22 * bounce;
+      drawPrecisionScale(cx, cy + 132, bounce);
+    }
+
+    const drawX = cx - ART_DRAW_SIZE / 2;
+    const drawY = cy + scaleLift - ART_DRAW_SIZE / 2;
+
+    // Base Normal Artifact Layer
+    ctx.drawImage(layerNormal, drawX, drawY, ART_DRAW_SIZE, ART_DRAW_SIZE);
+
+    // Subtle UV room dim when UV Light is actively scanning
+    if (state.lensActive && state.tool === 'uv' && state.phase === 'inspect') {
+      ctx.save();
+      roundRectPath(ctx, 22, 196, W - 44, 454, 18);
+      ctx.clip();
+      ctx.fillStyle = 'rgba(8, 3, 22, 0.56)';
+      ctx.fillRect(22, 196, W - 44, 454);
+      ctx.restore();
+    }
+
+    // ACTIVE REAL-TIME SCANNER LENS!
+    if (state.lensActive && state.phase === 'inspect' && state.tool !== 'scale') {
+      const lx = state.lensX;
+      const ly = state.lensY;
+      const lr = state.tool === 'loupe' ? 84 : 92;
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(lx, ly, lr, 0, Math.PI * 2);
+      ctx.clip();
+
+      if (state.tool === 'loupe') {
+        // 2.6x OPTICAL MAGNIFICATION directly from 840x840 HD buffer!
+        ctx.fillStyle = '#0e2c21';
+        ctx.fillRect(lx - lr, ly - lr, lr * 2, lr * 2);
+        const zoom = 2.6;
+        const relX = (lx - cx) / ART_DRAW_SIZE; // -0.5..+0.5
+        const relY = (ly - cy) / ART_DRAW_SIZE;
+        const magSize = ART_DRAW_SIZE * zoom;
+        ctx.drawImage(
+          layerNormal,
+          lx - (0.5 + relX) * magSize,
+          ly - (0.5 + relY) * magSize,
+          magSize,
+          magSize
+        );
+        // Subtle optical glass sheen
+        const glassGrad = ctx.createRadialGradient(lx - lr * 0.35, ly - lr * 0.35, 8, lx, ly, lr);
+        glassGrad.addColorStop(0, 'rgba(255,255,255,0.22)');
+        glassGrad.addColorStop(0.7, 'rgba(255,255,255,0)');
+        glassGrad.addColorStop(1, 'rgba(0,0,0,0.28)');
+        ctx.fillStyle = glassGrad;
+        ctx.fillRect(lx - lr, ly - lr, lr * 2, lr * 2);
+      } else if (state.tool === 'uv') {
+        // ULTRAVIOLET FLUORESCENCE LAYER
+        ctx.fillStyle = '#090418';
+        ctx.fillRect(lx - lr, ly - lr, lr * 2, lr * 2);
+        ctx.drawImage(layerUV, drawX, drawY, ART_DRAW_SIZE, ART_DRAW_SIZE);
+        // Subtle animated fluorescent micro-flecks inside UV beam
+        ctx.fillStyle = 'rgba(216, 180, 254, 0.35)';
+        for (let k = 0; k < 8; k++) {
+          const fx = lx + Math.sin(k * 2.3 + state.elapsed * 0.7) * (lr * 0.72);
+          const fy = ly + Math.cos(k * 1.9 - state.elapsed * 0.6) * (lr * 0.72);
+          ctx.beginPath(); ctx.arc(fx, fy, 1.3, 0, Math.PI * 2); ctx.fill();
+        }
+        // Violet beam vignette
+        const uvGrad = ctx.createRadialGradient(lx, ly, lr * 0.25, lx, ly, lr);
+        uvGrad.addColorStop(0, 'rgba(168, 85, 247, 0.08)');
+        uvGrad.addColorStop(0.85, 'rgba(126, 34, 206, 0.22)');
+        uvGrad.addColorStop(1, 'rgba(15, 5, 36, 0.72)');
+        ctx.fillStyle = uvGrad;
+        ctx.fillRect(lx - lr, ly - lr, lr * 2, lr * 2);
+      } else if (state.tool === 'xray') {
+        // CLINICAL X-RAY RADIOGRAPH LAYER
+        ctx.fillStyle = '#04121d';
+        ctx.fillRect(lx - lr, ly - lr, lr * 2, lr * 2);
+        ctx.drawImage(layerXRay, drawX, drawY, ART_DRAW_SIZE, ART_DRAW_SIZE);
+        // Animated horizontal radiograph scanlines + sweep bar
+        ctx.fillStyle = 'rgba(56, 189, 248, 0.11)';
+        for (let sy = ly - lr; sy < ly + lr; sy += 4) {
+          ctx.fillRect(lx - lr, sy, lr * 2, 1.4);
+        }
+        const sweepY = ly - lr + ((state.elapsed * 140) % (lr * 2));
+        ctx.fillStyle = 'rgba(186, 230, 253, 0.35)';
+        ctx.fillRect(lx - lr, sweepY, lr * 2, 3);
+      }
+      ctx.restore();
+
+      // Physical Lens Frame / Rim
+      ctx.save();
+      if (state.tool === 'loupe') {
+        // Ornate brass loupe ring + handle stub
+        ctx.strokeStyle = '#926014';
+        ctx.lineWidth = 10;
+        ctx.beginPath(); ctx.arc(lx, ly, lr + 3, 0, Math.PI * 2); ctx.stroke();
+        ctx.strokeStyle = '#fde68a';
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(lx, ly, lr + 2, 0, Math.PI * 2); ctx.stroke();
+        // Brass crosshair
+        ctx.strokeStyle = 'rgba(254, 240, 138, 0.35)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(lx - 14, ly); ctx.lineTo(lx + 14, ly);
+        ctx.moveTo(lx, ly - 14); ctx.lineTo(lx, ly + 14);
+        ctx.stroke();
+      } else if (state.tool === 'uv') {
+        ctx.shadowColor = '#a855f7';
+        ctx.shadowBlur = 18;
+        ctx.strokeStyle = '#c084fc';
+        ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.arc(lx, ly, lr, 0, Math.PI * 2); ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = 'rgba(18, 7, 38, 0.88)';
+        roundRectPath(ctx, lx - 38, ly - lr - 23, 76, 18, 9);
+        ctx.fill();
+        ctx.fillStyle = '#e9d5ff';
+        ctx.font = 'bold 10px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('UV 365nm', lx, ly - lr - 10);
+      } else if (state.tool === 'xray') {
+        ctx.shadowColor = '#38bdf8';
+        ctx.shadowBlur = 16;
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 3.5;
+        ctx.beginPath(); ctx.arc(lx, ly, lr, 0, Math.PI * 2); ctx.stroke();
+        // Clinical reticle ticks
+        ctx.strokeStyle = '#bae6fd';
+        ctx.lineWidth = 2;
+        for (let a = 0; a < 4; a++) {
+          const ang = a * Math.PI / 2;
+          ctx.beginPath();
+          ctx.moveTo(lx + Math.cos(ang) * (lr - 10), ly + Math.sin(ang) * (lr - 10));
+          ctx.lineTo(lx + Math.cos(ang) * (lr + 6), ly + Math.sin(ang) * (lr + 6));
+          ctx.stroke();
+        }
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = 'rgba(4, 18, 29, 0.9)';
+        roundRectPath(ctx, lx - 42, ly - lr - 23, 84, 18, 9);
+        ctx.fill();
+        ctx.fillStyle = '#bae6fd';
+        ctx.font = 'bold 10px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('X-RAY 85kV', lx, ly - lr - 10);
+      }
+
+      // Lock-on Progress Arc when hovering over a clue!
+      if (state.clueHoldProgress > 0.05) {
+        ctx.strokeStyle = '#fde047';
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.arc(lx, ly, lr + 8, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * state.clueHoldProgress);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // Draw Discovered Evidence Pins right on the Artifact (outer dashed frame so text stays legible!)
+    const toScreen = ART_DRAW_SIZE / 420;
+    for (const c of state.foundClues) {
+      if (c.tool === 'scale') continue;
+      const px = cx + c.x * toScreen;
+      const py = cy + scaleLift + c.y * toScreen;
+      const pulse = 1 + Math.sin(state.elapsed * 7) * 0.08;
+      const ringR = (c.isSecret ? 30 : 44) * c.anim * pulse;
+      ctx.save();
+      ctx.strokeStyle = c.isSecret ? '#fde047' : '#fb7185';
+      ctx.lineWidth = 2.6;
+      ctx.setLineDash([7, 5]);
+      ctx.beginPath();
+      ctx.arc(px, py, ringR, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      const badgeX = px + ringR * 0.76;
+      const badgeY = py - ringR * 0.76;
+      ctx.fillStyle = c.isSecret ? '#facc15' : '#e11d48';
+      ctx.beginPath();
+      ctx.arc(badgeX, badgeY, 13 * c.anim, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.8;
+      ctx.stroke();
+      ctx.fillStyle = c.isSecret ? '#1c0f06' : '#ffffff';
+      ctx.font = '900 13px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(c.isSecret ? '★' : '!', badgeX, badgeY + 0.5);
+      ctx.restore();
+    }
+
+    // First-time gentle drag hint pulse
+    if (!state.hasEverScanned && state.phase === 'inspect' && state.tool !== 'scale' && !SHORTS_MODE) {
+      const hx = cx + Math.sin(state.elapsed * 2.4) * 58;
+      const hy = cy + Math.cos(state.elapsed * 2.4) * 28;
+      ctx.save();
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.82)';
+      roundRectPath(ctx, hx - 96, hy - 18, 192, 34, 17);
+      ctx.fill();
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.fillStyle = '#e0f2fe';
+      ctx.font = '800 13px "Noto Sans JP", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('👆 指でなぞって透視！', hx, hy + 4);
+      ctx.restore();
+    }
+  }
+
+  function drawPrecisionScale(cx, cy, anim) {
+    const item = state.item;
+    const isFakeWeight = item.activeClues.includes('scale');
+    const dispWeight = Math.round(item.measuredWeight * clamp(anim, 0, 1));
+
+    // Brass weighing platform under item
+    ctx.save();
+    const panGrad = ctx.createLinearGradient(cx - 120, cy, cx + 120, cy);
+    panGrad.addColorStop(0, '#855812');
+    panGrad.addColorStop(0.5, '#f6d170');
+    panGrad.addColorStop(1, '#784c0c');
+    ctx.fillStyle = panGrad;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + 16, 128, 22, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#fef08a';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Digital Readout Box
+    const bx = cx - 152, by = cy + 32, bw = 304, bh = 54;
+    ctx.fillStyle = '#111827';
+    roundRectPath(ctx, bx, by, bw, bh, 12);
+    ctx.fill();
+    ctx.strokeStyle = state.scaleChecked ? (isFakeWeight ? '#fb7185' : '#34d399') : '#d4a853';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = state.scaleChecked ? (isFakeWeight ? '#fb7185' : '#34d399') : '#fde047';
+    ctx.font = '900 26px monospace';
+    ctx.fillText(`${dispWeight.toLocaleString()}g`, bx + 16, by + 35);
+
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '700 11px "Noto Sans JP", sans-serif';
+    ctx.fillText(`規定 ${item.def.realWeight.toLocaleString()}g`, bx + bw - 14, by + 22);
+    ctx.fillStyle = state.scaleChecked ? (isFakeWeight ? '#fda4af' : '#6ee7b7') : '#fde68a';
+    ctx.font = '800 13px "Noto Sans JP", sans-serif';
+    const statusTxt = !state.scaleChecked ? '計測中...' : (isFakeWeight ? '⚠️ 重量異常！' : '✅ 基準値内');
+    ctx.fillText(statusTxt, bx + bw - 14, by + 42);
+    ctx.restore();
+  }
+
+  function drawEvidenceBanner() {
+    const y = 660;
+    const latest = state.foundClues[state.foundClues.length - 1];
+    ctx.fillStyle = latest
+      ? (latest.isSecret ? 'rgba(113, 63, 18, 0.92)' : 'rgba(136, 19, 55, 0.92)')
+      : 'rgba(20, 12, 8, 0.84)';
+    roundRectPath(ctx, 22, y, W - 44, 38, 10);
+    ctx.fill();
+    ctx.strokeStyle = latest
+      ? (latest.isSecret ? '#fde047' : '#fb7185')
+      : 'rgba(218, 174, 88, 0.25)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    ctx.textAlign = 'center';
+    if (latest) {
+      ctx.fillStyle = latest.isSecret ? '#fef08a' : '#ffe4e6';
+      ctx.font = '800 13px "Noto Sans JP", sans-serif';
+      ctx.fillText(latest.label, W / 2, y + 24);
+    } else {
+      const c = state.item.client;
+      ctx.fillStyle = '#e7d5b8';
+      ctx.font = '600 12.5px "Noto Sans JP", sans-serif';
+      ctx.fillText(`${c.icon} ${c.name}「${c.quote}」`, W / 2, y + 24);
+    }
+  }
+
+  function drawToolDockAndStamps() {
+    // 4 Physical Tools Dock
+    const dockY = 710;
+    const gap = 10;
+    const tw = (W - 44 - gap * 3) / 4;
+    const th = 76;
+
+    TOOLS.forEach((t, i) => {
+      const tx = 22 + i * (tw + gap);
+      const active = state.tool === t.id && state.phase === 'inspect';
+      const used = !!state.toolsUsed[t.id];
+
+      ctx.save();
+      if (active) {
+        ctx.shadowColor = t.color;
+        ctx.shadowBlur = 14;
+      }
+      ctx.fillStyle = active ? '#2b1b11' : 'rgba(22, 13, 8, 0.9)';
+      roundRectPath(ctx, tx, dockY, tw, th, 14);
+      ctx.fill();
+      ctx.strokeStyle = active ? t.color : 'rgba(218, 174, 88, 0.3)';
+      ctx.lineWidth = active ? 2.8 : 1.2;
+      ctx.stroke();
+      ctx.restore();
+
+      ctx.textAlign = 'center';
+      ctx.font = '24px sans-serif';
+      ctx.fillText(t.icon, tx + tw / 2, dockY + 32);
+      ctx.fillStyle = active ? '#ffffff' : '#e5d4b7';
+      ctx.font = '800 13px "Noto Sans JP", sans-serif';
+      ctx.fillText(t.name, tx + tw / 2, dockY + 53);
+      ctx.fillStyle = active ? t.color : '#9c8669';
+      ctx.font = '600 10px "Noto Sans JP", sans-serif';
+      ctx.fillText(t.desc, tx + tw / 2, dockY + 68);
+
+      // Checked badge
+      if (used) {
+        ctx.fillStyle = '#15803d';
+        ctx.beginPath(); ctx.arc(tx + tw - 12, dockY + 12, 8, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 10px sans-serif';
+        ctx.fillText('✓', tx + tw - 12, dockY + 16);
+      }
+
+      registerHitbox(`tool_${t.id}`, tx, dockY, tw, th, () => selectTool(t.id));
+    });
+
+    // Two Huge Tactile Rubber Stamp Decision Buttons!
+    const sy = 804;
+    const sw = (W - 44 - 16) / 2;
+    const sh = 104;
+
+    // LEFT: FAKE / REJECT (Crimson Stamp)
+    const fx = 22;
+    const fakeGrad = ctx.createLinearGradient(fx, sy, fx, sy + sh);
+    fakeGrad.addColorStop(0, '#dc2626');
+    fakeGrad.addColorStop(1, '#7f1d1d');
+    ctx.save();
+    ctx.shadowColor = 'rgba(220, 38, 38, 0.35)';
+    ctx.shadowBlur = 16;
+    ctx.fillStyle = fakeGrad;
+    roundRectPath(ctx, fx, sy, sw, sh, 16);
+    ctx.fill();
+    ctx.restore();
+    ctx.strokeStyle = '#fca5a5';
+    ctx.lineWidth = 2;
+    roundRectPath(ctx, fx + 4, sy + 4, sw - 8, sh - 8, 12);
+    ctx.stroke();
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#fff1f2';
+    ctx.font = '900 28px "Shippori Mincho", serif';
+    ctx.fillText('贋作・却下', fx + sw / 2, sy + 48);
+    ctx.fillStyle = '#fecdd3';
+    ctx.font = '800 13px "Noto Sans JP", sans-serif';
+    ctx.fillText('偽物と見抜いて追い返す', fx + sw / 2, sy + 78);
+    registerHitbox('btn_fake', fx, sy, sw, sh, () => submitVerdict('reject'));
+
+    // RIGHT: GENUINE / BUY (Emerald-Gold Stamp)
+    const bx = 22 + sw + 16;
+    const buyGrad = ctx.createLinearGradient(bx, sy, bx, sy + sh);
+    buyGrad.addColorStop(0, '#16a34a');
+    buyGrad.addColorStop(1, '#14532d');
+    ctx.save();
+    ctx.shadowColor = 'rgba(22, 163, 74, 0.38)';
+    ctx.shadowBlur = 16;
+    ctx.fillStyle = buyGrad;
+    roundRectPath(ctx, bx, sy, sw, sh, 16);
+    ctx.fill();
+    ctx.restore();
+    ctx.strokeStyle = '#fde047';
+    ctx.lineWidth = 2.2;
+    roundRectPath(ctx, bx + 4, sy + 4, sw - 8, sh - 8, 12);
+    ctx.stroke();
+
+    ctx.fillStyle = '#fefce8';
+    ctx.font = '900 28px "Shippori Mincho", serif';
+    ctx.fillText('真作・買取', bx + sw / 2, sy + 48);
+    ctx.fillStyle = '#fef08a';
+    ctx.font = '800 13px "Noto Sans JP", sans-serif';
+    ctx.fillText(`${formatYen(state.item.askPrice)}で買い取る`, bx + sw / 2, sy + 78);
+    registerHitbox('btn_buy', bx, sy, sw, sh, () => submitVerdict('buy'));
+  }
+
+  function drawStampOverlay() {
+    const t = easeOutBack(state.stampAnim);
+    const scale = lerp(2.4, 1.0, clamp(state.stampAnim, 0, 1));
+    const isBuy = state.playerChoice === 'buy';
+
+    ctx.save();
+    ctx.translate(W / 2, ART_CENTER_Y);
+    ctx.rotate(isBuy ? -0.14 : 0.14);
+    ctx.scale(scale, scale);
+    ctx.globalAlpha = clamp(state.stampAnim * 1.6, 0, 0.96);
+
+    const col = isBuy ? '#16a34a' : '#dc2626';
+    ctx.fillStyle = isBuy ? 'rgba(20, 83, 45, 0.88)' : 'rgba(127, 29, 29, 0.9)';
+    roundRectPath(ctx, -155, -62, 310, 124, 16);
+    ctx.fill();
+    ctx.strokeStyle = isBuy ? '#fde047' : '#fca5a5';
+    ctx.lineWidth = 7;
+    ctx.stroke();
+    ctx.lineWidth = 2;
+    roundRectPath(ctx, -143, -50, 286, 100, 10);
+    ctx.stroke();
+
+    ctx.fillStyle = isBuy ? '#fef08a' : '#fff1f2';
+    ctx.font = '900 54px "Shippori Mincho", serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(isBuy ? '真 作' : '贋 作', 0, -4);
+    ctx.font = '800 15px "Cinzel", serif';
+    ctx.fillText(isBuy ? 'AUTHENTIC • BUY' : 'FORGERY • REJECT', 0, 34);
+    ctx.restore();
+  }
+
+  function drawAuctionOverlay() {
+    // Dramatic Dark Gold Auction Spotlight
+    ctx.fillStyle = 'rgba(10, 6, 4, 0.78)';
+    ctx.fillRect(0, 86, W, H - 86);
+
+    const cardX = 30, cardY = 215, cardW = W - 60, cardH = 440;
+    const bg = ctx.createLinearGradient(cardX, cardY, cardX, cardY + cardH);
+    bg.addColorStop(0, '#2a190e');
+    bg.addColorStop(1, '#140b06');
+    ctx.fillStyle = bg;
+    roundRectPath(ctx, cardX, cardY, cardW, cardH, 22);
+    ctx.fill();
+    ctx.strokeStyle = state.item.isSecret ? '#fde047' : '#d4a853';
+    ctx.lineWidth = state.item.isSecret ? 3.5 : 2.5;
+    ctx.stroke();
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = state.item.isSecret ? '#fde047' : '#e5bd66';
+    ctx.font = '900 15px "Cinzel", "Noto Sans JP", sans-serif';
+    ctx.fillText(state.item.isSecret ? '✨ ★ 超国宝 特別オークション ★ ✨' : '🔨 闇オークション 競り中!!', W / 2, cardY + 42);
+
+    ctx.fillStyle = '#f6e7c1';
+    ctx.font = '800 20px "Shippori Mincho", serif';
+    ctx.fillText(state.item.def.name, W / 2, cardY + 76);
+
+    // Big Escalating Price Counter
+    const pulse = 1 + Math.sin(state.elapsed * 18) * 0.03;
+    ctx.save();
+    ctx.translate(W / 2, cardY + 158);
+    ctx.scale(pulse, pulse);
+    ctx.fillStyle = state.item.isSecret ? '#fef08a' : '#fde047';
+    ctx.font = '900 50px "Cinzel", "Noto Sans JP", sans-serif';
+    ctx.fillText(formatYen(state.auctionCurrent), 0, 0);
+    ctx.restore();
+
+    ctx.fillStyle = '#86efac';
+    ctx.font = '700 14px "Noto Sans JP", sans-serif';
+    ctx.fillText(`買値 ${formatYen(state.item.askPrice)} → 急騰中！`, W / 2, cardY + 198);
+
+    // Live Bidder Feed
+    const visibleCount = Math.min(state.auctionStep, state.auctionBids.length);
+    const startIdx = Math.max(0, visibleCount - 4);
+    for (let i = startIdx; i < visibleCount; i++) {
+      const b = state.auctionBids[i];
+      const rowY = cardY + 232 + (i - startIdx) * 46;
+      const isLast = i === visibleCount - 1;
+      ctx.fillStyle = isLast ? 'rgba(250, 204, 21, 0.2)' : 'rgba(255,255,255,0.05)';
+      roundRectPath(ctx, cardX + 22, rowY, cardW - 44, 38, 10);
+      ctx.fill();
+      if (isLast) {
+        ctx.strokeStyle = '#fde047';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
+      ctx.textAlign = 'left';
+      ctx.fillStyle = isLast ? '#fef08a' : '#cbd5e1';
+      ctx.font = '700 14px "Noto Sans JP", sans-serif';
+      ctx.fillText(`🙋 ${b.who}`, cardX + 36, rowY + 24);
+      ctx.textAlign = 'right';
+      ctx.fillStyle = isLast ? '#fde047' : '#e2e8f0';
+      ctx.font = '900 16px "Noto Sans JP", sans-serif';
+      ctx.fillText(formatYen(b.val), cardX + cardW - 36, rowY + 24);
+    }
+  }
+
+  function drawVerdictOverlay() {
+    ctx.fillStyle = 'rgba(10, 6, 4, 0.72)';
+    ctx.fillRect(0, 86, W, H - 86);
+
+    const cx = 32, cy = 228, cw = W - 64, ch = 438;
+    const ok = state.verdictCorrect;
+    const isSecretWin = ok && state.item.isSecret && state.playerChoice === 'buy';
+
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.75)';
+    ctx.shadowBlur = 32;
+    const cardGrad = ctx.createLinearGradient(cx, cy, cx, cy + ch);
+    cardGrad.addColorStop(0, ok ? (isSecretWin ? '#3a2709' : '#122e22') : '#381016');
+    cardGrad.addColorStop(1, '#120a07');
+    ctx.fillStyle = cardGrad;
+    roundRectPath(ctx, cx, cy, cw, ch, 22);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.strokeStyle = ok ? (isSecretWin ? '#fde047' : '#34d399') : '#fb7185';
+    ctx.lineWidth = 3;
+    roundRectPath(ctx, cx, cy, cw, ch, 22);
+    ctx.stroke();
+
+    ctx.textAlign = 'center';
+    ctx.font = '46px sans-serif';
+    ctx.fillText(isSecretWin ? '👑' : (ok ? '⚖️' : '💥'), W / 2, cy + 66);
+
+    ctx.fillStyle = ok ? (isSecretWin ? '#fde047' : '#6ee7b7') : '#fda4af';
+    ctx.font = '900 30px "Shippori Mincho", "Noto Sans JP", serif';
+    ctx.fillText(state.verdictTitle, W / 2, cy + 114);
+
+    // Big Profit/Loss Number
+    ctx.fillStyle = state.verdictDelta > 0 ? '#fde047' : (state.verdictDelta < 0 ? '#fb7185' : '#cbd5e1');
+    ctx.font = '900 40px "Cinzel", "Noto Sans JP", sans-serif';
+    const dSign = state.verdictDelta > 0 ? '+' : '';
+    ctx.fillText(`${dSign}${formatYen(state.verdictDelta)}`, W / 2, cy + 174);
+
+    // Explanation box (always explains the exact truth/forgery!)
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+    roundRectPath(ctx, cx + 20, cy + 202, cw - 40, 126, 14);
+    ctx.fill();
+
+    ctx.fillStyle = '#e5bd66';
+    ctx.font = '800 13px "Noto Sans JP", sans-serif';
+    const truthLabel = state.item.isReal
+      ? (state.item.isSecret ? '【鑑定結果：超国宝・本物】' : '【鑑定結果：真作・本物】')
+      : '【鑑定結果：精巧な贋作（偽物）】';
+    ctx.fillText(truthLabel, W / 2, cy + 230);
+
+    ctx.fillStyle = '#f8fafc';
+    ctx.font = '700 14px "Noto Sans JP", sans-serif';
+    wrapText(ctx, state.verdictSub, W / 2, cy + 260, cw - 68, 22);
+
+    if (!state.item.isReal && state.item.activeClues.length > 0) {
+      const cTool = state.item.activeClues[0];
+      ctx.fillStyle = '#fda4af';
+      ctx.font = '700 12.5px "Noto Sans JP", sans-serif';
+      ctx.fillText(`決め手：${state.item.def.clueSpots[cTool].label}`, W / 2, cy + 312);
+    } else if (state.item.isSecret) {
+      ctx.fillStyle = '#fef08a';
+      ctx.font = '700 12.5px "Noto Sans JP", sans-serif';
+      ctx.fillText(state.item.def.secretSpot.label, W / 2, cy + 312);
+    }
+
+    // Next Button
+    const bx = cx + 28, by = cy + 350, bw = cw - 56, bh = 64;
+    const isGameOver = state.lives <= 0 || state.round >= state.maxRounds;
+    const btnGrad = ctx.createLinearGradient(bx, by, bx, by + bh);
+    btnGrad.addColorStop(0, '#fcd34d');
+    btnGrad.addColorStop(1, '#b47412');
+    ctx.fillStyle = btnGrad;
+    roundRectPath(ctx, bx, by, bw, bh, 14);
+    ctx.fill();
+    ctx.fillStyle = '#1c0f06';
+    ctx.font = '900 20px "Noto Sans JP", sans-serif';
+    ctx.fillText(isGameOver ? '最終鑑定結果を見る →' : '次の骨董品を鑑定する →', W / 2, by + 39);
+    registerHitbox('next_round', bx, by, bw, bh, advanceAfterVerdict);
+  }
+
+  function drawHelpModal() {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.78)';
+    ctx.fillRect(0, 0, W, H);
+
+    const mx = 34, my = 180, mw = W - 68, mh = 560;
+    ctx.fillStyle = '#1f130c';
+    roundRectPath(ctx, mx, my, mw, mh, 20);
+    ctx.fill();
+    ctx.strokeStyle = '#d4a853';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#fde047';
+    ctx.font = '900 22px "Shippori Mincho", serif';
+    ctx.fillText('鑑定マニュアル', W / 2, my + 46);
+
+    const rows = [
+      ['🔍 ルーペ', '骨董品を2.6倍拡大！底面の銘や年号、サインの偽造を見抜け。'],
+      ['🟣 UVライト', '肉眼で見えない蛍光インク・接着剤の亀裂・隠し紋章を発光！'],
+      ['🩻 X線スキャナー', '内部を完全透視！現代の乾電池・鉄釘・空洞、あるいは隠し秘宝を発見！'],
+      ['⚖️ 電子秤', 'タップで計量＆打音チェック！規定重量と大きく違えば偽物確定。'],
+      ['💎 超国宝シークレット', '本物の中には隠し秘宝が眠る品も！見抜けば落札額が約3倍に爆騰！'],
+    ];
+
+    ctx.textAlign = 'left';
+    rows.forEach(([title, body], idx) => {
+      const ry = my + 86 + idx * 80;
+      ctx.fillStyle = '#fde68a';
+      ctx.font = '800 15px "Noto Sans JP", sans-serif';
+      ctx.fillText(title, mx + 24, ry);
+      ctx.fillStyle = '#e2d5c0';
+      ctx.font = '500 13px "Noto Sans JP", sans-serif';
+      wrapTextLeft(ctx, body, mx + 24, ry + 22, mw - 48, 19);
+    });
+
+    const bx = mx + 60, by = my + mh - 74, bw = mw - 120, bh = 52;
+    ctx.fillStyle = '#d9961f';
+    roundRectPath(ctx, bx, by, bw, bh, 12);
+    ctx.fill();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#1c0f06';
+    ctx.font = '900 17px "Noto Sans JP", sans-serif';
+    ctx.fillText('閉じる', W / 2, by + 32);
+    registerHitbox('close_help', 0, 0, W, H, () => { state.showHelp = false; });
+  }
+
+  // =========================================================================
+  // RESULT CERTIFICATE SCREEN
+  // =========================================================================
+  function getAppraiserRank(cash, lives, accuracy) {
+    if (lives <= 0 && cash <= 0) return { grade: 'F', title: '闇市で破産…', color: '#fb7185' };
+    if (cash >= 35000 && accuracy >= 0.85) return { grade: 'SSS', title: '伝説の闇鑑定王', color: '#fde047' };
+    if (cash >= 20000) return { grade: 'S', title: '国宝の絶対目利き', color: '#f59e0b' };
+    if (cash >= 10000) return { grade: 'A', title: '一流オークション鑑定士', color: '#34d399' };
+    if (cash >= 3000) return { grade: 'B', title: '一人前の古美術商', color: '#38bdf8' };
+    return { grade: 'C', title: '見習い鑑定士', color: '#cbd5e1' };
+  }
+
+  function drawResultScreen() {
+    drawDeskBackground();
+
+    // Vintage Gilded Certificate Paper
+    const cx = 28, cy = 62, cw = W - 56, ch = 664;
+    const pGrad = ctx.createLinearGradient(cx, cy, cx, cy + ch);
+    pGrad.addColorStop(0, '#fcf5e3');
+    pGrad.addColorStop(1, '#e7d2ab');
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.65)';
+    ctx.shadowBlur = 28;
+    ctx.fillStyle = pGrad;
+    roundRectPath(ctx, cx, cy, cw, ch, 18);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.strokeStyle = '#b4832c';
+    ctx.lineWidth = 4;
+    roundRectPath(ctx, cx + 10, cy + 10, cw - 20, ch - 20, 12);
+    ctx.stroke();
+
+    const acc = state.history.length ? state.correctCount / state.history.length : 0;
+    const rank = getAppraiserRank(state.cash, state.lives, acc);
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#7c4e15';
+    ctx.font = '800 13px "Cinzel", serif';
+    ctx.fillText('OFFICIAL APPRAISAL CERTIFICATE', W / 2, cy + 48);
+
+    ctx.fillStyle = '#24140a';
+    ctx.font = '900 28px "Shippori Mincho", serif';
+    ctx.fillText(state.lives <= 0 ? '鑑定営業 終了' : '闇オークション 完遂！', W / 2, cy + 88);
+
+    // Wax Seal Rank Badge
+    ctx.save();
+    ctx.fillStyle = '#991b1b';
+    ctx.beginPath(); ctx.arc(W / 2, cy + 162, 52, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#fde047';
+    ctx.lineWidth = 3.5;
+    ctx.beginPath(); ctx.arc(W / 2, cy + 162, 44, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = rank.color;
+    ctx.font = '900 38px "Cinzel", serif';
+    ctx.fillText(rank.grade, W / 2, cy + 174);
+    ctx.restore();
+
+    ctx.fillStyle = '#451a03';
+    ctx.font = '900 20px "Shippori Mincho", serif';
+    ctx.fillText(`称号：${rank.title}`, W / 2, cy + 242);
+
+    // Total Profit Banner
+    ctx.fillStyle = '#23140b';
+    roundRectPath(ctx, cx + 28, cy + 262, cw - 56, 86, 14);
+    ctx.fill();
+    ctx.fillStyle = '#d4a853';
+    ctx.font = '700 12px "Noto Sans JP", sans-serif';
+    ctx.fillText('最終獲得資産', W / 2, cy + 288);
+    ctx.fillStyle = state.cash >= 0 ? '#fde047' : '#fb7185';
+    ctx.font = '900 38px "Cinzel", "Noto Sans JP", sans-serif';
+    ctx.fillText(formatYen(state.cash), W / 2, cy + 332);
+
+    // Stats Row
+    const stats = [
+      ['正解数', `${state.correctCount} / ${state.history.length}`],
+      ['最大連勝', `${state.maxStreak}連続`],
+      ['図鑑発見', `${saveData.discovered.length} / ${ARTIFACT_DEFS.length}`],
+    ];
+    stats.forEach(([lbl, val], i) => {
+      const sx = cx + 28 + i * ((cw - 56) / 3);
+      const sw = (cw - 56) / 3 - 8;
+      ctx.fillStyle = 'rgba(120, 72, 24, 0.12)';
+      roundRectPath(ctx, sx + 4, cy + 364, sw, 64, 10);
+      ctx.fill();
+      ctx.fillStyle = '#6b421c';
+      ctx.font = '700 12px "Noto Sans JP", sans-serif';
+      ctx.fillText(lbl, sx + sw / 2 + 4, cy + 388);
+      ctx.fillStyle = '#24140a';
+      ctx.font = '900 18px "Noto Sans JP", sans-serif';
+      ctx.fillText(val, sx + sw / 2 + 4, cy + 414);
+    });
+
+    // Item History List (up to 7 rows)
+    ctx.textAlign = 'left';
+    const showList = state.history.slice(-7);
+    showList.forEach((h, i) => {
+      const ry = cy + 452 + i * 28;
+      ctx.fillStyle = i % 2 === 0 ? 'rgba(120, 72, 24, 0.08)' : 'transparent';
+      ctx.fillRect(cx + 28, ry - 16, cw - 56, 24);
+      ctx.fillStyle = '#24140a';
+      ctx.font = '700 13px "Noto Sans JP", sans-serif';
+      const icon = h.correct ? (h.isSecret ? '💎' : '⭕') : '❌';
+      ctx.fillText(`${icon} ${h.name}`, cx + 36, ry);
+      ctx.textAlign = 'right';
+      ctx.fillStyle = h.delta > 0 ? '#15803d' : (h.delta < 0 ? '#b91c1c' : '#64748b');
+      ctx.font = '800 13px "Noto Sans JP", sans-serif';
+      ctx.fillText(`${h.delta > 0 ? '+' : ''}${formatYen(h.delta)}`, cx + cw - 36, ry);
+      ctx.textAlign = 'left';
+    });
+
+    // Action Buttons below certificate
+    const b1 = { x: 28, y: 748, w: W - 56, h: 72 };
+    const b1g = ctx.createLinearGradient(b1.x, b1.y, b1.x, b1.y + b1.h);
+    b1g.addColorStop(0, '#fcd34d');
+    b1g.addColorStop(1, '#b47412');
+    ctx.fillStyle = b1g;
+    roundRectPath(ctx, b1.x, b1.y, b1.w, b1.h, 16);
+    ctx.fill();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#1c0f06';
+    ctx.font = '900 22px "Noto Sans JP", sans-serif';
+    ctx.fillText('もう一度 鑑定する', W / 2, b1.y + 44);
+    registerHitbox('retry', b1.x, b1.y, b1.w, b1.h, () => startGame(state.mode));
+
+    const b2 = { x: 28, y: 836, w: W - 56, h: 58 };
+    ctx.fillStyle = 'rgba(28, 16, 10, 0.92)';
+    roundRectPath(ctx, b2.x, b2.y, b2.w, b2.h, 14);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(218, 174, 88, 0.5)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.fillStyle = '#f6e7c1';
+    ctx.font = '800 16px "Noto Sans JP", sans-serif';
+    ctx.fillText('タイトルへ戻る', W / 2, b2.y + 35);
+    registerHitbox('back_title', b2.x, b2.y, b2.w, b2.h, () => {
+      state.screen = 'title';
+      titlePreviewBuilt = false;
+    });
+  }
+
+  function wrapText(c, text, cx, y, maxW, lh) {
+    let line = '';
+    let yy = y;
+    for (const ch of text) {
+      if (c.measureText(line + ch).width > maxW) {
+        c.fillText(line, cx, yy);
+        line = ch;
+        yy += lh;
+      } else line += ch;
+    }
+    if (line) c.fillText(line, cx, yy);
+  }
+
+  function wrapTextLeft(c, text, x, y, maxW, lh) {
+    let line = '';
+    let yy = y;
+    for (const ch of text) {
+      if (c.measureText(line + ch).width > maxW) {
+        c.fillText(line, x, yy);
+        line = ch;
+        yy += lh;
+      } else line += ch;
+    }
+    if (line) c.fillText(line, x, yy);
+  }
+
+  // =========================================================================
+  // GLOBAL FX & MASTER RENDER
+  // =========================================================================
+  function drawEffects() {
+    // Floating ambient lamp dust motes
+    for (const m of state.dustMotes) {
+      ctx.fillStyle = `rgba(255, 226, 150, ${m.a})`;
+      ctx.beginPath();
+      ctx.arc(m.x, m.y, m.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Confetti & Sparkle Particles
+    for (const p of state.particles) {
+      const a = clamp(p.life / p.maxLife, 0, 1);
+      ctx.save();
+      ctx.globalAlpha = a;
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      ctx.fillStyle = p.color;
+      if (p.shape === 'rect') ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.65);
+      else { ctx.beginPath(); ctx.arc(0, 0, p.size * 0.55, 0, Math.PI * 2); ctx.fill(); }
+      ctx.restore();
+    }
+
+    // Floating Texts
+    for (const f of state.floatingTexts) {
+      const a = clamp(f.life / f.maxLife, 0, 1);
+      ctx.save();
+      ctx.globalAlpha = a;
+      ctx.font = `900 ${f.size}px "Noto Sans JP", sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+      ctx.lineWidth = 5;
+      ctx.strokeText(f.text, f.x, f.y);
+      ctx.fillStyle = f.color;
+      ctx.fillText(f.text, f.x, f.y);
+      ctx.restore();
+    }
+
+    // Screen Flash
+    if (state.flashAlpha > 0.01 && state.flashColor) {
+      ctx.fillStyle = state.flashColor;
+      ctx.globalAlpha = state.flashAlpha;
+      ctx.fillRect(0, 0, W, H);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  function render() {
+    hitboxes = [];
+    ctx.save();
+    if (state.shake > 0.2) {
+      ctx.translate((Math.random() - 0.5) * state.shake, (Math.random() - 0.5) * state.shake);
+    }
+
+    if (state.screen === 'title') {
+      drawTitleScreen();
+    } else if (state.screen === 'play') {
+      drawDeskBackground();
+      drawVelvetMat();
+      drawSpecCard();
+      drawArtifactAndScanner();
+      drawEvidenceBanner();
+      drawToolDockAndStamps();
+      drawTopHUD();
+
+      if (state.phase === 'stamp') drawStampOverlay();
+      else if (state.phase === 'auction') drawAuctionOverlay();
+      else if (state.phase === 'verdict') drawVerdictOverlay();
+
+      if (state.showHelp) drawHelpModal();
+    } else if (state.screen === 'result') {
+      drawResultScreen();
+    }
+
+    drawEffects();
+    ctx.restore();
+  }
+
+  // Deterministic stepping hook for Shorts frame capture
+  window.__stepFrame = (dt = 1 / 60) => {
+    update(dt);
+    render();
+  };
+
+  let lastTs = performance.now();
+  function loop(ts) {
+    const dt = Math.min(0.05, Math.max(0.001, (ts - lastTs) / 1000));
+    lastTs = ts;
+    if (!window.__manualStep) {
+      update(dt);
+      render();
+    }
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

@@ -48,6 +48,18 @@
       "game_path": "games/day04-eleven-dribble/index.html",
       "note_path": "notes/day04/note_draft.md",
       "shorts_script": "shorts/day04/generate_shorts.py"
+    },
+    {
+      "day": 5,
+      "date": "2026-11-19",
+      "slug": "day05-fake-or-fortune",
+      "title": "FAKE OR FORTUNE（闇の骨董鑑定士：UV・X線透視×億超えオークション）",
+      "type": "game",
+      "genre": "真贋鑑定・透視推理×オークション経営シミュレーション",
+      "core_mechanic": "指1本で4種の鑑定ツール（2.6倍ルーペ・UVブラックライト・X線レントゲン・電子秤＆打音）を骨董品の上になぞり、リアルタイム透視で現代乾電池や蛍光接着剤などの偽造証拠、あるいは超国宝シークレットを見抜いて「真作/贋作」スタンプを押す真贋鑑定×億超えオークションゲーム（全10種の手描き多層骨董品・7品チャレンジ＆限界エンドレス搭載）",
+      "game_path": "games/day05-fake-or-fortune/index.html",
+      "note_path": "notes/day05/note_draft.md",
+      "shorts_script": "shorts/day05/generate_shorts.py"
     }
   ]
 }

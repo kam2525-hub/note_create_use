@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Day 05 投稿ヘルパー｜FAKE OR FORTUNE</title>
+  <style>
+    :root {
+      --bg: #f6f1e6;
+      --card: #ffffff;
+      --text: #24160d;
+      --muted: #6f5842;
+      --accent: #b47412;
+      --green: #15803d;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px 16px 60px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
+      line-height: 1.65;
+    }
+    .wrap { max-width: 760px; margin: 0 auto; }
+    h1 { font-size: 22px; margin: 0 0 8px; }
+    .lead { margin: 0 0 20px; color: var(--muted); font-size: 14px; }
+    .quick-bar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 12px;
+      margin-bottom: 22px;
+    }
+    .action-link {
+      display: block;
+      text-align: center;
+      text-decoration: none;
+      border-radius: 14px;
+      padding: 14px 16px;
+      font-weight: 900;
+      font-size: 14px;
+      background: var(--accent);
+      color: #ffffff;
+    }
+    .action-link.secondary { background: #ffffff; color: var(--text); border: 1px solid #dfd2bc; }
+    .section {
+      background: var(--card);
+      border-radius: 18px;
+      padding: 18px 20px;
+      margin-bottom: 18px;
+      box-shadow: 0 8px 24px rgba(36, 22, 13, 0.06);
+    }
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+    .section-title { font-size: 15px; font-weight: 800; color: var(--accent); }
+    .thumb-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .copy-btn {
+      border: none;
+      border-radius: 10px;
+      padding: 8px 14px;
+      background: var(--accent);
+      color: #ffffff;
+      font-weight: 800;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .copy-btn.secondary { background: #f5ede0; color: var(--text); }
+    .copy-btn.done { background: var(--green); color: #ffffff; }
+    textarea {
+      width: 100%;
+      background: #fcfaf5;
+      color: var(--text);
+      border: 1px solid #e8dcc8;
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-family: inherit;
+      font-size: 14px;
+      line-height: 1.6;
+      resize: vertical;
+    }
+    .thumb-preview { width: 100%; border-radius: 12px; display: block; margin-top: 8px; }
+    .hint-small { margin: 8px 0 0; font-size: 12px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Day 05 投稿ヘルパー（ゲーム5日目：FAKE OR FORTUNE）</h1>
+    <p class="lead">闇の骨董鑑定士『FAKE OR FORTUNE』のX・note・YouTube Shorts投稿用データです。</p>
+
+    <div class="quick-bar">
+      <a class="action-link" id="xIntentBtn" href="#" target="_blank" rel="noopener">X（Twitter）の投稿画面を開く</a>
+      <a class="action-link secondary" href="https://note.com/notes/new" target="_blank" rel="noopener">note 新規記事作成を開く</a>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">X（Twitter）投稿テキスト</span>
+        <button class="copy-btn" data-target="xText">コピー</button>
+      </div>
+      <textarea id="xText" rows="8" readonly>【100日後にバズるゲームを作る男｜5日目】
+1888年の懐中時計にX線あてたら中から乾電池出てきたｗ
+骨董品の本物・偽物を透視で見抜くゲーム『FAKE OR FORTUNE』を作りました🔍🩻✨
+
+✅ 指1本でリアルタイムX線・UVブラックライト・2.6倍ルーペ透視
+✅ 電子秤＆打音チェックで全10種の骨董品を鑑定
+✅ 隠し「超国宝」を見抜けば一撃2億円超えオークション！
+
+あなたは偽物を見抜ける？👇
+https://kam2525-hub.github.io/note_create_use/games/day05-fake-or-fortune/
+
+#100日後にバズるゲームを作る男 #個人開発 #ゲーム制作</textarea>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">note タイトル</span>
+        <button class="copy-btn" data-target="noteTitle">コピー</button>
+      </div>
+      <textarea id="noteTitle" rows="2" readonly>【ゲーム5日目】指1本でUVライト＆X線透視！1億円の国宝か偽物かを見抜く『FAKE OR FORTUNE（闇の骨董鑑定士）』を作った【無料プレイ可】</textarea>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">note 見出し画像（1280×670）</span>
+        <div class="thumb-actions">
+          <a class="copy-btn secondary" href="../../shorts/day05/output/note_thumbnail.png" download="day05_fake_or_fortune_thumbnail.png">画像をダウンロード</a>
+        </div>
+      </div>
+      <img class="thumb-preview" src="../../shorts/day05/output/note_thumbnail.png" alt="Day 05 FAKE OR FORTUNE note見出し画像" />
+      <p class="hint-small">スマホの場合は画像を長押しして「写真に保存」してください。</p>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">note 本文</span>
+        <button class="copy-btn" data-target="noteBody">コピー</button>
+      </div>
+      <textarea id="noteBody" rows="16" readonly>100日後にバズるゲームを作る男、5日目です。
+
+これまで1〜4日目はすべてリアルタイムアクション系を作ってきましたが、5日目の今日はジャンルもUIも完全に一新！
+アンティーク木製デスクの上で、持ち込まれる謎の骨董品を透視スキャンして真贋を見抜く『FAKE OR FORTUNE（闇の骨董鑑定士）』を作りました！
+
+スマホでもPCでも、インストール不要・ブラウザだけで今すぐ無料で遊べます👇
+
+https://kam2525-hub.github.io/note_create_use/games/day05-fake-or-fortune/
+
+■ 遊び方：4種の鑑定ツールで偽造を暴き、億超え落札を狙え！
+1. 🔍 2.6倍ルーペ：底面の銘や時計の文字盤・絵画の署名などの微細な偽造刻印を拡大！
+2. 🟣 UVブラックライト：肉眼で見えない蛍光接着剤の亀裂や現代塗料がネオン発光！
+3. 🩻 X線スキャナー：1888年の懐中時計の中の乾電池＆IC基板、名画の下の落書きなど内部を丸裸に！
+4. ⚖️ 電子秤＆打音チェック：規定重量とのズレや、純金・磁器とプラスチックの打音の違いを確認！
+
+■ 見どころ
+・本物の中に眠る「✨超国宝シークレット」を透視で発見すれば、闇オークションで一撃1億〜2億円超え！
+・全10種の手描き多層骨董品（懐中時計・青磁の大壺・ファラオ仮面・油彩名画・妖刀村正・紅ダイヤ・王冠・太古琥珀・マヤ翡翠盤・ストラディバリウス）を収録！
+・全7品チャレンジ＆1ミス即破産の🔥限界エンドレスモード搭載！
+
+ぜひ「SSS 伝説の闇鑑定王」を目指して遊んでみてください！
+
+#100日後にバズるゲームを作る男 #個人開発 #ゲーム制作 #推理ゲーム #無料ゲーム #ブラウザゲーム</textarea>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">YouTube Shorts タイトル</span>
+        <button class="copy-btn" data-target="ytTitle">コピー</button>
+      </div>
+      <textarea id="ytTitle" rows="2" readonly>1888年の懐中時計にX線あてたら中からヤバいもん出てきたｗ【闇の骨董鑑定士】 #Shorts #ゲーム制作</textarea>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">YouTube Shorts 説明文</span>
+        <button class="copy-btn" data-target="ytDesc">コピー</button>
+      </div>
+      <textarea id="ytDesc" rows="9" readonly>スマホ・PCで今すぐ無料で遊べます▼
+https://kam2525-hub.github.io/note_create_use/games/day05-fake-or-fortune/
+
+100日後にバズるゲームを作る男【ゲーム5日目】
+『FAKE OR FORTUNE（闇の骨董鑑定士：UV・X線透視×億超えオークション）』
+
+指1本で🔍ルーペ・🟣UVライト・🩻X線・⚖️電子秤を骨董品にかざし、偽物を見抜いて億超え落札を狙う真贋鑑定ゲーム！
+あなたは偽物を見抜いて億万長者になれる？記録をコメント欄で教えてください！
+
+#Shorts #ゲーム制作 #個人開発 #骨董鑑定 #推理ゲーム #無料ゲーム #ブラウザゲーム</textarea>
+    </div>
+  </div>
+
+  <script>
+    const xText = document.getElementById('xText').value;
+    document.getElementById('xIntentBtn').href =
+      'https://twitter.com/intent/tweet?text=' + encodeURIComponent(xText);
+
+    document.querySelectorAll('.copy-btn[data-target]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const el = document.getElementById(btn.dataset.target);
+        try {
+          await navigator.clipboard.writeText(el.value);
+        } catch (_) {
+          el.select();
+          document.execCommand('copy');
+        }
+        const orig = btn.textContent;
+        btn.textContent = 'コピー完了!';
+        btn.classList.add('done');
+        setTimeout(() => {
+          btn.textContent = orig;
+          btn.classList.remove('done');
+        }, 1500);
+      });
+    });
+  </script>
+</body>
+</html>
