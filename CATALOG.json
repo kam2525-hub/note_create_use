@@ -52,12 +52,12 @@
     {
       "day": 5,
       "date": "2026-11-19",
-      "slug": "day05-fake-or-fortune",
-      "title": "FAKE OR FORTUNE（闇の骨董鑑定士：UV・X線透視×億超えオークション）",
+      "slug": "day05-dice-overdrive",
+      "title": "DICE OVERDRIVE（禁断のダイス改造ローグライト）",
       "type": "game",
-      "genre": "真贋鑑定・透視推理×オークション経営シミュレーション",
-      "core_mechanic": "指1本で4種の鑑定ツール（2.6倍ルーペ・UVブラックライト・X線レントゲン・電子秤＆打音）を骨董品の上になぞり、リアルタイム透視で現代乾電池や蛍光接着剤などの偽造証拠、あるいは超国宝シークレットを見抜いて「真作/贋作」スタンプを押す真贋鑑定×億超えオークションゲーム（全10種の手描き多層骨董品・7品チャレンジ＆限界エンドレス搭載）",
-      "game_path": "games/day05-fake-or-fortune/index.html",
+      "genre": "ターン制ダイス改造・インフレ構築ローグライト",
+      "core_mechanic": "5個のサイコロをロック＆リロールしてポーカー役を作り、ショップでサイコロの1面を「✨黄金面×3」「⚡連鎖リトリガー」「🪞鏡面コピー」「💥爆弾」「💎ダイヤ」「🃏ワイルド」に直接改造＋12種の壊れレリックを掛け合わせてスコアを数百→数百万へ爆増させる全8ステージ＋無限エンドレスのインフレ戦略ローグライト",
+      "game_path": "games/day05-dice-overdrive/index.html",
       "note_path": "notes/day05/note_draft.md",
       "shorts_script": "shorts/day05/generate_shorts.py"
     }

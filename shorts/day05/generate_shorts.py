@@ -1,18 +1,14 @@
 #!/usr/bin/env python3
 """
-Day 05 YouTube Shorts (1080x1920, 60fps, 18.0s, FULL-BLEED) + Note Thumbnail Generator.
-Showcases FAKE OR FORTUNE (Underground Antique Appraiser):
-- 0.0s..4.9s: 1888 Imperial Gold Pocket Watch -> X-Ray reveals modern CR2032 battery & PCB!
-- 4.9s..7.4s: Slams FAKE stamp -> Forgery busted!
-- 7.4s..12.6s: Ming Dragon Porcelain Vase -> UV clean -> X-Ray reveals hidden Golden Orb (Super Jackpot)!
-- 12.6s..18.0s: Slams BUY stamp -> Auction rockets past ¥1.5億!
+Day 05 YouTube Shorts (1080x1920, 60fps, 10.5s high-density combo explosion) + Note Thumbnail Generator.
+Showcases DICE OVERDRIVE (Roguelite Dice-Forging Deckbuilder):
+- Final Boss Stage 8 (Target 500,000) with forged Gold x3 / Echo / Mirror / Wild dice + 5 Synergistic Relics
+- Rolls Wild -> FIVE OF A KIND -> Cascading Multipliers explode past 800,000,000 pts!
 """
 
-import asyncio
 import base64
 import http.server
 import json
-import math
 import os
 import shutil
 import socket
@@ -22,11 +18,9 @@ import tempfile
 import threading
 import time
 import urllib.request
-import wave
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-GAME_DIR = ROOT / "games" / "day05-fake-or-fortune"
 OUT_DIR = ROOT / "shorts" / "day05" / "output"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -43,10 +37,7 @@ def find_browser() -> str:
 
 
 class SimpleCDP:
-    """Minimal pure-stdlib WebSocket client for Chrome DevTools Protocol."""
-
     def __init__(self, ws_url: str):
-        assert ws_url.startswith("ws://")
         rest = ws_url[5:]
         host_port, path = rest.split("/", 1)
         host, port = host_port.split(":")
@@ -103,7 +94,7 @@ class SimpleCDP:
                 ln = struct.unpack("!Q", self._recv_exact(8))[0]
             data = self._recv_exact(ln)
             if op == 8:
-                raise ConnectionError("WebSocket closed by server")
+                raise ConnectionError("WebSocket closed")
             if op == 1:
                 return data.decode("utf-8", errors="replace")
 
@@ -143,54 +134,43 @@ def start_static_server(directory: Path):
     return srv, port
 
 
-NARRATION_CUES = [
-    (0.10, "1888年の高級懐中時計、本物か偽物か見抜いてみる！"),
-    (2.35, "X線を当ててみると…おい、中から乾電池出てきたぞ！"),
-    (5.05, "即・贋作スタンプ！偽物を見抜いて報酬ゲット！"),
-    (7.60, "次は明朝の大壺。UVライトは異常なし、X線で中を見ると…"),
-    (10.50, "うわ！壺の底に純金の秘宝玉が封印されてる！超国宝だ！"),
-    (13.10, "即買い取って闇オークションへ！1億超え落札キター！"),
-]
-
-
-def render_note_thumbnail(browser: str, xray_png_path: Path, out_png: Path):
-    """Render a crisp 1280x670 magazine-grade note thumbnail using headless Chrome."""
-    b64 = base64.b64encode(xray_png_path.read_bytes()).decode("ascii")
+def render_note_thumbnail(browser: str, game_png_path: Path, out_png: Path):
+    b64 = base64.b64encode(game_png_path.read_bytes()).decode("ascii")
     html = f"""<!DOCTYPE html>
 <html lang="ja"><head><meta charset="UTF-8"><style>
 *{{box-sizing:border-box;margin:0;padding:0;}}
 body{{
   width:1280px;height:670px;overflow:hidden;
-  background: radial-gradient(circle at 28% 35%, #2e1b10 0%, #140b06 72%, #090503 100%);
+  background: radial-gradient(circle at 28% 35%, #164433 0%, #091d16 70%, #040d0a 100%);
   font-family:'Noto Sans JP','Hiragino Kaku Gothic ProN',sans-serif;
-  color:#fcf5e3;display:flex;align-items:center;justify-content:space-between;
+  color:#fefce8;display:flex;align-items:center;justify-content:space-between;
   padding:46px 56px;position:relative;
 }}
 body::before{{
   content:'';position:absolute;inset:16px;
-  border:2px solid rgba(218,174,88,0.45);border-radius:20px;pointer-events:none;
+  border:2px solid rgba(250,204,21,0.45);border-radius:20px;pointer-events:none;
 }}
 .left{{width:720px;z-index:2;}}
 .badge{{
   display:inline-block;padding:8px 20px;border-radius:999px;
-  background:linear-gradient(90deg,#f59e0b,#fde047);color:#1c0f06;
-  font-weight:900;font-size:22px;letter-spacing:0.06em;margin-bottom:20px;
+  background:linear-gradient(90deg,#f59e0b,#fde047);color:#1c1205;
+  font-weight:900;font-size:22px;letter-spacing:0.06em;margin-bottom:18px;
   box-shadow:0 6px 20px rgba(245,158,11,0.4);
 }}
 h1{{
-  font-size:66px;line-height:1.12;font-weight:900;letter-spacing:-0.01em;
-  background:linear-gradient(180deg,#fff9db 0%,#f5c547 55%,#c48216 100%);
+  font-size:66px;line-height:1.1;font-weight:900;letter-spacing:0.01em;
+  background:linear-gradient(180deg,#fffbeb 0%,#fde047 55%,#d97706 100%);
   -webkit-background-clip:text;-webkit-text-fill-color:transparent;
   margin-bottom:16px;filter:drop-shadow(0 6px 14px rgba(0,0,0,0.65));
 }}
 .sub{{
-  font-size:34px;font-weight:900;color:#fff7e6;line-height:1.35;margin-bottom:28px;
+  font-size:34px;font-weight:900;color:#f0fdf4;line-height:1.35;margin-bottom:26px;
 }}
-.sub span{{color:#38bdf8;}}
-.chips{{display:flex;gap:14px;flex-wrap:wrap;}}
+.sub span{{color:#fb7185;}}
+.chips{{display:flex;gap:12px;flex-wrap:wrap;}}
 .chip{{
-  padding:10px 18px;border-radius:12px;background:rgba(16,42,32,0.92);
-  border:1.5px solid rgba(218,174,88,0.55);font-size:20px;font-weight:800;color:#fde68a;
+  padding:10px 18px;border-radius:12px;background:rgba(7,24,18,0.92);
+  border:1.5px solid rgba(250,204,21,0.52);font-size:20px;font-weight:800;color:#fde68a;
 }}
 .right{{
   position:relative;width:400px;height:590px;z-index:2;
@@ -198,31 +178,31 @@ h1{{
 }}
 .phone{{
   width:326px;height:580px;border-radius:28px;overflow:hidden;
-  border:4px solid #d4a853;
-  box-shadow:0 24px 60px rgba(0,0,0,0.85), 0 0 40px rgba(56,189,248,0.28);
-  transform:rotate(2.2deg);
+  border:4px solid #facc15;
+  box-shadow:0 24px 60px rgba(0,0,0,0.85), 0 0 42px rgba(244,63,94,0.34);
+  transform:rotate(2deg);
 }}
 .phone img{{width:100%;height:100%;object-fit:cover;display:block;}}
 .stamp{{
-  position:absolute;bottom:24px;left:-26px;transform:rotate(-11deg);
-  padding:10px 24px;border-radius:12px;background:rgba(185,28,28,0.94);
-  border:4px solid #fecaca;color:#fff1f2;font-weight:900;font-size:28px;
-  box-shadow:0 10px 26px rgba(0,0,0,0.6);
+  position:absolute;bottom:26px;left:-32px;transform:rotate(-9deg);
+  padding:10px 22px;border-radius:12px;background:linear-gradient(90deg,#e11d48,#f97316);
+  border:3.5px solid #fef08a;color:#ffffff;font-weight:900;font-size:26px;
+  box-shadow:0 10px 26px rgba(0,0,0,0.65);
 }}
 </style></head><body>
   <div class="left">
     <div class="badge">GAME DAY 05 ｜ 無料ブラウザゲーム</div>
-    <h1>FAKE OR FORTUNE</h1>
-    <div class="sub">指1本で<span>X線＆UV透視</span>！<br>1億円の国宝か偽物か見抜け！</div>
+    <h1>DICE OVERDRIVE</h1>
+    <div class="sub">サイコロ1面を改造して<br><span>スコア8億点超え</span>のインフレ快感！</div>
     <div class="chips">
-      <div class="chip">🩻 X線レントゲン</div>
-      <div class="chip">🟣 UVブラックライト</div>
-      <div class="chip">🔨 億超えオークション</div>
+      <div class="chip">✨ 黄金面 ×3倍</div>
+      <div class="chip">⚡ リトリガー連鎖</div>
+      <div class="chip">🏺 壊れレリック12種</div>
     </div>
   </div>
   <div class="right">
     <div class="phone"><img src="data:image/png;base64,{b64}" /></div>
-    <div class="stamp">真作？贋作？</div>
+    <div class="stamp">🔥 倍率 133,741×</div>
   </div>
 </body></html>"""
     with tempfile.NamedTemporaryFile("w", suffix=".html", delete=False, encoding="utf-8") as tf:
@@ -244,7 +224,7 @@ h1{{
 def main():
     browser = find_browser()
     srv, port = start_static_server(ROOT)
-    dbg_port = 9235
+    dbg_port = 9255
     proc = subprocess.Popen(
         [
             browser, "--headless=new", "--no-sandbox", "--disable-gpu",
@@ -253,12 +233,12 @@ def main():
         ],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
     )
-    time.sleep(1.5)
+    time.sleep(1.3)
 
     frames_dir = OUT_DIR / "frames"
     frames_dir.mkdir(parents=True, exist_ok=True)
     fps = 60
-    total_sec = 18.0
+    total_sec = 10.0
     total_frames = int(fps * total_sec)
 
     try:
@@ -271,13 +251,12 @@ def main():
             "width": 540, "height": 960, "deviceScaleFactor": 2, "mobile": True
         })
 
-        cdp.call("Page.navigate", {"url": f"http://127.0.0.1:{port}/games/day05-fake-or-fortune/index.html?shorts=1"})
-        time.sleep(1.0)
+        cdp.call("Page.navigate", {"url": f"http://127.0.0.1:{port}/games/day05-dice-overdrive/index.html?shorts=1"})
+        time.sleep(0.8)
         cdp.eval_js("window.__manualStep = true;")
 
-        thumb_only = os.environ.get("THUMB_ONLY") == "1"
-        if thumb_only:
-            cdp.eval_js("for(let i=0;i<234;i++) window.__stepFrame(1/60);")
+        if os.environ.get("THUMB_ONLY") == "1":
+            cdp.eval_js("for(let i=0;i<260;i++) window.__stepFrame(1/60);")
             res = cdp.call("Page.captureScreenshot", {"format": "png"})
             snap_path = OUT_DIR / "_thumb_src.png"
             snap_path.write_bytes(base64.b64decode(res["data"]))
@@ -292,10 +271,9 @@ def main():
             res = cdp.call("Page.captureScreenshot", {"format": "png"})
             (frames_dir / f"frame_{f:04d}.png").write_bytes(base64.b64decode(res["data"]))
 
-        # Build thumbnail from dramatic X-Ray battery frame (frame 234 = 3.9s)
-        render_note_thumbnail(browser, frames_dir / "frame_0234.png", OUT_DIR / "note_thumbnail.png")
+        render_note_thumbnail(browser, frames_dir / "frame_0260.png", OUT_DIR / "note_thumbnail.png")
 
-        out_mp4 = OUT_DIR / "day05_fake_or_fortune_shorts.mp4"
+        out_mp4 = OUT_DIR / "day05_dice_overdrive_shorts.mp4"
         subprocess.run(
             [
                 "ffmpeg", "-y", "-framerate", str(fps),
