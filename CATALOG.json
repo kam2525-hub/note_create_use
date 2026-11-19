@@ -44,7 +44,7 @@
       "title": "ELEVEN DRIBBLE（一人称3D・11人抜きドリブルサッカー）",
       "type": "game",
       "genre": "一人称3Dスポーツアクション / 11人抜きサッカー",
-      "core_mechanic": "一人称POV視点で足元のボールとスパイクを見ながら左右スライドでランダム移動・スライディングするCPU 10人をフェイント突破（アンクルブレイカー加速）＋11人目の守護神GKと1対1カーブシュート",
+      "core_mechanic": "一人称POV視点で360°自由移動（スタート地点は自分が動くまで相手待機）＋4大必殺ドリブル技（アクセルバースト・ダブルタッチ・360°回転ルーレット・頭上ヒールリフト）＋3難易度（イージー/ノーマル/ベリーハード）で猛プレスを突破し、いつでも好きな軌道でバナナカーブ＆ループシュートを決める11人抜きサッカー",
       "game_path": "games/day04-eleven-dribble/index.html",
       "note_path": "notes/day04/note_draft.md",
       "shorts_script": "shorts/day04/generate_shorts.py"

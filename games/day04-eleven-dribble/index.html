@@ -383,17 +383,17 @@
       col1: '#22c55e',
       col2: '#15803d',
       border: '#bbf7d0',
-      speedMul: 0.92,
-      pressRadius: 26,
-      closeBurstMul: 1.05,
-      accelRate: 6.0,
-      slideSpeed: 14.5,
-      slideRange: 12.0,
-      slideCooldown: 2.2,
+      speedMul: 1.05,
+      pressRadius: 34,
+      closeBurstMul: 1.15,
+      accelRate: 7.5,
+      slideSpeed: 15.5,
+      slideRange: 13.0,
+      slideCooldown: 2.0,
       allCanSlide: false,
       chaseFromBehind: false,
-      immediatePress: false,
-      gkSpeedMul: 0.9,
+      immediatePress: true,
+      gkSpeedMul: 0.95,
       shields: 3,
       scoreMul: 1.0,
     },
@@ -408,17 +408,17 @@
       col1: '#eab308',
       col2: '#a16207',
       border: '#fef08a',
-      speedMul: 1.34,
-      pressRadius: 44,
-      closeBurstMul: 1.20,
-      accelRate: 9.5,
-      slideSpeed: 18.8,
-      slideRange: 14.8,
-      slideCooldown: 1.4,
+      speedMul: 1.50,
+      pressRadius: 56,
+      closeBurstMul: 1.30,
+      accelRate: 11.5,
+      slideSpeed: 20.5,
+      slideRange: 15.8,
+      slideCooldown: 1.25,
       allCanSlide: false,
-      chaseFromBehind: false,
+      chaseFromBehind: true,
       immediatePress: true,
-      gkSpeedMul: 1.15,
+      gkSpeedMul: 1.20,
       shields: 2,
       scoreMul: 1.5,
     },
@@ -433,17 +433,17 @@
       col1: '#f43f5e',
       col2: '#9f1239',
       border: '#fecdd3',
-      speedMul: 1.82,
-      pressRadius: 72,
-      closeBurstMul: 1.35,
-      accelRate: 14.0,
-      slideSpeed: 24.0,
-      slideRange: 17.2,
-      slideCooldown: 0.9,
+      speedMul: 2.02,
+      pressRadius: 88,
+      closeBurstMul: 1.48,
+      accelRate: 16.5,
+      slideSpeed: 26.0,
+      slideRange: 18.5,
+      slideCooldown: 0.78,
       allCanSlide: true,
       chaseFromBehind: true,
       immediatePress: true,
-      gkSpeedMul: 1.45,
+      gkSpeedMul: 1.50,
       shields: 1,
       scoreMul: 2.5,
     },
@@ -477,6 +477,7 @@
       z: 0,
       vx: 0,
       vz: 0,
+      hasMoved: false,  // Opponents wait in formation until the player moves from kickoff!
       yaw: 0,           // Horizontal viewing/facing angle in radians
       rouletteYaw: 0,   // 360-degree spin offset during Marseille Roulette!
       camRoll: 0,
@@ -704,6 +705,7 @@
     state.player.z = 0;
     state.player.vx = 0;
     state.player.vz = 0;
+    state.player.hasMoved = false;
     state._shortsSkillFlags = {};
     state._shortsAimTimer = 0;
     state.player.yaw = 0;
@@ -740,7 +742,7 @@
     buildDefenders(stage);
     showBanner(
       `KICK OFF! (${cfg.fullLabel})`,
-      cfg.desc,
+      'スティックを倒してドリブル開始！動くと相手も動き出す！',
       cfg.color,
       1.6
     );
@@ -795,6 +797,7 @@
   function triggerDribbleSkill(skillType, preferredDir = 0) {
     if (state.phase !== 'dribble' && state.phase !== 'loose_ball') return;
     if (state.phase === 'loose_ball') state.phase = 'dribble';
+    state.player.hasMoved = true;
 
     const dir = chooseSmartDodgeDir(preferredDir);
     state.player.skillType = skillType;
@@ -1512,6 +1515,16 @@
       const baseSpd = d.baseSpeed || (9.5 + idx * 0.35);
       d.maxSpeed = baseSpd * diffCfg.speedMul * stageMul;
 
+      // Wait in formation at kickoff until the player makes their first move!
+      if (!SHORTS_MODE && !state.player.hasMoved && state.phase === 'dribble') {
+        d.vx = 0;
+        d.vz = 0;
+        d.pressing = false;
+        d.sliding = false;
+        d.heading = Math.atan2(state.player.x - d.x, state.player.z - d.z);
+        return;
+      }
+
       if (d.slideCooldown > 0) d.slideCooldown = Math.max(0, d.slideCooldown - effDt);
 
       // If stunned by an Ankle Breaker, stumble forward on momentum
@@ -1587,17 +1600,17 @@
 
       if (shouldPress) {
         // Actively pursue or intercept the ball in 2D!
-        let aimX = state.ball.x + state.player.vx * 0.12;
-        let aimZ = state.ball.z + state.player.vz * 0.10;
+        let aimX = state.ball.x + state.player.vx * 0.10;
+        let aimZ = state.ball.z + state.player.vz * 0.08;
 
-        if (d.role === 'INTERCEPTOR' && distToBall > 8.5) {
+        if (d.role === 'INTERCEPTOR' && distToBall > 11.5) {
           // Cut off player's 2D vector ahead of the ball, then lock straight onto ball when close!
-          aimX = clamp(state.ball.x + state.player.vx * 0.42, -PLAYER_MAX_X, PLAYER_MAX_X);
-          aimZ = state.ball.z + Math.max(1.4, state.player.vz * 0.32);
-        } else if (d.role === 'ROAMER' && distToBall > 10.5) {
-          // Weave when approaching from afar, then charge straight at the ball within 10.5m!
-          aimX = state.ball.x + Math.sin(state.elapsed * 3.4 + d.num) * 3.2;
-          aimZ = state.ball.z + Math.cos(state.elapsed * 2.6 + d.num) * 2.2;
+          aimX = clamp(state.ball.x + state.player.vx * 0.36, -PLAYER_MAX_X, PLAYER_MAX_X);
+          aimZ = state.ball.z + Math.max(1.2, state.player.vz * 0.26);
+        } else if (d.role === 'ROAMER' && distToBall > 12.5) {
+          // Slight angle shift when approaching from afar, then charge straight at the ball within 12.5m!
+          aimX = state.ball.x + Math.sin(state.elapsed * 3.4 + d.num) * 2.2;
+          aimZ = state.ball.z + Math.cos(state.elapsed * 2.6 + d.num) * 1.5;
         }
 
         if (SHORTS_MODE) {
@@ -1618,9 +1631,9 @@
         const dx = aimX - d.x;
         const dz = aimZ - d.z;
         const len = Math.hypot(dx, dz) || 1;
-        // Close-in final burst when within 12m of the ball carrier!
-        const closeBurst = distToBall < 12.5 ? diffCfg.closeBurstMul : 1.0;
-        const behindPenalty = d.passed ? 0.84 : 1.0;
+        // Close-in final burst when within 15m of the ball carrier!
+        const closeBurst = distToBall < 15.0 ? diffCfg.closeBurstMul : 1.0;
+        const behindPenalty = d.passed ? 0.88 : 1.0;
         const spd = d.maxSpeed * closeBurst * behindPenalty;
         targetVx = (dx / len) * spd;
         targetVz = (dz / len) * spd;
@@ -1656,25 +1669,30 @@
 
     // 2. Update Goalkeeper (#11) in 2D (Lateral X + Coming off line Z + 3D Diving!)
     if (state.gk) {
-      state.gk.stridePhase += effDt * 8;
-      if (state.phase === 'shot_flight' || state.phase === 'goal') {
-        state.gk.diveProgress = Math.min(1, state.gk.diveProgress + dt * 2.5);
-        if (state.phase === 'shot_flight') {
-          state.gk.x = clamp(state.gk.x + state.gk.diveDir * 6.4 * diffCfg.gkSpeedMul * dt, -GOAL_HALF_W * 0.78, GOAL_HALF_W * 0.78);
-        }
+      if (!SHORTS_MODE && !state.player.hasMoved && state.phase === 'dribble') {
+        state.gk.vx = 0;
+        state.gk.vz = 0;
       } else {
-        // GK tracks ball X and comes out slightly when player enters the box
-        const desiredGkX = clamp(
-          state.ball.x * 0.48 + Math.sin(state.elapsed * state.gk.freq + state.gk.phase) * 2.6,
-          -GOAL_HALF_W * 0.75,
-          GOAL_HALF_W * 0.75
-        );
-        const distToGoal = GOAL_Z - state.ball.z;
-        const desiredGkZ = distToGoal < 45 ? GOAL_Z - clamp((45 - distToGoal) * 0.14 * diffCfg.gkSpeedMul, 1.5, 6.2) : GOAL_Z - 1.6;
-        state.gk.vx = (desiredGkX - state.gk.x) * 6.5 * diffCfg.gkSpeedMul;
-        state.gk.vz = (desiredGkZ - state.gk.z) * 4.5 * diffCfg.gkSpeedMul;
-        state.gk.x += state.gk.vx * effDt;
-        state.gk.z += state.gk.vz * effDt;
+        state.gk.stridePhase += effDt * 8;
+        if (state.phase === 'shot_flight' || state.phase === 'goal') {
+          state.gk.diveProgress = Math.min(1, state.gk.diveProgress + dt * 2.5);
+          if (state.phase === 'shot_flight') {
+            state.gk.x = clamp(state.gk.x + state.gk.diveDir * 6.4 * diffCfg.gkSpeedMul * dt, -GOAL_HALF_W * 0.78, GOAL_HALF_W * 0.78);
+          }
+        } else {
+          // GK tracks ball X and comes out slightly when player enters the box
+          const desiredGkX = clamp(
+            state.ball.x * 0.48 + Math.sin(state.elapsed * state.gk.freq + state.gk.phase) * 2.6,
+            -GOAL_HALF_W * 0.75,
+            GOAL_HALF_W * 0.75
+          );
+          const distToGoal = GOAL_Z - state.ball.z;
+          const desiredGkZ = distToGoal < 45 ? GOAL_Z - clamp((45 - distToGoal) * 0.14 * diffCfg.gkSpeedMul, 1.5, 6.2) : GOAL_Z - 1.6;
+          state.gk.vx = (desiredGkX - state.gk.x) * 6.5 * diffCfg.gkSpeedMul;
+          state.gk.vz = (desiredGkZ - state.gk.z) * 4.5 * diffCfg.gkSpeedMul;
+          state.gk.x += state.gk.vx * effDt;
+          state.gk.z += state.gk.vz * effDt;
+        }
       }
     }
 
@@ -1888,6 +1906,15 @@
 
       state.player.x = clamp(state.player.x + state.player.vx * effDt, -PLAYER_MAX_X, PLAYER_MAX_X);
       state.player.z = clamp(state.player.z + state.player.vz * effDt, 0, GOAL_Z - 6);
+
+      if (!state.player.hasMoved && (
+        Math.hypot(targetVx, targetVz) > 0.5 ||
+        state.player.skillTimer > 0 ||
+        Math.hypot(state.player.x, state.player.z) > 0.08 ||
+        state.phase === 'aim_shot'
+      )) {
+        state.player.hasMoved = true;
+      }
 
       // In SHORTS_MODE, enter slow-mo free trajectory shot mode once reaching z >= 208
       if (SHORTS_MODE && state.phase === 'dribble' && state.player.z >= 208) {
@@ -3124,6 +3151,29 @@
         ctx.fillStyle = '#ffffff';
         ctx.fillText(state.bannerSub, W * 0.5, bannerY + 29);
       }
+      ctx.restore();
+    }
+
+    // Kickoff Standby Pill: informs player that enemies wait until first move
+    if (!SHORTS_MODE && state.phase === 'dribble' && !state.player.hasMoved) {
+      ctx.save();
+      const pillW = 356;
+      const pillH = 34;
+      const pillX = (W - pillW) * 0.5;
+      const pillY = topY + 144;
+      ctx.fillStyle = 'rgba(2, 6, 23, 0.78)';
+      ctx.strokeStyle = '#a3e635';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(pillX, pillY, pillW, pillH, 999);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#ecfccb';
+      ctx.font = '900 13px sans-serif';
+      ctx.fillText('🕹️ 自分が動くと相手も動き出す！（待機中）', W * 0.5, pillY + pillH * 0.5);
       ctx.restore();
     }
 
