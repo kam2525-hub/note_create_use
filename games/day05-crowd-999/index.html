@@ -136,10 +136,10 @@
     save.upgFire = 3;
   }
 
-  function startTroopsForLevel(lv) { return 4 + (lv - 1) * 4; }
-  function firePowerForLevel(lv) { return 1 + (lv - 1) * 0.45; }
-  function coinMultForLevel(lv) { return 1 + (lv - 1) * 0.35; }
-  function upgCost(lv) { return Math.round(120 * Math.pow(1.65, lv - 1) / 10) * 10; }
+  function startTroopsForLevel(lv) { return 5 + (lv - 1) * 3; }
+  function firePowerForLevel(lv) { return Math.pow(1.22, lv - 1); }
+  function coinMultForLevel(lv) { return 1 + (lv - 1) * 0.28; }
+  function upgCost(lv) { return Math.round(120 * Math.pow(1.38, lv - 1) / 10) * 10; }
 
   // =========================================================================
   // WEB AUDIO DOPAMINE SYNTHESIZER (Bubble-Wrap Pops + Gate Chimes!)
@@ -433,7 +433,6 @@
     state.particles = [];
     state.floats = [];
     state.distance = 0;
-    const hardMult = state.hardMode ? 1.55 : 1.0;
     state.stageLength = SHORTS_MODE ? 320 : (390 + Math.min(stageNum, 8) * 38);
     state.speed = SHORTS_MODE ? 27 : ((26.5 + Math.min(stageNum, 6) * 1.25) * (state.hardMode ? 1.12 : 1.0));
     state.px = 0;
@@ -455,7 +454,11 @@
       return;
     }
 
-    const diff = (1 + (stageNum - 1) * 0.46) * hardMult;
+    const hardMult = state.hardMode ? 1.48 : 1.0;
+    const sScale = Math.pow(1.31, stageNum - 1) * hardMult;
+    const barrelScale = Math.pow(1.24, stageNum - 1) * (state.hardMode ? 1.28 : 1.0);
+    const hordeCountScale = (1 + Math.min(stageNum - 1, 14) * 0.20) * (state.hardMode ? 1.15 : 1.0);
+    const hordeUnitHp = Math.pow(1.22, stageNum - 1) * (state.hardMode ? 1.25 : 1.0);
     let z = 54;
     let pairId = 1;
 
@@ -472,7 +475,7 @@
           return {
             z, side, x, w: 0.9,
             op: isMul ? 'mul' : 'add',
-            val: isMul ? randInt(2, progress > 0.72 ? 3 : 2) : Math.round(randInt(8, 22) * Math.sqrt(diff)),
+            val: isMul ? randInt(2, progress > 0.72 ? 3 : 2) : Math.round(randInt(8, 22) * (1 + Math.min(stageNum - 1, 12) * 0.14)),
             hitFlash: 0, hitAccum: 0, moveAmp: 0, moveSpd: 0, movePhase: 0, passed: false, pairId,
           };
         } else if (kind === 'div') {
@@ -482,7 +485,7 @@
             hitFlash: 0, hitAccum: 0, moveAmp: 0, moveSpd: 0, movePhase: 0, passed: false, pairId,
           };
         } else {
-          const neg = -Math.round(randInt(14, 30) * (state.hardMode ? 1.25 : 1.0));
+          const neg = -Math.round(randInt(14, 28) * (1 + Math.min(stageNum - 1, 10) * 0.1) * (state.hardMode ? 1.2 : 1.0));
           return {
             z, side, x, w: 0.9,
             op: 'add', val: neg,
@@ -492,15 +495,13 @@
       };
 
       if (progress > 0.35 && rand() < 0.25) {
-        // Fast sliding multiplier gate + risky saw!
         state.gates.push({
           z, side: 0, x: 0, w: 0.84,
           op: 'mul', val: randInt(2, 3),
-          hitFlash: 0, hitAccum: 0, moveAmp: 0.56, moveSpd: 2.3 + stageNum * 0.16, movePhase: randRange(0, 6.28),
+          hitFlash: 0, hitAccum: 0, moveAmp: 0.56, moveSpd: 2.3 + Math.min(stageNum, 10) * 0.16, movePhase: randRange(0, 6.28),
           passed: false, pairId,
         });
       } else if (doubleTrap) {
-        // Tense Squeeze: ÷2 trap vs Tough Shootable Red Gate (must focus-fire to flip!)
         const divLeft = rand() < 0.5;
         state.gates.push(makeGate(-1, divLeft ? 'div' : 'red'));
         state.gates.push(makeGate(1, divLeft ? 'red' : 'div'));
@@ -509,7 +510,6 @@
         const gL = makeGate(-1, leftIsGood ? 'good' : badKind);
         const gR = makeGate(1, leftIsGood ? badKind : 'good');
         state.gates.push(gL, gR);
-        // Put a spinning saw guarding high-value multiplier gates!
         const goodGate = leftIsGood ? gL : gR;
         if (goodGate.op === 'mul' && rand() < 0.65) {
           state.saws.push({
@@ -520,34 +520,33 @@
       }
       pairId++;
 
-      // 2. Tougher Shootable Bonus Barrels (Real risk/reward choice!)
+      // 2. Harmonized Bonus Barrels
       if (rand() < 0.62) {
         const bz = z + 22;
         const bx = randRange(-0.64, 0.64);
         const roll = rand();
         let rewardType = 'spread', label = '3WAY砲', icon = '🔱', color = '#facc15';
-        if (roll < 0.28) { rewardType = 'rapid'; label = '超連射'; icon = '⚡'; color = '#22d3ee'; }
-        else if (roll < 0.52) { rewardType = 'laser'; label = '貫通レーザー'; icon = '🔥'; color = '#f43f5e'; }
-        else if (roll < 0.76) { rewardType = 'giant'; label = '巨人召喚'; icon = '👑'; color = '#f59e0b'; }
-        const hp = Math.round((24 + progress * 76) * diff);
+        if (roll < 0.28) { rewardType = 'rapid'; label = '超連射'; icon = '⚡', color = '#22d3ee'; }
+        else if (roll < 0.52) { rewardType = 'laser'; label = '貫通レーザー'; icon = '🔥', color = '#f43f5e'; }
+        else if (roll < 0.76) { rewardType = 'giant'; label = '巨人召喚'; icon = '👑', color = '#f59e0b'; }
+        const hp = Math.round((20 + progress * 52) * barrelScale);
         state.barrels.push({ z: bz, x: bx, hp, maxHp: hp, rewardType, label, icon, color, hitFlash: 0, broken: false });
       }
 
-      // 3. Aggressive Enemy Hordes + Twin Saw Gauntlets!
+      // 3. Harmonized Enemy Hordes + Twin Saw Gauntlets!
       const hz = z + 42;
       if (hz < state.stageLength - 38) {
         const r = rand();
         if (r < 0.68) {
-          const count = Math.round((24 + progress * 155) * diff);
+          const count = Math.round((20 + progress * 92) * hordeCountScale);
           const hx = randRange(-0.46, 0.46);
-          state.hordes.push(makeEnemyHorde(hz, hx, count));
+          state.hordes.push(makeEnemyHorde(hz, hx, count, hordeUnitHp));
         } else if (r < 0.86) {
           state.saws.push({
             z: hz, x: randRange(-0.4, 0.4), r: 0.27,
-            moveAmp: 0.54, moveSpd: 2.6 + stageNum * 0.18, phase: randRange(0, 6.28),
+            moveAmp: 0.54, moveSpd: 2.6 + Math.min(stageNum, 10) * 0.16, phase: randRange(0, 6.28),
           });
         } else {
-          // Twin saws leaving a thrilling weave gap!
           const gapSide = rand() < 0.5 ? -0.58 : 0.58;
           state.saws.push({ z: hz, x: -gapSide * 0.8, r: 0.25, moveAmp: 0, moveSpd: 0, phase: 0 });
           state.saws.push({ z: hz, x: 0.0, r: 0.25, moveAmp: 0, moveSpd: 0, phase: 0 });
@@ -557,8 +556,8 @@
       z += 68;
     }
 
-    // Beefy End-of-Stage MEGA BOSS with Fireball Attacks!
-    const bossHp = Math.round(360 * Math.pow(1.72, stageNum - 1) * hardMult);
+    // Harmonized Infinite Boss HP!
+    const bossHp = Math.round(235 * sScale);
     state.boss = {
       z: state.stageLength + 8,
       x: 0,
@@ -571,42 +570,47 @@
     };
   }
 
-  function makeEnemyHorde(z, x, count) {
-    const visCount = Math.min(75, Math.max(6, Math.round(count * 0.55)));
+  function makeEnemyHorde(z, x, count, unitHp = 1.0) {
+    const visCount = Math.min(75, Math.max(6, Math.round(count * 0.52)));
     const units = [];
     for (let i = 0; i < visCount; i++) {
       const ang = i * 2.39996;
       const rad = Math.sqrt(i) * 0.052;
       units.push({ ox: Math.cos(ang) * rad, oz: Math.sin(ang) * rad * 7, phase: randRange(0, 6.28) });
     }
-    return { z, x, count, maxCount: count, units, hitFlash: 0, alive: true };
+    const hp = count * unitHp;
+    return { z, x, count, maxCount: count, unitHp, hp, maxHp: hp, units, hitFlash: 0, alive: true };
   }
 
   function buildShortsShowcaseStage() {
-    // Choreographed maximum-dopamine 15s viral run!
+    // Explosive 0.0s..1.0s Hook! Gate 1 is already right ahead at z=27 so flip+pass hits inside first 1.0s!
+    state.px = -0.46;
+    state.targetPx = -0.46;
+    state.troops = 10;
+    syncVisualUnits();
     state.gates = [
-      // Gate 1 (z=52): Left RED -10 (we shoot it all the way to +26 BLUE!!), Right +6
-      { z: 52, side: -1, x: -0.49, w: 0.9, op: 'add', val: -8, hitFlash: 0, moveAmp: 0, moveSpd: 0, movePhase: 0, passed: false, pairId: 1 },
-      { z: 52, side: 1,  x: 0.49,  w: 0.9, op: 'add', val: 6,  hitFlash: 0, moveAmp: 0, moveSpd: 0, movePhase: 0, passed: false, pairId: 1 },
-      // Gate 2 (z=128): Right ×3 vs Left -25
-      { z: 128, side: -1, x: -0.49, w: 0.9, op: 'add', val: -25, hitFlash: 0, moveAmp: 0, moveSpd: 0, movePhase: 0, passed: false, pairId: 2 },
-      { z: 128, side: 1,  x: 0.49,  w: 0.9, op: 'mul', val: 3,   hitFlash: 0, moveAmp: 0, moveSpd: 0, movePhase: 0, passed: false, pairId: 2 },
-      // Gate 3 (z=212): Left ×4!! vs Right +40
-      { z: 212, side: -1, x: -0.49, w: 0.9, op: 'mul', val: 4,   hitFlash: 0, moveAmp: 0, moveSpd: 0, movePhase: 0, passed: false, pairId: 3 },
-      { z: 212, side: 1,  x: 0.49,  w: 0.9, op: 'add', val: 40,  hitFlash: 0, moveAmp: 0, moveSpd: 0, movePhase: 0, passed: false, pairId: 3 },
+      // Gate 1 (z=27): Left RED -6 -> flips BLUE in ~0.45s, slammed at 0.95s!!
+      { z: 27, side: -1, x: -0.49, w: 0.9, op: 'add', val: -6,  hitFlash: 0, hitAccum: 0, moveAmp: 0, moveSpd: 0, movePhase: 0, passed: false, pairId: 1 },
+      { z: 27, side: 1,  x: 0.49,  w: 0.9, op: 'div', val: 2,   hitFlash: 0, hitAccum: 0, moveAmp: 0, moveSpd: 0, movePhase: 0, passed: false, pairId: 1 },
+      // Gate 2 (z=116): Right ×3 vs Left ÷2
+      { z: 116, side: -1, x: -0.49, w: 0.9, op: 'div', val: 2,   hitFlash: 0, hitAccum: 0, moveAmp: 0, moveSpd: 0, movePhase: 0, passed: false, pairId: 2 },
+      { z: 116, side: 1,  x: 0.49,  w: 0.9, op: 'mul', val: 3,   hitFlash: 0, hitAccum: 0, moveAmp: 0, moveSpd: 0, movePhase: 0, passed: false, pairId: 2 },
+      // Gate 3 (z=206): Left ×4!! vs Right +40
+      { z: 206, side: -1, x: -0.49, w: 0.9, op: 'mul', val: 4,   hitFlash: 0, hitAccum: 0, moveAmp: 0, moveSpd: 0, movePhase: 0, passed: false, pairId: 3 },
+      { z: 206, side: 1,  x: 0.49,  w: 0.9, op: 'add', val: 40,  hitFlash: 0, hitAccum: 0, moveAmp: 0, moveSpd: 0, movePhase: 0, passed: false, pairId: 3 },
     ];
     state.barrels = [
-      { z: 86,  x: 0.42,  hp: 10, maxHp: 10, rewardType: 'spread', label: '3WAY砲', icon: '🔱', color: '#facc15', hitFlash: 0, broken: false },
-      { z: 168, x: -0.44, hp: 28, maxHp: 28, rewardType: 'giant',  label: '巨人召喚', icon: '👑', color: '#f59e0b', hitFlash: 0, broken: false },
+      { z: 72,  x: 0.42,  hp: 10, maxHp: 10, rewardType: 'spread', label: '3WAY砲', icon: '🔱', color: '#facc15', hitFlash: 0, broken: false },
+      { z: 162, x: -0.44, hp: 26, maxHp: 26, rewardType: 'giant',  label: '巨人召喚', icon: '👑', color: '#f59e0b', hitFlash: 0, broken: false },
     ];
     state.hordes = [
-      makeEnemyHorde(152, 0.32, 42),
-      makeEnemyHorde(255, -0.1, 145),
+      makeEnemyHorde(142, 0.34, 48, 1.0),
+      makeEnemyHorde(252, -0.05, 165, 1.0),
     ];
     state.saws = [
-      { z: 188, x: 0.4, r: 0.24, moveAmp: 0, moveSpd: 0, phase: 0 },
+      { z: 184, x: 0.42, r: 0.25, moveAmp: 0, moveSpd: 0, phase: 0 },
     ];
-    state.boss = { z: state.stageLength + 8, x: 0, hp: 520, maxHp: 520, hitFlash: 0, defeated: false, scale: 1 };
+    state.boss = { z: state.stageLength + 8, x: 0, hp: 560, maxHp: 560, hitFlash: 0, defeated: false, scale: 1, shotTimer: 99 };
   }
 
   function startRun() {
@@ -618,16 +622,16 @@
   }
 
   // =========================================================================
-  // SHORTS AI PILOT (Makes the dream plays viewers crave!)
+  // SHORTS AI PILOT (First-second instant action!)
   // =========================================================================
   function updateShortsPilot() {
     if (state.screen === 'lobby') { startRun(); return; }
     const d = state.distance;
-    if (d < 56) state.targetPx = -0.48;       // Shoot Red -8 gate into +20+ BLUE!
-    else if (d < 134) state.targetPx = 0.46;  // Bust 3WAY barrel + slam ×3 gate!
-    else if (d < 164) state.targetPx = 0.30;  // Mow down red horde!
-    else if (d < 220) state.targetPx = -0.46; // Dodge right saw + bust Giant barrel + slam ×4 gate!!
-    else state.targetPx = 0.0;                // Center tsunami obliterating 145 horde & MEGA BOSS!!
+    if (d < 34) state.targetPx = -0.46;       // 0.0s..1.0s: Shoot & flip RED -6 into BLUE!!
+    else if (d < 122) state.targetPx = 0.46;  // Bust 3WAY barrel + slam ×3 gate!
+    else if (d < 154) state.targetPx = 0.32;  // Mow down red horde!
+    else if (d < 214) state.targetPx = -0.46; // Dodge saw + Giant Titan + ×4 TSUNAMI!!
+    else state.targetPx = 0.0;                // 500+ swarm obliterates 165 horde & MEGA BOSS!!
   }
 
   // =========================================================================
@@ -659,6 +663,7 @@
       });
     }
     SFX.shot(state.weapon);
+    if (SHORTS_MODE) emitEvent('shot', { weapon: state.weapon });
   }
 
   function update(dt) {
@@ -776,7 +781,7 @@
         if (Math.abs(worldZ - g.z) < 4.5 && Math.abs(b.x - g.x) < g.w * 0.5) {
           b.hitSet.add(g);
           g.hitAccum = (g.hitAccum || 0) + b.dmg;
-          const threshold = SHORTS_MODE ? 1.1 : (state.hardMode ? 2.6 : 2.0);
+          const threshold = SHORTS_MODE ? 0.95 : (1.8 * Math.pow(1.18, save.stage - 1) * (state.hardMode ? 1.25 : 1.0));
           g.hitFlash = 1;
           const pr = project(g.x, g.z - state.distance, 0.35);
           if (g.hitAccum >= threshold) {
@@ -785,6 +790,7 @@
             const prevVal = g.val;
             g.val += steps;
             SFX.gateTick(g.val);
+            if (SHORTS_MODE) emitEvent('gate_tick', { val: g.val });
             if (prevVal <= 0 && g.val > 0) {
               SFX.gateFlipBlue();
               state.shake = Math.max(state.shake, 7);
@@ -815,11 +821,11 @@
             spawnParticles(pr.x, pr.y, 28, [br.color, '#fde047', '#ffffff'], 280, 380);
             if (br.rewardType === 'giant') {
               state.giants += 2;
-              addTroops(16);
+              addTroops(14);
               addFloat(pr.x, pr.y - 38, '👑 巨人チャンピオン参戦！', '#fde047', 23);
             } else {
               state.weapon = br.rewardType;
-              state.weaponTimer = 9.0;
+              state.weaponTimer = 8.0;
               addFloat(pr.x, pr.y - 38, `${br.icon} ${br.label} 解放!!`, br.color, 25);
             }
             emitEvent('barrel', { reward: br.rewardType });
@@ -831,24 +837,31 @@
       }
       if (consumed) { state.bullets.splice(i, 1); continue; }
 
-      // 3. Coral-Red Enemy Hordes (Bubble-wrap pop cascade!)
+      // 3. Coral-Red Enemy Hordes (unitHp-scaled bubble-wrap pop cascade!)
       for (const h of state.hordes) {
         if (!h.alive || b.hitSet.has(h)) continue;
         const hRad = 0.24 + Math.sqrt(h.count) * 0.025;
         if (Math.abs(worldZ - h.z) < 7.5 && Math.abs(b.x - h.x) < hRad) {
           b.hitSet.add(h);
-          const dmg = Math.max(1, Math.round(b.dmg));
-          h.count -= dmg;
+          const dmg = b.dmg;
+          const prevCount = h.count;
+          h.hp = Math.max(0, h.hp - dmg);
+          h.count = Math.max(0, Math.ceil(h.hp / h.unitHp));
+          const killed = Math.max(0, prevCount - h.count);
           h.hitFlash = 1;
           state.combo++;
           state.comboTimer = 1.4;
-          state.feverGauge = Math.min(100, state.feverGauge + 1.8);
-          state.runCoins += Math.round(dmg * 1.5 * coinMultForLevel(save.upgCoin));
+          state.feverGauge = Math.min(100, state.feverGauge + 1.4);
+          if (killed > 0) {
+            state.runCoins += Math.round(killed * 0.9 * Math.pow(1.16, save.stage - 1) * coinMultForLevel(save.upgCoin) * (state.hardMode ? 2 : 1));
+          }
           const pr = project(h.x + randRange(-0.15, 0.15), Math.max(2, h.z - state.distance), 0.15);
           SFX.pop(state.combo);
+          if (SHORTS_MODE && state.combo % 3 === 1) emitEvent('pop', { combo: state.combo });
           spawnParticles(pr.x, pr.y, 5, ['#fb7185', '#fde047', '#ffffff'], 170, 360);
-          if (h.count <= 0) {
+          if (h.hp <= 0) {
             h.alive = false;
+            h.count = 0;
             state.shake = Math.max(state.shake, 9);
             spawnParticles(pr.x, pr.y, 26, ['#fb7185', '#f43f5e', '#fde047', '#ffffff'], 280, 420);
             addFloat(pr.x, pr.y - 30, '💥 敵軍団 全滅!!', '#fde047', 23);
@@ -866,9 +879,10 @@
           const dmg = Math.max(1, b.dmg);
           state.boss.hp -= dmg;
           state.boss.hitFlash = 1;
-          state.runCoins += Math.round(dmg * 2 * coinMultForLevel(save.upgCoin));
+          state.runCoins += Math.round(1.5 * Math.pow(1.16, save.stage - 1) * coinMultForLevel(save.upgCoin) * (state.hardMode ? 2 : 1));
           const pr = project(state.boss.x + randRange(-0.2, 0.2), Math.max(4, state.boss.z - state.distance), 0.45);
           SFX.bossHit();
+          if (SHORTS_MODE) emitEvent('boss_hit');
           spawnParticles(pr.x, pr.y, 4, ['#fb7185', '#fde047', '#ffffff'], 180, 340);
           if (state.boss.hp <= 0) {
             triggerBossVictory();
@@ -881,7 +895,7 @@
     // Trigger FEVER Mode at 100% gauge!
     if (state.feverGauge >= 100 && state.feverTimer <= 0) {
       state.feverGauge = 0;
-      state.feverTimer = 5.5;
+      state.feverTimer = 5.0;
       state.flashColor = '#fde047';
       state.flashAlpha = 0.25;
       state.shake = 10;
@@ -897,7 +911,6 @@
       if (relZ <= 1.2) {
         if (Math.abs(state.px - g.x) < g.w * 0.56) {
           g.passed = true;
-          // Mark sibling pair passed so you don't clip both gates at once!
           state.gates.forEach(other => { if (other.pairId === g.pairId) other.passed = true; });
 
           const pr = project(state.px, 0, 0.3);
@@ -948,6 +961,7 @@
         if (Math.abs(state.px - h.x) < hRad + crowdHalfW * 0.65) {
           const clash = Math.min(h.count, Math.max(2, Math.ceil(72 * dt)));
           h.count -= clash;
+          h.hp = Math.max(0, h.count * h.unitHp);
           addTroops(-Math.ceil(clash * (state.hardMode ? 1.15 : 0.96)));
           state.shake = Math.max(state.shake, 9);
           const pr = project((state.px + h.x) / 2, 2, 0.15);
@@ -974,7 +988,7 @@
       }
     }
 
-    // BOSS CLASH PHASE: Dodgeable Boss Fireballs + Intense Melee Showdown!
+    // BOSS CLASH PHASE: Dodgeable Boss Fireballs + Harmonized Melee Showdown!
     if (state.screen === 'boss_clash' && state.boss && !state.boss.defeated) {
       const relZ = state.boss.z - state.distance;
       if (relZ > 7) {
@@ -989,10 +1003,11 @@
           }
         }
       } else {
-        const playerDps = (state.troops * 1.2 + state.giants * 36) * dt;
+        const fp = firePowerForLevel(save.upgFire);
+        const playerDps = (state.troops * 0.55 + state.giants * 18) * fp * dt;
         state.boss.hp -= playerDps;
         state.boss.hitFlash = 1;
-        addTroops(-Math.max(2, Math.ceil((state.hardMode ? 48 : 34) * dt)));
+        addTroops(-Math.max(2, Math.ceil((state.hardMode ? 42 : 28) * dt)));
         state.shake = 11;
         const pr = project(0, 6, 0.4);
         spawnParticles(pr.x, pr.y, 10, ['#38bdf8', '#fb7185', '#fde047'], 260, 380);
@@ -1040,10 +1055,12 @@
     const pr = project(0, Math.max(6, state.boss.z - state.distance), 0.45);
     spawnParticles(pr.x, pr.y, 90, ['#fde047', '#f59e0b', '#38bdf8', '#fb7185', '#ffffff'], 420, 400);
 
-    // Victory Multiplier Stairs based on surviving crowd!
+    // Harmonized Infinite Stage Coin Rewards!
     state.bossShots = [];
     state.stairMult = clamp(2 + Math.floor(state.troops / 35), 2, 10);
-    state.bonusCoinsAwarded = Math.round((120 + state.runCoins + state.troops * 2.5) * (state.stairMult * 0.45) * coinMultForLevel(save.upgCoin) * (state.hardMode ? 2 : 1));
+    const stageCoinBase = 110 * Math.pow(1.26, save.stage - 1);
+    const troopCoinBonus = state.troops * 0.65 * Math.pow(1.16, save.stage - 1);
+    state.bonusCoinsAwarded = Math.round((stageCoinBase + state.runCoins + troopCoinBonus) * (0.75 + state.stairMult * 0.14) * coinMultForLevel(save.upgCoin) * (state.hardMode ? 2 : 1));
     save.coins += state.bonusCoinsAwarded;
     save.stage++;
     writeSave(save);
