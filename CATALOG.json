@@ -48,6 +48,18 @@
       "game_path": "games/day04-eleven-dribble/index.html",
       "note_path": "notes/day04/note_draft.md",
       "shorts_script": "shorts/day04/generate_shorts.py"
+    },
+    {
+      "day": 5,
+      "date": "2026-11-19",
+      "slug": "day05-crowd-999",
+      "title": "CROWD ×999（あの広告の増殖ゲートをガチ神ゲー化）",
+      "type": "game",
+      "genre": "群衆増殖ゲート・超爽快ハイパーカジュアルランナー",
+      "core_mechanic": "左右スワイプだけで青軍団が自動連射しながら突撃！赤のマイナスゲートを撃って青のプラスに反転させ、×2/×3/×4ゲート・3WAY拡散砲＆巨人召喚タル・FEVERモードで大群を数百人へ爆増させ、敵軍団＆巨大ボスを押し潰す純ドーパミン増殖アクション",
+      "game_path": "games/day05-crowd-999/index.html",
+      "note_path": "notes/day05/note_draft.md",
+      "shorts_script": "shorts/day05/generate_shorts.py"
     }
   ]
 }

@@ -1,0 +1,1708 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>CROWD ×999｜あの広告の増殖ゲートをガチ神ゲー化</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@700;900&family=Noto+Sans+JP:wght@700;900&display=swap" rel="stylesheet" />
+<style>
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #0c1b2e;
+    font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', system-ui, -apple-system, sans-serif;
+    touch-action: none;
+  }
+  #game-wrap {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: radial-gradient(circle at 50% 25%, #1b3b66 0%, #0a1628 75%, #050b14 100%);
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    max-width: 540px;
+    max-height: 960px;
+    aspect-ratio: 9 / 16;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.78);
+    cursor: ew-resize;
+  }
+  body.shorts-mode canvas {
+    max-width: 100vw;
+    max-height: 100vh;
+    width: 100vw;
+    height: 100vh;
+    box-shadow: none;
+  }
+  .back-link {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    z-index: 50;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 800;
+    text-decoration: none;
+    backdrop-filter: blur(6px);
+  }
+  body.shorts-mode .back-link {
+    display: none;
+  }
+</style>
+</head>
+<body>
+<a class="back-link" href="../../index.html">← ゲーム一覧</a>
+<div id="game-wrap">
+  <canvas id="game" width="540" height="960"></canvas>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  const params = new URLSearchParams(window.location.search);
+  const SHORTS_MODE = params.get('shorts') === '1';
+  if (SHORTS_MODE) document.body.classList.add('shorts-mode');
+
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const W = 540;
+  const H = 960;
+  const DPR = SHORTS_MODE ? 2 : Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = W * DPR;
+  canvas.height = H * DPR;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+
+  window.__gameEvents = [];
+  function emitEvent(type, extra = {}) {
+    window.__gameEvents.push({ type, t: +state.elapsed.toFixed(3), ...extra });
+  }
+
+  let rngSeed = SHORTS_MODE ? 20260999 : ((Date.now() ^ (Math.random() * 0xffffffff)) >>> 0);
+  function rand() {
+    rngSeed = (rngSeed * 1664525 + 1013904223) >>> 0;
+    return rngSeed / 4294967296;
+  }
+  function randRange(a, b) { return a + (b - a) * rand(); }
+  function randInt(a, b) { return Math.floor(randRange(a, b + 1)); }
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+  function lerp(a, b, t) { return a + (b - a) * t; }
+
+  // =========================================================================
+  // PERSISTENT UPGRADES & STATS
+  // =========================================================================
+  const SAVE_KEY = 'crowd_999_v1';
+  function loadSave() {
+    try {
+      const r = localStorage.getItem(SAVE_KEY);
+      if (r) return JSON.parse(r);
+    } catch (_) {}
+    return {
+      stage: 1,
+      coins: 0,
+      bestCrowd: 0,
+      upgStart: 1,  // Starting troops level
+      upgFire: 1,   // Firepower / Rate level
+      upgCoin: 1,   // Coin multiplier level
+    };
+  }
+  function writeSave(d) {
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(d)); } catch (_) {}
+  }
+  const save = loadSave();
+  if (SHORTS_MODE) {
+    save.stage = 3;
+    save.upgStart = 3;
+    save.upgFire = 3;
+  }
+
+  function startTroopsForLevel(lv) { return 4 + (lv - 1) * 4; }
+  function firePowerForLevel(lv) { return 1 + (lv - 1) * 0.45; }
+  function coinMultForLevel(lv) { return 1 + (lv - 1) * 0.35; }
+  function upgCost(lv) { return Math.round(120 * Math.pow(1.65, lv - 1) / 10) * 10; }
+
+  // =========================================================================
+  // WEB AUDIO DOPAMINE SYNTHESIZER (Bubble-Wrap Pops + Gate Chimes!)
+  // =========================================================================
+  let audioCtx = null;
+  let muted = false;
+  let lastShotSfx = 0;
+  let lastPopSfx = 0;
+  let lastGateTickSfx = 0;
+
+  function ensureAudio() {
+    if (SHORTS_MODE || muted) return null;
+    if (!audioCtx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) audioCtx = new AC();
+    }
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+    return audioCtx;
+  }
+
+  function playTone(freq, dur, type = 'triangle', vol = 0.12, slideTo = null, delay = 0) {
+    const ac = ensureAudio();
+    if (!ac) return;
+    const t0 = ac.currentTime + delay;
+    const osc = ac.createOscillator();
+    const g = ac.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t0);
+    if (slideTo) osc.frequency.exponentialRampToValueAtTime(Math.max(25, slideTo), t0 + dur);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.linearRampToValueAtTime(vol, t0 + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    osc.connect(g); g.connect(ac.destination);
+    osc.start(t0); osc.stop(t0 + dur + 0.02);
+  }
+
+  function playNoise(dur, vol = 0.09, freq = 1400, type = 'bandpass', delay = 0) {
+    const ac = ensureAudio();
+    if (!ac) return;
+    const t0 = ac.currentTime + delay;
+    const n = Math.max(1, Math.floor(ac.sampleRate * dur));
+    const buf = ac.createBuffer(1, n, ac.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+    const src = ac.createBufferSource();
+    src.buffer = buf;
+    const f = ac.createBiquadFilter();
+    f.type = type; f.frequency.setValueAtTime(freq, t0);
+    const g = ac.createGain();
+    g.gain.setValueAtTime(vol, t0);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(f); f.connect(g); g.connect(ac.destination);
+    src.start(t0); src.stop(t0 + dur + 0.02);
+  }
+
+  const SFX = {
+    shot(weapon) {
+      const now = performance.now();
+      if (now - lastShotSfx < 52) return;
+      lastShotSfx = now;
+      if (weapon === 'laser') playTone(980, 0.055, 'sawtooth', 0.05, 520);
+      else playTone(680 + Math.random() * 140, 0.04, 'triangle', 0.05, 320);
+    },
+    gateTick(val) {
+      const now = performance.now();
+      if (now - lastGateTickSfx < 48) return;
+      lastGateTickSfx = now;
+      const pitch = clamp(420 + (val + 20) * 14, 340, 1480);
+      playTone(pitch, 0.065, 'sine', 0.09, pitch * 1.12);
+    },
+    gateFlipBlue() {
+      playTone(587, 0.12, 'triangle', 0.14, 880);
+      playTone(880, 0.2, 'sine', 0.14, 1318, 0.06);
+    },
+    gateMultiply(good, big) {
+      if (good) {
+        const notes = big ? [523, 659, 784, 1046, 1318] : [523, 659, 880];
+        notes.forEach((n, i) => playTone(n, 0.22, 'triangle', 0.15, null, i * 0.045));
+        if (big) playTone(110, 0.24, 'sine', 0.22, 55);
+      } else {
+        playTone(240, 0.22, 'sawtooth', 0.13, 110);
+        playNoise(0.12, 0.12, 500, 'lowpass');
+      }
+    },
+    pop(combo = 0) {
+      const now = performance.now();
+      if (now - lastPopSfx < 34) return;
+      lastPopSfx = now;
+      const base = 440 * Math.pow(1.04, Math.min(combo, 24));
+      playTone(base, 0.075, 'sine', 0.11, base * 1.45);
+    },
+    barrelBreak() {
+      playTone(320, 0.14, 'triangle', 0.16, 140);
+      playNoise(0.09, 0.14, 1200, 'bandpass');
+      [659, 880, 1174, 1568].forEach((n, i) => playTone(n, 0.2, 'triangle', 0.13, null, 0.05 + i * 0.045));
+    },
+    bossHit() {
+      playTone(160, 0.08, 'sawtooth', 0.08, 95);
+    },
+    bossExplode() {
+      playTone(110, 0.48, 'sine', 0.28, 36);
+      playNoise(0.36, 0.22, 650, 'lowpass');
+      [523, 659, 784, 1046, 1318, 1568].forEach((n, i) => playTone(n, 0.36, 'triangle', 0.14, null, 0.12 + i * 0.06));
+    },
+    coin() {
+      playTone(1318, 0.09, 'sine', 0.09, 1760);
+    },
+    fail() {
+      playTone(220, 0.3, 'sawtooth', 0.14, 130);
+      playTone(146, 0.45, 'sawtooth', 0.14, 82, 0.18);
+    },
+  };
+
+  // =========================================================================
+  // 2.5D PERSPECTIVE BRIDGE PROJECTION ENGINE
+  // =========================================================================
+  // World Coordinates:
+  //   wx in [-1.0 .. +1.0] (left edge to right edge of bridge)
+  //   wz in [0 .. 110]     (player stands at wz = 0, horizon at wz = 110)
+  const HORIZON_Y = 232;
+  const PLAYER_Y = 776;
+  const CAM_FOCAL = 26;
+
+  function project(wx, wz, wy = 0) {
+    const z = Math.max(-4, wz);
+    const scale = CAM_FOCAL / (z + CAM_FOCAL);
+    const sy = HORIZON_Y + (PLAYER_Y - HORIZON_Y) * scale - wy * 185 * scale;
+    const halfRoadW = 216 * scale;
+    const sx = W / 2 + wx * halfRoadW;
+    return { x: sx, y: sy, s: scale, roadHalf: halfRoadW };
+  }
+
+  // =========================================================================
+  // GAME STATE & ENTITIES
+  // =========================================================================
+  const WEAPONS = {
+    normal: { name: '連射ブラスター', icon: '🔵', color: '#38bdf8', rate: 0.26, streams: 1, dmg: 1.0 },
+    spread: { name: '3WAY拡散砲',     icon: '🔱', color: '#facc15', rate: 0.22, streams: 3, dmg: 1.0 },
+    rapid:  { name: '超連射ガトリング', icon: '⚡', color: '#22d3ee', rate: 0.11, streams: 2, dmg: 0.9 },
+    laser:  { name: '貫通プラズマ砲',   icon: '🔥', color: '#f43f5e', rate: 0.19, streams: 2, dmg: 2.1, pierce: true },
+  };
+
+  const state = {
+    screen: 'lobby', // 'lobby' | 'play' | 'boss_clash' | 'victory' | 'gameover'
+    elapsed: 0,
+    runTime: 0,
+    distance: 0,
+    stageLength: 420,
+    speed: 26,
+
+    // Player Crowd
+    px: 0,           // -0.78..+0.78
+    targetPx: 0,
+    troops: 6,
+    maxTroopsReached: 6,
+    giants: 0,       // Golden Giant Champions!
+    weapon: 'normal',
+    weaponTimer: 0,
+    fireCooldown: 0,
+    feverGauge: 0,
+    feverTimer: 0,
+    combo: 0,
+    comboTimer: 0,
+    runCoins: 0,
+
+    // Visual crowd units (up to 260 animated capsule warriors swarming!)
+    visualUnits: [],
+    bullets: [],
+    gates: [],       // { z, side, x, w, op: 'add'|'mul', val, hitFlash, moveAmp, moveSpd, movePhase, passed, pairId }
+    barrels: [],     // { z, x, hp, maxHp, rewardType, label, icon, color, hitFlash, broken }
+    hordes: [],      // { z, x, count, maxCount, units:[], hitFlash, alive }
+    saws: [],        // { z, x, r, moveAmp, moveSpd, phase }
+    boss: null,      // { z, hp, maxHp, x, hitFlash, defeated, scale }
+
+    // Victory Stairs / Result
+    victoryTimer: 0,
+    stairMult: 1,
+    bonusCoinsAwarded: 0,
+
+    // Input & FX
+    dragging: false,
+    lastDragX: 0,
+    keys: { left: false, right: false },
+    shake: 0,
+    hitstop: 0,
+    flashColor: null,
+    flashAlpha: 0,
+    particles: [],
+    floats: [],
+    clouds: [],
+  };
+
+  for (let i = 0; i < 8; i++) {
+    state.clouds.push({
+      x: randRange(0, W),
+      y: randRange(38, 195),
+      w: randRange(72, 145),
+      sp: randRange(6, 16),
+    });
+  }
+
+  function syncVisualUnits() {
+    const desired = Math.min(240, Math.max(0, Math.floor(state.troops)));
+    while (state.visualUnits.length < desired) {
+      const idx = state.visualUnits.length;
+      // Golden-angle phyllotaxis spiral so crowd packs into a gorgeous circular swarm!
+      const ang = idx * 2.39996;
+      const rad = Math.sqrt(idx) * 0.048;
+      state.visualUnits.push({
+        ox: Math.cos(ang) * rad,
+        oz: Math.sin(ang) * rad * 8.5,
+        phase: randRange(0, Math.PI * 2),
+        popAnim: 1,
+        isGiant: false,
+      });
+    }
+    if (state.visualUnits.length > desired) {
+      state.visualUnits.length = desired;
+    }
+    // Mark front units as Golden Giant Champions
+    for (let i = 0; i < state.visualUnits.length; i++) {
+      state.visualUnits[i].isGiant = i < state.giants;
+    }
+  }
+
+  function addTroops(delta, reasonX = state.px) {
+    const prev = state.troops;
+    state.troops = Math.max(0, Math.round(state.troops + delta));
+    if (state.troops > state.maxTroopsReached) {
+      state.maxTroopsReached = state.troops;
+      if (state.maxTroopsReached > save.bestCrowd) {
+        save.bestCrowd = state.maxTroopsReached;
+        writeSave(save);
+      }
+    }
+    syncVisualUnits();
+    // Pop animation on newly added units
+    if (state.troops > prev) {
+      for (let i = Math.min(prev, state.visualUnits.length); i < state.visualUnits.length; i++) {
+        state.visualUnits[i].popAnim = 0;
+      }
+    }
+    if (state.troops <= 0 && (state.screen === 'play' || state.screen === 'boss_clash')) {
+      state.screen = 'gameover';
+      SFX.fail();
+      emitEvent('gameover');
+    }
+  }
+
+  function spawnParticles(x, y, count, colors, speed = 280, gravity = 520) {
+    for (let i = 0; i < count; i++) {
+      const a = randRange(0, Math.PI * 2);
+      const sp = randRange(speed * 0.3, speed);
+      state.particles.push({
+        x, y,
+        vx: Math.cos(a) * sp,
+        vy: Math.sin(a) * sp - randRange(60, 180),
+        size: randRange(4, 9.5),
+        color: colors[Math.floor(rand() * colors.length)],
+        rot: randRange(0, Math.PI * 2),
+        vrot: randRange(-12, 12),
+        life: randRange(0.35, 0.95),
+        maxLife: 0.95,
+        gravity,
+      });
+    }
+  }
+
+  function addFloat(x, y, text, color = '#fde047', size = 26) {
+    state.floats.push({ x, y, text, color, size, life: 0.95, maxLife: 0.95 });
+  }
+
+  // =========================================================================
+  // STAGE LEVEL GENERATOR (Maximum Dopamine Pacing!)
+  // =========================================================================
+  function buildStage(stageNum) {
+    state.gates = [];
+    state.barrels = [];
+    state.hordes = [];
+    state.saws = [];
+    state.bullets = [];
+    state.particles = [];
+    state.floats = [];
+    state.distance = 0;
+    state.stageLength = SHORTS_MODE ? 320 : (360 + Math.min(stageNum, 8) * 35);
+    state.speed = SHORTS_MODE ? 27 : (25 + Math.min(stageNum, 6) * 1.1);
+    state.px = 0;
+    state.targetPx = 0;
+    state.troops = SHORTS_MODE ? 8 : startTroopsForLevel(save.upgStart);
+    state.maxTroopsReached = state.troops;
+    state.giants = 0;
+    state.weapon = 'normal';
+    state.weaponTimer = 0;
+    state.feverGauge = 0;
+    state.feverTimer = 0;
+    state.combo = 0;
+    state.runCoins = 0;
+    state.visualUnits = [];
+    syncVisualUnits();
+
+    if (SHORTS_MODE) {
+      buildShortsShowcaseStage();
+      return;
+    }
+
+    const diff = 1 + (stageNum - 1) * 0.38;
+    let z = 54;
+    let pairId = 1;
+
+    while (z < state.stageLength - 58) {
+      const progress = z / state.stageLength;
+
+      // 1. Dual Math Gate Row (At least 1 shootable/upgradable gate for juicy dopamine!)
+      const leftIsGood = rand() < 0.5;
+      const makeGate = (side, isGood) => {
+        const x = side === -1 ? -0.49 : 0.49;
+        if (isGood) {
+          const isMul = progress > 0.22 && rand() < 0.48;
+          return {
+            z, side, x, w: 0.9,
+            op: isMul ? 'mul' : 'add',
+            val: isMul ? randInt(2, progress > 0.65 ? 4 : 3) : Math.round(randInt(10, 32) * diff),
+            hitFlash: 0, moveAmp: 0, moveSpd: 0, movePhase: 0, passed: false, pairId,
+          };
+        } else {
+          // Red negative gate that FLIPS TO BLUE when shot enough!!
+          const neg = -randInt(8, 22);
+          return {
+            z, side, x, w: 0.9,
+            op: 'add',
+            val: neg,
+            hitFlash: 0, moveAmp: 0, moveSpd: 0, movePhase: 0, passed: false, pairId,
+          };
+        }
+      };
+
+      // Sometimes spawn a single sliding mega-multiplier gate!
+      if (progress > 0.35 && rand() < 0.28) {
+        state.gates.push({
+          z, side: 0, x: 0, w: 0.88,
+          op: 'mul', val: randInt(2, 4),
+          hitFlash: 0, moveAmp: 0.52, moveSpd: 1.7 + stageNum * 0.12, movePhase: randRange(0, 6.28),
+          passed: false, pairId,
+        });
+      } else {
+        state.gates.push(makeGate(-1, leftIsGood));
+        state.gates.push(makeGate(1, !leftIsGood));
+      }
+      pairId++;
+
+      // 2. Shootable Bonus Barrel (Weapons or Giant Titan!)
+      if (rand() < 0.65) {
+        const bz = z + 24;
+        const bx = randRange(-0.62, 0.62);
+        const roll = rand();
+        let rewardType = 'spread', label = '3WAY砲', icon = '🔱', color = '#facc15';
+        if (roll < 0.28) { rewardType = 'rapid'; label = '超連射'; icon = '⚡'; color = '#22d3ee'; }
+        else if (roll < 0.52) { rewardType = 'laser'; label = '貫通レーザー'; icon = '🔥'; color = '#f43f5e'; }
+        else if (roll < 0.76) { rewardType = 'giant'; label = '巨人召喚'; icon = '👑'; color = '#f59e0b'; }
+        const hp = Math.round((12 + progress * 48) * diff);
+        state.barrels.push({ z: bz, x: bx, hp, maxHp: hp, rewardType, label, icon, color, hitFlash: 0, broken: false });
+      }
+
+      // 3. Coral-Red Enemy Horde OR Spinning Saw Hazard
+      const hz = z + 42;
+      if (hz < state.stageLength - 40) {
+        if (rand() < 0.74) {
+          const count = Math.round((14 + progress * 95) * diff);
+          const hx = randRange(-0.45, 0.45);
+          state.hordes.push(makeEnemyHorde(hz, hx, count));
+        } else {
+          state.saws.push({
+            z: hz, x: randRange(-0.4, 0.4), r: 0.24,
+            moveAmp: 0.48, moveSpd: 2.1 + stageNum * 0.15, phase: randRange(0, 6.28),
+          });
+        }
+      }
+
+      z += 72;
+    }
+
+    // End-of-Stage MEGA BOSS!
+    const bossHp = Math.round(180 * Math.pow(1.55, stageNum - 1));
+    state.boss = {
+      z: state.stageLength + 8,
+      x: 0,
+      hp: bossHp,
+      maxHp: bossHp,
+      hitFlash: 0,
+      defeated: false,
+      scale: 1,
+    };
+  }
+
+  function makeEnemyHorde(z, x, count) {
+    const visCount = Math.min(75, Math.max(6, Math.round(count * 0.55)));
+    const units = [];
+    for (let i = 0; i < visCount; i++) {
+      const ang = i * 2.39996;
+      const rad = Math.sqrt(i) * 0.052;
+      units.push({ ox: Math.cos(ang) * rad, oz: Math.sin(ang) * rad * 7, phase: randRange(0, 6.28) });
+    }
+    return { z, x, count, maxCount: count, units, hitFlash: 0, alive: true };
+  }
+
+  function buildShortsShowcaseStage() {
+    // Choreographed maximum-dopamine 15s viral run!
+    state.gates = [
+      // Gate 1 (z=52): Left RED -10 (we shoot it all the way to +26 BLUE!!), Right +6
+      { z: 52, side: -1, x: -0.49, w: 0.9, op: 'add', val: -8, hitFlash: 0, moveAmp: 0, moveSpd: 0, movePhase: 0, passed: false, pairId: 1 },
+      { z: 52, side: 1,  x: 0.49,  w: 0.9, op: 'add', val: 6,  hitFlash: 0, moveAmp: 0, moveSpd: 0, movePhase: 0, passed: false, pairId: 1 },
+      // Gate 2 (z=128): Right ×3 vs Left -25
+      { z: 128, side: -1, x: -0.49, w: 0.9, op: 'add', val: -25, hitFlash: 0, moveAmp: 0, moveSpd: 0, movePhase: 0, passed: false, pairId: 2 },
+      { z: 128, side: 1,  x: 0.49,  w: 0.9, op: 'mul', val: 3,   hitFlash: 0, moveAmp: 0, moveSpd: 0, movePhase: 0, passed: false, pairId: 2 },
+      // Gate 3 (z=212): Left ×4!! vs Right +40
+      { z: 212, side: -1, x: -0.49, w: 0.9, op: 'mul', val: 4,   hitFlash: 0, moveAmp: 0, moveSpd: 0, movePhase: 0, passed: false, pairId: 3 },
+      { z: 212, side: 1,  x: 0.49,  w: 0.9, op: 'add', val: 40,  hitFlash: 0, moveAmp: 0, moveSpd: 0, movePhase: 0, passed: false, pairId: 3 },
+    ];
+    state.barrels = [
+      { z: 86,  x: 0.42,  hp: 10, maxHp: 10, rewardType: 'spread', label: '3WAY砲', icon: '🔱', color: '#facc15', hitFlash: 0, broken: false },
+      { z: 168, x: -0.44, hp: 28, maxHp: 28, rewardType: 'giant',  label: '巨人召喚', icon: '👑', color: '#f59e0b', hitFlash: 0, broken: false },
+    ];
+    state.hordes = [
+      makeEnemyHorde(152, 0.32, 42),
+      makeEnemyHorde(255, -0.1, 145),
+    ];
+    state.saws = [
+      { z: 188, x: 0.4, r: 0.24, moveAmp: 0, moveSpd: 0, phase: 0 },
+    ];
+    state.boss = { z: state.stageLength + 8, x: 0, hp: 520, maxHp: 520, hitFlash: 0, defeated: false, scale: 1 };
+  }
+
+  function startRun() {
+    ensureAudio();
+    state.screen = 'play';
+    state.runTime = 0;
+    buildStage(save.stage);
+    emitEvent('start', { stage: save.stage });
+  }
+
+  // =========================================================================
+  // SHORTS AI PILOT (Makes the dream plays viewers crave!)
+  // =========================================================================
+  function updateShortsPilot() {
+    if (state.screen === 'lobby') { startRun(); return; }
+    const d = state.distance;
+    if (d < 56) state.targetPx = -0.48;       // Shoot Red -8 gate into +20+ BLUE!
+    else if (d < 134) state.targetPx = 0.46;  // Bust 3WAY barrel + slam ×3 gate!
+    else if (d < 164) state.targetPx = 0.30;  // Mow down red horde!
+    else if (d < 220) state.targetPx = -0.46; // Dodge right saw + bust Giant barrel + slam ×4 gate!!
+    else state.targetPx = 0.0;                // Center tsunami obliterating 145 horde & MEGA BOSS!!
+  }
+
+  // =========================================================================
+  // COMBAT, BULLETS & PHYSICS UPDATE
+  // =========================================================================
+  function fireArmyVolley() {
+    const wDef = WEAPONS[state.weapon];
+    const feverBoost = state.feverTimer > 0 ? 1.6 : 1;
+    const crowdScale = clamp(Math.sqrt(state.troops) * 0.42, 1, 5.5);
+    const dmg = wDef.dmg * firePowerForLevel(save.upgFire) * (1 + Math.min(state.troops, 300) * 0.015) * feverBoost;
+    const streams = wDef.streams + (state.troops >= 45 ? 1 : 0) + (state.troops >= 140 ? 1 : 0);
+    const spreadW = Math.min(0.42, 0.06 + Math.sqrt(state.troops) * 0.022);
+
+    for (let i = 0; i < streams; i++) {
+      const frac = streams === 1 ? 0 : (i / (streams - 1) - 0.5) * 2;
+      const bx = clamp(state.px + frac * spreadW, -0.92, 0.92);
+      const vx = wDef.streams === 3 ? frac * 0.14 : 0;
+      state.bullets.push({
+        x: bx,
+        z: 3,
+        vx,
+        vz: 118,
+        dmg: dmg * (crowdScale / streams) * 1.15,
+        color: state.feverTimer > 0 ? '#fde047' : wDef.color,
+        pierce: !!wDef.pierce,
+        hitSet: new Set(),
+        life: 0.95,
+      });
+    }
+    SFX.shot(state.weapon);
+  }
+
+  function update(dt) {
+    state.elapsed += dt;
+    if (SHORTS_MODE) updateShortsPilot();
+
+    // Clouds drift
+    for (const c of state.clouds) {
+      c.x += c.sp * dt;
+      if (c.x - c.w > W) c.x = -c.w;
+    }
+
+    // FX decay
+    state.shake = Math.max(0, state.shake - dt * 44);
+    state.flashAlpha = Math.max(0, state.flashAlpha - dt * 2.2);
+    if (state.comboTimer > 0) {
+      state.comboTimer -= dt;
+      if (state.comboTimer <= 0) state.combo = 0;
+    }
+
+    // Particles & Floats
+    for (let i = state.particles.length - 1; i >= 0; i--) {
+      const p = state.particles[i];
+      p.life -= dt;
+      if (p.life <= 0) { state.particles.splice(i, 1); continue; }
+      p.vy += p.gravity * dt;
+      p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.vrot * dt;
+    }
+    for (let i = state.floats.length - 1; i >= 0; i--) {
+      const f = state.floats[i];
+      f.life -= dt;
+      if (f.life <= 0) { state.floats.splice(i, 1); continue; }
+      f.y -= 58 * dt;
+    }
+
+    if (state.hitstop > 0) {
+      state.hitstop -= dt;
+      return;
+    }
+
+    // Visual unit pop animations
+    for (const u of state.visualUnits) {
+      u.popAnim = Math.min(1, u.popAnim + dt * 5.5);
+    }
+
+    if (state.screen === 'victory') {
+      state.victoryTimer += dt;
+      return;
+    }
+    if (state.screen !== 'play' && state.screen !== 'boss_clash') return;
+
+    state.runTime += dt;
+
+    // Keyboard movement
+    if (state.keys.left) state.targetPx -= 1.85 * dt;
+    if (state.keys.right) state.targetPx += 1.85 * dt;
+    const crowdHalfW = clamp(0.12 + Math.sqrt(state.troops) * 0.012, 0.14, 0.34);
+    state.targetPx = clamp(state.targetPx, -0.94 + crowdHalfW * 0.6, 0.94 - crowdHalfW * 0.6);
+    state.px += (state.targetPx - state.px) * Math.min(1, dt * 16);
+
+    // Weapon & Fever timers
+    if (state.weaponTimer > 0) {
+      state.weaponTimer -= dt;
+      if (state.weaponTimer <= 0) state.weapon = 'normal';
+    }
+    if (state.feverTimer > 0) state.feverTimer -= dt;
+
+    // Advance along bridge
+    const moveSpd = state.screen === 'boss_clash' ? 0 : state.speed * (state.feverTimer > 0 ? 1.15 : 1);
+    state.distance += moveSpd * dt;
+
+    // Enter Boss Clash when reaching end of bridge
+    if (state.screen === 'play' && state.boss && state.boss.z - state.distance <= 32) {
+      state.screen = 'boss_clash';
+      emitEvent('boss_start', { troops: state.troops, bossHp: state.boss.hp });
+    }
+
+    // Auto-Fire Army Volley!
+    const wDef = WEAPONS[state.weapon];
+    state.fireCooldown -= dt;
+    if (state.fireCooldown <= 0 && state.troops > 0) {
+      state.fireCooldown = wDef.rate / (state.feverTimer > 0 ? 1.45 : 1);
+      fireArmyVolley();
+    }
+
+    // Update Moving Gates & Saws
+    for (const g of state.gates) {
+      g.hitFlash = Math.max(0, g.hitFlash - dt * 8);
+      if (g.moveAmp > 0) g.x = Math.sin(state.runTime * g.moveSpd + g.movePhase) * g.moveAmp;
+    }
+    for (const s of state.saws) {
+      if (s.moveAmp > 0) s.x = Math.sin(state.runTime * s.moveSpd + s.phase) * s.moveAmp;
+    }
+    for (const b of state.barrels) b.hitFlash = Math.max(0, b.hitFlash - dt * 8);
+    for (const h of state.hordes) h.hitFlash = Math.max(0, h.hitFlash - dt * 8);
+    if (state.boss) state.boss.hitFlash = Math.max(0, state.boss.hitFlash - dt * 8);
+
+    // Update Bullets & Collisions
+    for (let i = state.bullets.length - 1; i >= 0; i--) {
+      const b = state.bullets[i];
+      b.life -= dt;
+      b.z += b.vz * dt;
+      b.x += b.vx * dt;
+      if (b.life <= 0 || b.z > 108 || Math.abs(b.x) > 1.15) {
+        state.bullets.splice(i, 1);
+        continue;
+      }
+
+      const worldZ = state.distance + b.z;
+      let consumed = false;
+
+      // 1. Shootable ADD Gates (Turn RED negative gates into glowing BLUE positive gates!!)
+      for (const g of state.gates) {
+        if (g.passed || g.op !== 'add' || b.hitSet.has(g)) continue;
+        if (Math.abs(worldZ - g.z) < 4.5 && Math.abs(b.x - g.x) < g.w * 0.5) {
+          b.hitSet.add(g);
+          const prevVal = g.val;
+          const inc = Math.max(1, Math.round(b.dmg * 0.72));
+          g.val += inc;
+          g.hitFlash = 1;
+          const pr = project(g.x, g.z - state.distance, 0.35);
+          SFX.gateTick(g.val);
+          if (prevVal <= 0 && g.val > 0) {
+            SFX.gateFlipBlue();
+            state.shake = Math.max(state.shake, 7);
+            spawnParticles(pr.x, pr.y, 20, ['#38bdf8', '#fde047', '#ffffff'], 240, 320);
+            addFloat(pr.x, pr.y - 34, 'BLUE 反転!!', '#38bdf8', 24);
+            emitEvent('gate_flip', { val: g.val });
+          } else {
+            spawnParticles(pr.x, pr.y, 3, [g.val > 0 ? '#38bdf8' : '#fb7185', '#ffffff'], 110, 220);
+          }
+          if (!b.pierce) { consumed = true; break; }
+        }
+      }
+      if (consumed) { state.bullets.splice(i, 1); continue; }
+
+      // 2. Shootable Bonus Barrels
+      for (const br of state.barrels) {
+        if (br.broken || b.hitSet.has(br)) continue;
+        if (Math.abs(worldZ - br.z) < 5.5 && Math.abs(b.x - br.x) < 0.28) {
+          b.hitSet.add(br);
+          br.hp -= b.dmg;
+          br.hitFlash = 1;
+          const pr = project(br.x, br.z - state.distance, 0.25);
+          if (br.hp <= 0) {
+            br.broken = true;
+            SFX.barrelBreak();
+            state.shake = Math.max(state.shake, 11);
+            spawnParticles(pr.x, pr.y, 28, [br.color, '#fde047', '#ffffff'], 280, 380);
+            if (br.rewardType === 'giant') {
+              state.giants += 2;
+              addTroops(16);
+              addFloat(pr.x, pr.y - 38, '👑 巨人チャンピオン参戦！', '#fde047', 23);
+            } else {
+              state.weapon = br.rewardType;
+              state.weaponTimer = 9.0;
+              addFloat(pr.x, pr.y - 38, `${br.icon} ${br.label} 解放!!`, br.color, 25);
+            }
+            emitEvent('barrel', { reward: br.rewardType });
+          } else {
+            spawnParticles(pr.x, pr.y, 3, [br.color, '#ffffff'], 110, 220);
+          }
+          if (!b.pierce) { consumed = true; break; }
+        }
+      }
+      if (consumed) { state.bullets.splice(i, 1); continue; }
+
+      // 3. Coral-Red Enemy Hordes (Bubble-wrap pop cascade!)
+      for (const h of state.hordes) {
+        if (!h.alive || b.hitSet.has(h)) continue;
+        const hRad = 0.24 + Math.sqrt(h.count) * 0.025;
+        if (Math.abs(worldZ - h.z) < 7.5 && Math.abs(b.x - h.x) < hRad) {
+          b.hitSet.add(h);
+          const dmg = Math.max(1, Math.round(b.dmg));
+          h.count -= dmg;
+          h.hitFlash = 1;
+          state.combo++;
+          state.comboTimer = 1.4;
+          state.feverGauge = Math.min(100, state.feverGauge + 1.8);
+          state.runCoins += Math.round(dmg * 1.5 * coinMultForLevel(save.upgCoin));
+          const pr = project(h.x + randRange(-0.15, 0.15), Math.max(2, h.z - state.distance), 0.15);
+          SFX.pop(state.combo);
+          spawnParticles(pr.x, pr.y, 5, ['#fb7185', '#fde047', '#ffffff'], 170, 360);
+          if (h.count <= 0) {
+            h.alive = false;
+            state.shake = Math.max(state.shake, 9);
+            spawnParticles(pr.x, pr.y, 26, ['#fb7185', '#f43f5e', '#fde047', '#ffffff'], 280, 420);
+            addFloat(pr.x, pr.y - 30, '💥 敵軍団 全滅!!', '#fde047', 23);
+            emitEvent('horde_clear');
+          }
+          if (!b.pierce) { consumed = true; break; }
+        }
+      }
+      if (consumed) { state.bullets.splice(i, 1); continue; }
+
+      // 4. MEGA BOSS Hit!
+      if (state.boss && !state.boss.defeated && !b.hitSet.has(state.boss)) {
+        if (Math.abs(worldZ - state.boss.z) < 9 && Math.abs(b.x - state.boss.x) < 0.45) {
+          b.hitSet.add(state.boss);
+          const dmg = Math.max(1, b.dmg);
+          state.boss.hp -= dmg;
+          state.boss.hitFlash = 1;
+          state.runCoins += Math.round(dmg * 2 * coinMultForLevel(save.upgCoin));
+          const pr = project(state.boss.x + randRange(-0.2, 0.2), Math.max(4, state.boss.z - state.distance), 0.45);
+          SFX.bossHit();
+          spawnParticles(pr.x, pr.y, 4, ['#fb7185', '#fde047', '#ffffff'], 180, 340);
+          if (state.boss.hp <= 0) {
+            triggerBossVictory();
+          }
+          if (!b.pierce) { state.bullets.splice(i, 1); continue; }
+        }
+      }
+    }
+
+    // Trigger FEVER Mode at 100% gauge!
+    if (state.feverGauge >= 100 && state.feverTimer <= 0) {
+      state.feverGauge = 0;
+      state.feverTimer = 5.5;
+      state.flashColor = '#fde047';
+      state.flashAlpha = 0.25;
+      state.shake = 10;
+      SFX.gateMultiply(true, true);
+      addFloat(W / 2, 360, '🔥 OVERDRIVE FEVER!! 🔥', '#fde047', 30);
+      emitEvent('fever');
+    }
+
+    // PLAYER PASSING THROUGH GATES!
+    for (const g of state.gates) {
+      if (g.passed) continue;
+      const relZ = g.z - state.distance;
+      if (relZ <= 1.2) {
+        if (Math.abs(state.px - g.x) < g.w * 0.56) {
+          g.passed = true;
+          // Mark sibling pair passed so you don't clip both gates at once!
+          state.gates.forEach(other => { if (other.pairId === g.pairId) other.passed = true; });
+
+          const pr = project(state.px, 0, 0.3);
+          if (g.op === 'mul') {
+            const gain = state.troops * (g.val - 1);
+            addTroops(gain);
+            SFX.gateMultiply(true, g.val >= 3);
+            state.shake = g.val >= 3 ? 16 : 10;
+            state.flashColor = '#38bdf8';
+            state.flashAlpha = 0.24;
+            spawnParticles(pr.x, pr.y, g.val >= 3 ? 46 : 26, ['#38bdf8', '#fde047', '#ffffff', '#34d399'], 340, 420);
+            addFloat(pr.x, pr.y - 54, `×${g.val}!! (${state.troops}人!)`, '#fde047', 34);
+            emitEvent('gate_pass', { op: 'mul', val: g.val, troops: state.troops });
+          } else {
+            const good = g.val >= 0;
+            addTroops(g.val);
+            SFX.gateMultiply(good, g.val >= 30);
+            state.shake = good ? 8 : 13;
+            state.flashColor = good ? '#34d399' : '#ef4444';
+            state.flashAlpha = 0.2;
+            spawnParticles(pr.x, pr.y, 24, good ? ['#34d399', '#38bdf8', '#ffffff'] : ['#ef4444', '#fb7185'], 260, 400);
+            addFloat(pr.x, pr.y - 52, `${g.val >= 0 ? '+' : ''}${g.val}人!`, good ? '#4ade80' : '#fb7185', 30);
+            emitEvent('gate_pass', { op: 'add', val: g.val, troops: state.troops });
+          }
+        } else if (relZ < -5) {
+          g.passed = true;
+        }
+      }
+    }
+
+    // PLAYER COLLIDING WITH REMAINING ENEMY HORDES!
+    for (const h of state.hordes) {
+      if (!h.alive) continue;
+      const relZ = h.z - state.distance;
+      // Enemy horde charges slightly toward player when close
+      if (relZ < 38) h.z -= 8 * dt;
+      if (relZ <= 5 && relZ >= -6) {
+        const hRad = 0.28 + Math.sqrt(h.count) * 0.025;
+        if (Math.abs(state.px - h.x) < hRad + crowdHalfW * 0.65) {
+          const clash = Math.min(h.count, Math.max(1, Math.ceil(45 * dt)));
+          h.count -= clash;
+          addTroops(-Math.ceil(clash * 0.72));
+          state.shake = Math.max(state.shake, 7);
+          const pr = project((state.px + h.x) / 2, 2, 0.15);
+          SFX.pop(state.combo++);
+          spawnParticles(pr.x, pr.y, 10, ['#38bdf8', '#fb7185', '#ffffff'], 220, 380);
+          if (h.count <= 0) {
+            h.alive = false;
+            addFloat(pr.x, pr.y - 36, '突破!!', '#4ade80', 26);
+          }
+        }
+      }
+    }
+
+    // PLAYER CLIPPING SPINNING RED SAWS
+    for (const s of state.saws) {
+      const relZ = s.z - state.distance;
+      if (relZ <= 2.5 && relZ >= -2.5 && Math.abs(state.px - s.x) < s.r + crowdHalfW * 0.45) {
+        const cut = Math.max(1, Math.ceil(state.troops * 0.9 * dt));
+        addTroops(-cut);
+        state.shake = Math.max(state.shake, 10);
+        const pr = project(s.x, 0, 0.1);
+        SFX.pop(0);
+        spawnParticles(pr.x, pr.y, 6, ['#ef4444', '#38bdf8'], 240, 420);
+      }
+    }
+
+    // BOSS CLASH PHASE: Boss marches slowly & trades blows with your bullet storm + giant charge!
+    if (state.screen === 'boss_clash' && state.boss && !state.boss.defeated) {
+      const relZ = state.boss.z - state.distance;
+      if (relZ > 7) {
+        state.boss.z -= 6.5 * dt;
+      } else {
+        // Melee clash! Giant champions & swarm slam the boss!
+        const playerDps = (state.troops * 1.6 + state.giants * 45) * dt;
+        state.boss.hp -= playerDps;
+        state.boss.hitFlash = 1;
+        addTroops(-Math.max(1, Math.ceil(16 * dt)));
+        state.shake = 9;
+        const pr = project(0, 6, 0.4);
+        spawnParticles(pr.x, pr.y, 8, ['#38bdf8', '#fb7185', '#fde047'], 260, 380);
+        if (state.boss.hp <= 0) triggerBossVictory();
+      }
+    }
+  }
+
+  function triggerBossVictory() {
+    if (!state.boss || state.boss.defeated) return;
+    state.boss.defeated = true;
+    state.boss.hp = 0;
+    state.screen = 'victory';
+    state.victoryTimer = 0;
+    state.hitstop = 0.08;
+    state.shake = 22;
+    state.flashColor = '#fde047';
+    state.flashAlpha = 0.42;
+    SFX.bossExplode();
+
+    const pr = project(0, Math.max(6, state.boss.z - state.distance), 0.45);
+    spawnParticles(pr.x, pr.y, 90, ['#fde047', '#f59e0b', '#38bdf8', '#fb7185', '#ffffff'], 420, 400);
+
+    // Victory Multiplier Stairs based on surviving crowd!
+    state.stairMult = clamp(2 + Math.floor(state.troops / 35), 2, 10);
+    state.bonusCoinsAwarded = Math.round((120 + state.runCoins + state.troops * 2.5) * (state.stairMult * 0.45) * coinMultForLevel(save.upgCoin));
+    save.coins += state.bonusCoinsAwarded;
+    save.stage++;
+    writeSave(save);
+    emitEvent('victory', { troops: state.troops, mult: state.stairMult, coins: state.bonusCoinsAwarded });
+  }
+
+  // =========================================================================
+  // INPUT (Butter-Smooth 1-Finger Mobile Drag + PC Mouse/Keyboard!)
+  // =========================================================================
+  let hitboxes = [];
+  function addHit(id, x, y, w, h, fn) { hitboxes.push({ id, x, y, w, h, fn }); }
+
+  function getPos(e) {
+    const r = canvas.getBoundingClientRect();
+    return { x: ((e.clientX - r.left) / r.width) * W, y: ((e.clientY - r.top) / r.height) * H };
+  }
+
+  canvas.addEventListener('pointerdown', (e) => {
+    if (SHORTS_MODE) return;
+    ensureAudio();
+    const p = getPos(e);
+    for (let i = hitboxes.length - 1; i >= 0; i--) {
+      const h = hitboxes[i];
+      if (p.x >= h.x && p.x <= h.x + h.w && p.y >= h.y && p.y <= h.y + h.h) {
+        h.fn();
+        return;
+      }
+    }
+    if (state.screen === 'play' || state.screen === 'boss_clash') {
+      state.dragging = true;
+      state.lastDragX = p.x;
+    }
+  });
+
+  window.addEventListener('pointermove', (e) => {
+    if (SHORTS_MODE || !state.dragging) return;
+    const p = getPos(e);
+    const dx = p.x - state.lastDragX;
+    state.lastDragX = p.x;
+    state.targetPx += dx / 185;
+  });
+
+  window.addEventListener('pointerup', () => { state.dragging = false; });
+  window.addEventListener('pointercancel', () => { state.dragging = false; });
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') state.keys.left = true;
+    if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') state.keys.right = true;
+  });
+  window.addEventListener('keyup', (e) => {
+    if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') state.keys.left = false;
+    if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') state.keys.right = false;
+  });
+
+  // =========================================================================
+  // RENDERING — BRIGHT SUNLIT 2.5D ARCADE BRIDGE
+  // =========================================================================
+  function rr(g, x, y, w, h, r) {
+    const rad = Math.min(r, w / 2, h / 2);
+    g.beginPath();
+    g.moveTo(x + rad, y);
+    g.arcTo(x + w, y, x + w, y + h, rad);
+    g.arcTo(x + w, y + h, x, y + h, rad);
+    g.arcTo(x, y + h, x, y, rad);
+    g.arcTo(x, y, x + w, y, rad);
+    g.closePath();
+  }
+
+  function drawSkyAndBridge() {
+    // Vibrant Sunlit Sky
+    const sky = ctx.createLinearGradient(0, 0, 0, HORIZON_Y + 25);
+    if (state.feverTimer > 0) {
+      sky.addColorStop(0, '#7c3aed');
+      sky.addColorStop(0.55, '#ec4899');
+      sky.addColorStop(1, '#fde047');
+    } else {
+      sky.addColorStop(0, '#0284c7');
+      sky.addColorStop(0.55, '#38bdf8');
+      sky.addColorStop(1, '#e0f2fe');
+    }
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, W, HORIZON_Y + 30);
+
+    // Stylized Clouds
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.72)';
+    for (const c of state.clouds) {
+      rr(ctx, c.x, c.y, c.w, 24, 12); ctx.fill();
+      rr(ctx, c.x + 18, c.y - 12, c.w * 0.56, 22, 11); ctx.fill();
+    }
+
+    // Ocean / Abyss below horizon
+    const sea = ctx.createLinearGradient(0, HORIZON_Y, 0, H);
+    sea.addColorStop(0, '#0ea5e9');
+    sea.addColorStop(0.35, '#0369a1');
+    sea.addColorStop(1, '#0c1e38');
+    ctx.fillStyle = sea;
+    ctx.fillRect(0, HORIZON_Y, W, H - HORIZON_Y);
+
+    // 3D Perspective Bridge Track
+    const farL = project(-1, 108);
+    const farR = project(1, 108);
+    const nearL = project(-1, -4);
+    const nearR = project(1, -4);
+
+    // Drop shadow under bridge
+    ctx.fillStyle = 'rgba(2, 12, 27, 0.45)';
+    ctx.beginPath();
+    ctx.moveTo(farL.x - 6, farL.y + 8);
+    ctx.lineTo(farR.x + 6, farR.y + 8);
+    ctx.lineTo(nearR.x + 26, H);
+    ctx.lineTo(nearL.x - 26, H);
+    ctx.closePath();
+    ctx.fill();
+
+    // Main Crisp White/Ice Highway Deck
+    const roadGrad = ctx.createLinearGradient(0, HORIZON_Y, 0, H);
+    roadGrad.addColorStop(0, '#cbd5e1');
+    roadGrad.addColorStop(0.3, '#f1f5f9');
+    roadGrad.addColorStop(1, '#ffffff');
+    ctx.fillStyle = roadGrad;
+    ctx.beginPath();
+    ctx.moveTo(farL.x, farL.y);
+    ctx.lineTo(farR.x, farR.y);
+    ctx.lineTo(nearR.x, H);
+    ctx.lineTo(nearL.x, H);
+    ctx.closePath();
+    ctx.fill();
+
+    // Scrolling Speed Chevrons & Lane Stripes (Huge sense of velocity!)
+    const segLen = 14;
+    const offset = state.distance % segLen;
+    for (let z = 104 - offset; z >= -2; z -= segLen) {
+      const p0 = project(0, z);
+      const p1 = project(0, z + 5.5);
+      // Alternating subtle track bands
+      const pl0 = project(-1, z), pr0 = project(1, z);
+      const pl1 = project(-1, z + 7), pr1 = project(1, z + 7);
+      if (Math.floor((state.distance + z) / segLen) % 2 === 0) {
+        ctx.fillStyle = 'rgba(148, 163, 184, 0.14)';
+        ctx.beginPath();
+        ctx.moveTo(pl1.x, pl1.y); ctx.lineTo(pr1.x, pr1.y);
+        ctx.lineTo(pr0.x, pr0.y); ctx.lineTo(pl0.x, pl0.y);
+        ctx.closePath();
+        ctx.fill();
+      }
+      // Center dashed divider
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.45)';
+      ctx.lineWidth = Math.max(1.5, 4.5 * p0.s);
+      ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y); ctx.stroke();
+    }
+
+    // Golden / Electric Guardrails
+    [-1, 1].forEach(side => {
+      const f = project(side, 108);
+      const n = project(side, -4);
+      ctx.strokeStyle = state.feverTimer > 0 ? '#fde047' : '#0284c7';
+      ctx.lineWidth = 10;
+      ctx.beginPath(); ctx.moveTo(f.x, f.y); ctx.lineTo(n.x, H); ctx.stroke();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(f.x, f.y); ctx.lineTo(n.x, H); ctx.stroke();
+    });
+
+    // Finish Line Checkered Strip before Boss
+    const finRelZ = state.stageLength - state.distance;
+    if (finRelZ > -6 && finRelZ < 105) {
+      const fl = project(-1, finRelZ), fr = project(1, finRelZ);
+      const h = Math.max(4, 18 * fl.s);
+      const cells = 10;
+      const cw = (fr.x - fl.x) / cells;
+      for (let i = 0; i < cells; i++) {
+        ctx.fillStyle = i % 2 === 0 ? '#0f172a' : '#facc15';
+        ctx.fillRect(fl.x + i * cw, fl.y - h / 2, cw, h);
+      }
+    }
+  }
+
+  function drawCapsuleWarrior(x, y, s, color, rimColor, phase, isGiant = false, popAnim = 1) {
+    const sc = s * (isGiant ? 2.15 : 1.0) * (0.2 + 0.8 * popAnim);
+    if (sc < 0.08) return;
+    const bounce = Math.abs(Math.sin(state.elapsed * 15 + phase)) * 7 * sc;
+    const bodyW = 16 * sc;
+    const bodyH = 22 * sc;
+    const headR = 8.5 * sc;
+
+    // Ground shadow
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.28)';
+    ctx.beginPath();
+    ctx.ellipse(x, y + 2 * sc, bodyW * 0.72, 4.5 * sc, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Capsule body
+    ctx.fillStyle = color;
+    rr(ctx, x - bodyW / 2, y - bodyH - bounce, bodyW, bodyH, bodyW / 2);
+    ctx.fill();
+    ctx.strokeStyle = rimColor;
+    ctx.lineWidth = Math.max(1, 2 * sc);
+    ctx.stroke();
+
+    // Head
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(x, y - bodyH - headR * 0.72 - bounce, headR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Specular shine dot
+    ctx.fillStyle = 'rgba(255,255,255,0.68)';
+    ctx.beginPath();
+    ctx.arc(x - headR * 0.3, y - bodyH - headR * 0.95 - bounce, headR * 0.28, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Golden Crown on Giant Champions!
+    if (isGiant) {
+      ctx.fillStyle = '#fde047';
+      const cy = y - bodyH - headR * 1.85 - bounce;
+      ctx.beginPath();
+      ctx.moveTo(x - 10 * sc, cy + 6 * sc);
+      ctx.lineTo(x - 8 * sc, cy - 5 * sc);
+      ctx.lineTo(x - 2 * sc, cy + 1 * sc);
+      ctx.lineTo(x, cy - 8 * sc);
+      ctx.lineTo(x + 2 * sc, cy + 1 * sc);
+      ctx.lineTo(x + 8 * sc, cy - 5 * sc);
+      ctx.lineTo(x + 10 * sc, cy + 6 * sc);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+
+  function drawWorldEntities() {
+    // Collect all depth-sorted objects (far -> near painter's algorithm!)
+    const drawList = [];
+
+    // 1. Gates
+    for (const g of state.gates) {
+      if (g.passed) continue;
+      const relZ = g.z - state.distance;
+      if (relZ < -2 || relZ > 106) continue;
+      drawList.push({ z: relZ, type: 'gate', obj: g });
+    }
+    // 2. Barrels
+    for (const br of state.barrels) {
+      if (br.broken) continue;
+      const relZ = br.z - state.distance;
+      if (relZ < -2 || relZ > 106) continue;
+      drawList.push({ z: relZ, type: 'barrel', obj: br });
+    }
+    // 3. Enemy Hordes
+    for (const h of state.hordes) {
+      if (!h.alive) continue;
+      const relZ = h.z - state.distance;
+      if (relZ < -4 || relZ > 106) continue;
+      drawList.push({ z: relZ, type: 'horde', obj: h });
+    }
+    // 4. Spinning Saws
+    for (const s of state.saws) {
+      const relZ = s.z - state.distance;
+      if (relZ < -2 || relZ > 106) continue;
+      drawList.push({ z: relZ, type: 'saw', obj: s });
+    }
+    // 5. Boss
+    if (state.boss && !state.boss.defeated) {
+      const relZ = state.boss.z - state.distance;
+      if (relZ > -2 && relZ < 108) drawList.push({ z: relZ, type: 'boss', obj: state.boss });
+    }
+
+    drawList.sort((a, b) => b.z - a.z);
+
+    for (const item of drawList) {
+      if (item.type === 'gate') drawGate(item.obj, item.z);
+      else if (item.type === 'barrel') drawBarrel(item.obj, item.z);
+      else if (item.type === 'horde') drawEnemyHorde(item.obj, item.z);
+      else if (item.type === 'saw') drawSaw(item.obj, item.z);
+      else if (item.type === 'boss') drawBoss(item.obj, item.z);
+    }
+
+    // Draw Glowing Bullets
+    for (const b of state.bullets) {
+      const p0 = project(b.x, b.z, 0.16);
+      const p1 = project(b.x, Math.max(0, b.z - 5), 0.16);
+      ctx.save();
+      ctx.strokeStyle = b.color;
+      ctx.lineWidth = Math.max(2.5, (b.pierce ? 9 : 6) * p0.s);
+      ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y); ctx.stroke();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.arc(p0.x, p0.y, Math.max(2, 4 * p0.s), 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
+
+    // Draw Player Blue Swarm! (Back-to-front sorted by oz)
+    const sortedUnits = state.visualUnits.slice().sort((a, b) => b.oz - a.oz);
+    for (const u of sortedUnits) {
+      const ux = clamp(state.px + u.ox, -0.94, 0.94);
+      const uz = u.oz;
+      const p = project(ux, uz, 0);
+      const col = u.isGiant ? '#f59e0b' : (state.feverTimer > 0 ? '#06b6d4' : '#2563eb');
+      const rim = u.isGiant ? '#fef08a' : '#bae6fd';
+      drawCapsuleWarrior(p.x, p.y, p.s * 1.15, col, rim, u.phase, u.isGiant, u.popAnim);
+    }
+
+    // Crisp Crowd Count Pill Floating Over Player Swarm!
+    if (state.troops > 0) {
+      const cp = project(state.px, 0, 0.52);
+      const pillW = 94, pillH = 34;
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,0.4)';
+      ctx.shadowBlur = 10;
+      ctx.fillStyle = state.feverTimer > 0 ? '#f59e0b' : '#1d4ed8';
+      rr(ctx, cp.x - pillW / 2, cp.y - pillH / 2, pillW, pillH, 17);
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '900 20px "Chakra Petch", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`${state.troops}`, cp.x, cp.y + 1);
+      ctx.restore();
+    }
+  }
+
+  function drawGate(g, relZ) {
+    const leftP = project(g.x - g.w / 2, relZ, 0);
+    const rightP = project(g.x + g.w / 2, relZ, 0);
+    const gw = rightP.x - leftP.x;
+    const gh = Math.max(22, 118 * leftP.s);
+    const gx = leftP.x;
+    const gy = leftP.y - gh - g.hitFlash * 8 * leftP.s;
+
+    const isGood = g.op === 'mul' || g.val > 0;
+    const isGold = g.op === 'mul' && g.val >= 3;
+
+    ctx.save();
+    // Translucent holographic glass panel
+    const fill = g.hitFlash > 0.2
+      ? 'rgba(255, 255, 255, 0.88)'
+      : (isGold ? 'rgba(245, 158, 11, 0.84)' : (isGood ? 'rgba(14, 165, 233, 0.82)' : 'rgba(225, 29, 72, 0.82)'));
+    ctx.fillStyle = fill;
+    rr(ctx, gx, gy, gw, gh, Math.max(4, 14 * leftP.s));
+    ctx.fill();
+
+    // Metallic Side Pillars
+    const postW = Math.max(3, 10 * leftP.s);
+    ctx.fillStyle = isGold ? '#fef08a' : '#f8fafc';
+    ctx.fillRect(gx, gy, postW, gh + 6 * leftP.s);
+    ctx.fillRect(gx + gw - postW, gy, postW, gh + 6 * leftP.s);
+    ctx.fillRect(gx, gy, gw, Math.max(3, 8 * leftP.s));
+
+    // Huge Crisp Gate Number!
+    const txt = g.op === 'mul' ? `×${g.val}` : (g.val > 0 ? `+${g.val}` : `${g.val}`);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `900 ${Math.max(14, Math.round(52 * leftP.s))}px "Chakra Petch", sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.strokeStyle = 'rgba(15, 23, 42, 0.65)';
+    ctx.lineWidth = Math.max(2, 5 * leftP.s);
+    ctx.strokeText(txt, gx + gw / 2, gy + gh * 0.52);
+    ctx.fillText(txt, gx + gw / 2, gy + gh * 0.52);
+
+    // Hint badge on shootable red gates!
+    if (g.op === 'add' && g.val <= 0 && leftP.s > 0.35) {
+      ctx.fillStyle = '#fef08a';
+      ctx.font = `900 ${Math.round(13 * leftP.s)}px "Noto Sans JP", sans-serif`;
+      ctx.fillText('撃って反転！', gx + gw / 2, gy + gh * 0.84);
+    }
+    ctx.restore();
+  }
+
+  function drawBarrel(br, relZ) {
+    const p = project(br.x, relZ, 0);
+    const bw = Math.max(18, 76 * p.s);
+    const bh = Math.max(20, 82 * p.s);
+    const bx = p.x - bw / 2;
+    const by = p.y - bh - br.hitFlash * 7 * p.s;
+
+    ctx.save();
+    ctx.fillStyle = br.hitFlash > 0.2 ? '#ffffff' : br.color;
+    rr(ctx, bx, by, bw, bh, Math.max(4, 14 * p.s));
+    ctx.fill();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = Math.max(1.5, 3.5 * p.s);
+    ctx.stroke();
+
+    // Dark icon badge for high contrast on bright barrels
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+    ctx.beginPath(); ctx.arc(p.x, by + bh * 0.34, Math.max(8, 22 * p.s), 0, Math.PI * 2); ctx.fill();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `${Math.max(12, Math.round(25 * p.s))}px sans-serif`;
+    ctx.fillText(br.icon, p.x, by + bh * 0.35);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = 'rgba(15, 23, 42, 0.85)';
+    ctx.lineWidth = Math.max(2, 4 * p.s);
+    ctx.font = `900 ${Math.max(11, Math.round(24 * p.s))}px "Chakra Petch", sans-serif`;
+    ctx.strokeText(`${Math.ceil(br.hp)}`, p.x, by + bh * 0.76);
+    ctx.fillText(`${Math.ceil(br.hp)}`, p.x, by + bh * 0.76);
+    ctx.restore();
+  }
+
+  function drawEnemyHorde(h, relZ) {
+    const showRatio = clamp(h.count / Math.max(1, h.maxCount), 0.15, 1);
+    const drawN = Math.max(1, Math.round(h.units.length * showRatio));
+    for (let i = 0; i < drawN; i++) {
+      const u = h.units[i];
+      const p = project(clamp(h.x + u.ox, -0.92, 0.92), relZ + u.oz, 0);
+      drawCapsuleWarrior(p.x, p.y, p.s * 1.1, h.hitFlash > 0.25 ? '#ffffff' : '#e11d48', '#fecdd3', u.phase, false, 1);
+    }
+    const tp = project(h.x, relZ, 0.48);
+    const pw = Math.max(36, 72 * tp.s), ph = Math.max(16, 30 * tp.s);
+    ctx.fillStyle = '#be123c';
+    rr(ctx, tp.x - pw / 2, tp.y - ph / 2, pw, ph, ph / 2); ctx.fill();
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = Math.max(1, 2 * tp.s); ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `900 ${Math.max(10, Math.round(18 * tp.s))}px "Chakra Petch", sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(`${Math.ceil(h.count)}`, tp.x, tp.y + 1);
+  }
+
+  function drawSaw(s, relZ) {
+    const p = project(s.x, relZ, 0);
+    const rad = Math.max(12, 52 * p.s);
+    ctx.save();
+    ctx.translate(p.x, p.y - rad * 0.35);
+    ctx.scale(1, 0.52);
+    ctx.rotate(state.elapsed * 9);
+    ctx.fillStyle = '#ef4444';
+    ctx.beginPath();
+    for (let i = 0; i < 16; i++) {
+      const a = (i * Math.PI) / 8;
+      const r = i % 2 === 0 ? rad : rad * 0.72;
+      if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+      else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3; ctx.stroke();
+    ctx.fillStyle = '#1e293b';
+    ctx.beginPath(); ctx.arc(0, 0, rad * 0.28, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  function drawBoss(boss, relZ) {
+    const p = project(boss.x, relZ, 0);
+    const sc = p.s * 4.4;
+    drawCapsuleWarrior(p.x, p.y, sc, boss.hitFlash > 0.2 ? '#ffffff' : '#991b1b', '#fde047', 0, true, 1);
+
+    // Boss HP Bar cleanly floating above the golden crown!
+    const bw = Math.max(94, 220 * p.s), bh = Math.max(14, 28 * p.s);
+    const by = p.y - 475 * p.s;
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
+    rr(ctx, p.x - bw / 2, by, bw, bh, bh / 2); ctx.fill();
+    const frac = clamp(boss.hp / boss.maxHp, 0, 1);
+    ctx.fillStyle = '#f43f5e';
+    rr(ctx, p.x - bw / 2 + 3, by + 3, Math.max(6, (bw - 6) * frac), bh - 6, bh / 2); ctx.fill();
+    ctx.strokeStyle = '#fde047'; ctx.lineWidth = 2;
+    rr(ctx, p.x - bw / 2, by, bw, bh, bh / 2); ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `900 ${Math.max(11, Math.round(18 * p.s))}px "Chakra Petch", sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(`BOSS ${Math.ceil(boss.hp)}`, p.x, by + bh / 2 + 1);
+  }
+
+  // =========================================================================
+  // HUD, LOBBY UPGRADE DOCK & VICTORY SCREEN
+  // =========================================================================
+  function drawTopHUD() {
+    // Stage Progress Bar at top
+    const px = 122, py = 18, pw = W - 244, ph = 22;
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.72)';
+    rr(ctx, px, py, pw, ph, 11); ctx.fill();
+    const prog = clamp(state.distance / state.stageLength, 0, 1);
+    ctx.fillStyle = state.feverTimer > 0 ? '#fde047' : '#38bdf8';
+    rr(ctx, px + 3, py + 3, Math.max(10, (pw - 6) * prog), ph - 6, 8); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.45)'; ctx.lineWidth = 1.5;
+    rr(ctx, px, py, pw, ph, 11); ctx.stroke();
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '900 13px "Chakra Petch", sans-serif';
+    ctx.fillText(`STAGE ${save.stage}`, W / 2, py + 38);
+
+    // Right Coin Counter & Mute Toggle
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.8)';
+    rr(ctx, W - 114, 14, 102, 34, 17); ctx.fill();
+    ctx.strokeStyle = '#facc15'; ctx.lineWidth = 1.8; ctx.stroke();
+    ctx.fillStyle = '#fde047';
+    ctx.font = '900 15px "Chakra Petch", sans-serif';
+    ctx.fillText(`🪙 ${(save.coins + state.runCoins).toLocaleString()}`, W - 63, 36);
+
+    if (!SHORTS_MODE) {
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.78)';
+      rr(ctx, W - 48, 56, 36, 34, 10); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = 1.2; ctx.stroke();
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '15px sans-serif';
+      ctx.fillText(muted ? '🔇' : '🔊', W - 30, 78);
+      addHit('mute_btn', W - 48, 56, 36, 34, () => { muted = !muted; });
+    }
+
+    // Active Weapon & Fever Indicator
+    if (state.screen === 'play' || state.screen === 'boss_clash') {
+      const wDef = WEAPONS[state.weapon];
+      if (state.weapon !== 'normal') {
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+        rr(ctx, W / 2 - 110, 68, 220, 32, 16); ctx.fill();
+        ctx.strokeStyle = wDef.color; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = wDef.color;
+        ctx.font = '900 14px "Noto Sans JP", sans-serif';
+        ctx.fillText(`${wDef.icon} ${wDef.name} (${Math.ceil(state.weaponTimer)}s)`, W / 2, 89);
+      }
+      // Fever bar with crisp label
+      const fx = 166, fy = 108, fw = W - 332, fh = 12;
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.65)';
+      rr(ctx, fx, fy, fw, fh, 6); ctx.fill();
+      const ff = state.feverTimer > 0 ? (state.feverTimer / 5.5) : (state.feverGauge / 100);
+      ctx.fillStyle = state.feverTimer > 0 ? '#fde047' : '#f43f5e';
+      rr(ctx, fx, fy, fw * clamp(ff, 0, 1), fh, 6); ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '900 9.5px "Chakra Petch", sans-serif';
+      ctx.fillText(state.feverTimer > 0 ? '🔥 FEVER MAX!!' : 'FEVER', W / 2, fy + 9.5);
+    }
+  }
+
+  function drawLobbyOverlay() {
+    // Crisp Title Banner right over the live sunlit highway!
+    ctx.textAlign = 'center';
+    ctx.save();
+    ctx.shadowColor = 'rgba(15, 23, 42, 0.65)';
+    ctx.shadowBlur = 18;
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '900 56px "Chakra Petch", sans-serif';
+    ctx.fillText('CROWD ×999', W / 2, 166);
+    ctx.restore();
+
+    ctx.fillStyle = '#0f172a';
+    rr(ctx, W / 2 - 190, 184, 380, 34, 17); ctx.fill();
+    ctx.fillStyle = '#fde047';
+    ctx.font = '900 15px "Noto Sans JP", sans-serif';
+    ctx.fillText('🔥 あの広告の増殖ゲートをガチ神ゲー化！', W / 2, 206);
+
+    // Big Pulsing START PLAY Button!
+    const pulse = 1 + Math.sin(state.elapsed * 5) * 0.03;
+    const bx = 64, by = 520, bw = W - 128, bh = 86;
+    ctx.save();
+    ctx.translate(W / 2, by + bh / 2);
+    ctx.scale(pulse, pulse);
+    ctx.shadowColor = 'rgba(245, 158, 11, 0.55)';
+    ctx.shadowBlur = 24;
+    const bg = ctx.createLinearGradient(0, -bh / 2, 0, bh / 2);
+    bg.addColorStop(0, '#fde047'); bg.addColorStop(1, '#ea580c');
+    ctx.fillStyle = bg;
+    rr(ctx, -bw / 2, -bh / 2, bw, bh, 22); ctx.fill();
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3; ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '900 28px "Noto Sans JP", sans-serif';
+    ctx.fillText(`▶ STAGE ${save.stage} 出撃！`, 0, -2);
+    ctx.fillStyle = '#fef9c3';
+    ctx.font = '800 13px "Noto Sans JP", sans-serif';
+    ctx.fillText('左右スワイプでゲートを撃って大増殖！', 0, 24);
+    ctx.restore();
+    addHit('start_run', bx, by, bw, bh, startRun);
+
+    // 3 Tactile Permanent Upgrade Cards at bottom!
+    const upgs = [
+      { key: 'upgStart', icon: '👥', name: '初期人数', valTxt: `${startTroopsForLevel(save.upgStart)}人` },
+      { key: 'upgFire',  icon: '⚡', name: '火力・連射', valTxt: `Lv.${save.upgFire}` },
+      { key: 'upgCoin',  icon: '🪙', name: 'コイン倍率', valTxt: `×${coinMultForLevel(save.upgCoin).toFixed(1)}` },
+    ];
+    const uw = 158, uh = 136, gap = 12, uy = 774;
+    upgs.forEach((u, i) => {
+      const ux = (W - (3 * uw + 2 * gap)) / 2 + i * (uw + gap);
+      const cost = upgCost(save[u.key]);
+      const canBuy = save.coins >= cost;
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+      rr(ctx, ux, uy, uw, uh, 18); ctx.fill();
+      ctx.strokeStyle = canBuy ? '#fde047' : 'rgba(255,255,255,0.22)';
+      ctx.lineWidth = canBuy ? 2.5 : 1.5; ctx.stroke();
+
+      ctx.textAlign = 'center';
+      ctx.font = '28px sans-serif';
+      ctx.fillText(u.icon, ux + uw / 2, uy + 36);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '900 14px "Noto Sans JP", sans-serif';
+      ctx.fillText(u.name, ux + uw / 2, uy + 64);
+      ctx.fillStyle = '#38bdf8';
+      ctx.font = '900 15px "Chakra Petch", sans-serif';
+      ctx.fillText(u.valTxt, ux + uw / 2, uy + 86);
+
+      ctx.fillStyle = canBuy ? '#facc15' : '#334155';
+      rr(ctx, ux + 14, uy + uh - 36, uw - 28, 26, 9); ctx.fill();
+      ctx.fillStyle = canBuy ? '#0f172a' : '#94a3b8';
+      ctx.font = '900 13px "Chakra Petch", sans-serif';
+      ctx.fillText(`🪙 ${cost}`, ux + uw / 2, uy + uh - 18);
+
+      if (canBuy) addHit(`upg_${u.key}`, ux, uy, uw, uh, () => {
+        save.coins -= cost;
+        save[u.key]++;
+        writeSave(save);
+        state.troops = startTroopsForLevel(save.upgStart);
+        syncVisualUnits();
+        SFX.barrelBreak();
+        spawnParticles(ux + uw / 2, uy + 40, 22, ['#fde047', '#38bdf8', '#ffffff'], 220, 320);
+      });
+    });
+
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.font = '800 13px "Noto Sans JP", sans-serif';
+    ctx.fillText(`最大軍団記録: ${save.bestCrowd}人`, W / 2, 938);
+  }
+
+  function drawResultModal(isVictory) {
+    ctx.fillStyle = 'rgba(10, 22, 40, 0.78)';
+    ctx.fillRect(0, 0, W, H);
+    const cx = 36, cy = 200, cw = W - 72, ch = 480;
+    ctx.fillStyle = '#0f172a';
+    rr(ctx, cx, cy, cw, ch, 26); ctx.fill();
+    ctx.strokeStyle = isVictory ? '#fde047' : '#fb7185';
+    ctx.lineWidth = 3.5; ctx.stroke();
+
+    ctx.textAlign = 'center';
+    ctx.font = '60px sans-serif';
+    ctx.fillText(isVictory ? '🏆' : '💥', W / 2, cy + 84);
+    ctx.fillStyle = isVictory ? '#fde047' : '#fda4af';
+    ctx.font = '900 36px "Chakra Petch", "Noto Sans JP", sans-serif';
+    ctx.fillText(isVictory ? 'STAGE CLEAR!!' : '全滅...', W / 2, cy + 142);
+
+    if (isVictory) {
+      ctx.fillStyle = '#38bdf8';
+      ctx.font = '900 22px "Noto Sans JP", sans-serif';
+      ctx.fillText(`生存軍団 ${state.troops}人 → ボーナス ×${state.stairMult}!!`, W / 2, cy + 190);
+      ctx.fillStyle = '#fde047';
+      ctx.font = '900 44px "Chakra Petch", sans-serif';
+      ctx.fillText(`+🪙 ${state.bonusCoinsAwarded.toLocaleString()}`, W / 2, cy + 258);
+      ctx.fillStyle = '#cbd5e1';
+      ctx.font = '700 15px "Noto Sans JP", sans-serif';
+      ctx.fillText(`今回の最大軍団数：${state.maxTroopsReached}人`, W / 2, cy + 306);
+    } else {
+      ctx.fillStyle = '#e2e8f0';
+      ctx.font = '700 16px "Noto Sans JP", sans-serif';
+      ctx.fillText('赤ゲートを撃って青に反転させよう！', W / 2, cy + 206);
+      ctx.fillStyle = '#fde047';
+      ctx.font = '900 26px "Chakra Petch", sans-serif';
+      ctx.fillText(`獲得コイン +🪙 ${state.runCoins}`, W / 2, cy + 266);
+      if (state.runCoins > 0) {
+        save.coins += state.runCoins;
+        state.runCoins = 0;
+        writeSave(save);
+      }
+    }
+
+    const bx = cx + 28, by = cy + 368, bw = cw - 56, bh = 78;
+    const bg = ctx.createLinearGradient(bx, by, bx, by + bh);
+    bg.addColorStop(0, '#4ade80'); bg.addColorStop(1, '#16a34a');
+    ctx.fillStyle = bg;
+    rr(ctx, bx, by, bw, bh, 18); ctx.fill();
+    ctx.fillStyle = '#052e16';
+    ctx.font = '900 24px "Noto Sans JP", sans-serif';
+    ctx.fillText(isVictory ? `強化して STAGE ${save.stage} へ →` : '強化してリベンジ →', W / 2, by + 48);
+    addHit('res_next', bx, by, bw, bh, () => {
+      state.screen = 'lobby';
+      setupLobbyPreview();
+    });
+  }
+
+  function drawFX() {
+    for (const p of state.particles) {
+      ctx.save();
+      ctx.globalAlpha = clamp(p.life / p.maxLife, 0, 1);
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.72);
+      ctx.restore();
+    }
+    for (const f of state.floats) {
+      ctx.save();
+      ctx.globalAlpha = clamp(f.life / f.maxLife, 0, 1);
+      ctx.font = `900 ${f.size}px "Chakra Petch", "Noto Sans JP", sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.strokeStyle = 'rgba(15, 23, 42, 0.9)';
+      ctx.lineWidth = 6;
+      ctx.strokeText(f.text, f.x, f.y);
+      ctx.fillStyle = f.color;
+      ctx.fillText(f.text, f.x, f.y);
+      ctx.restore();
+    }
+    if (state.flashAlpha > 0.01 && state.flashColor) {
+      ctx.fillStyle = state.flashColor;
+      ctx.globalAlpha = state.flashAlpha;
+      ctx.fillRect(0, 0, W, H);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  function render() {
+    hitboxes = [];
+    ctx.save();
+    if (state.shake > 0.2) ctx.translate((Math.random() - 0.5) * state.shake, (Math.random() - 0.5) * state.shake);
+
+    drawSkyAndBridge();
+    drawWorldEntities();
+    drawTopHUD();
+
+    if (state.screen === 'lobby') drawLobbyOverlay();
+    else if (state.screen === 'victory') drawResultModal(true);
+    else if (state.screen === 'gameover') drawResultModal(false);
+
+    drawFX();
+    ctx.restore();
+  }
+
+  // Init lobby troops & iconic preview gates on the bridge!
+  function setupLobbyPreview() {
+    state.distance = 0;
+    state.px = 0;
+    state.troops = startTroopsForLevel(save.upgStart);
+    state.giants = 0;
+    state.bullets = [];
+    state.barrels = [];
+    state.hordes = [];
+    state.saws = [];
+    state.boss = null;
+    state.gates = [
+      { z: 38, side: -1, x: -0.49, w: 0.9, op: 'add', val: -15, hitFlash: 0, moveAmp: 0, moveSpd: 0, movePhase: 0, passed: false, pairId: 1 },
+      { z: 38, side: 1,  x: 0.49,  w: 0.9, op: 'mul', val: 4,   hitFlash: 0, moveAmp: 0, moveSpd: 0, movePhase: 0, passed: false, pairId: 1 },
+    ];
+    syncVisualUnits();
+  }
+  setupLobbyPreview();
+
+  window.__stepFrame = (dt = 1 / 60) => { update(dt); render(); };
+
+  let lastTs = performance.now();
+  function loop(ts) {
+    const dt = Math.min(0.05, Math.max(0.001, (ts - lastTs) / 1000));
+    lastTs = ts;
+    if (!window.__manualStep) { update(dt); render(); }
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
