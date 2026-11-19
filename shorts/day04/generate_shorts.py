@@ -184,13 +184,13 @@ def start_static_server(directory: Path):
     return srv, port
 
 
-# Natural, punchy Japanese voice narration for First-Person 11-Man Dribble Soccer
+# Natural, punchy Japanese voice narration for First-Person 11-Man Dribble Soccer (Very Hard + 4 Special Skills)
 NARRATION_CUES = [
-    (0.05, "一人称視点で11人抜きするサッカーゲーム作った！"),
-    (3.10, "ランダムに動く相手を、左右のフェイントでかわして、"),
-    (7.30, "スライディングもギリギリで突破すると一気に加速！"),
-    (12.80, "10人抜いたら最後はキーパーと1対1！"),
-    (15.30, "11人抜きゴール！スマホで今すぐ遊べるよ！"),
+    (0.05, "360度自由移動で、ベリーハードの11人抜きサッカー！"),
+    (3.25, "猛プレスをダブルタッチとアクセルバーストで突破！"),
+    (6.95, "ルーレット回転から、頭上を越えるヒールリフト！"),
+    (11.00, "10人抜いたら、自由軌道でバナナカーブシュート！"),
+    (14.55, "11人抜きゴール！ベリーハードで何人抜ける？"),
 ]
 
 
@@ -285,7 +285,7 @@ def generate_audio(total_dur: float, events: list, wav_path: Path):
 
         bgm[s_start : s_start + s_len] += bass + marimba + kick + hat
 
-    # Frame-accurate soccer SFX (whistle, pass, ankle_breaker, shoot, goal)
+    # Frame-accurate soccer SFX (whistle, skill, pass, ankle_breaker, shoot, goal)
     penta = [440.0, 493.88, 523.25, 587.33, 659.25, 783.99, 880.0, 987.77, 1046.5, 1174.66, 1318.51]
     for ev in events:
         t0 = float(ev.get("t", 0.0))
@@ -299,6 +299,18 @@ def generate_audio(total_dur: float, events: list, wav_path: Path):
             lt = np.arange(e_len, dtype=np.float32) / sr
             trill = 2850.0 + 120.0 * np.sin(2.0 * math.pi * 28.0 * lt)
             sfx[idx0 : idx0 + e_len] += np.sin(2.0 * math.pi * np.cumsum(trill) / sr) * np.exp(-lt * 8.0) * 0.18
+        elif kind in ("skill", "accel_burst", "double_touch", "roulette", "heel_lift"):
+            skill_type = ev.get("skill") or kind
+            e_len = min(int(0.28 * sr), n_samples - idx0)
+            if e_len > 0:
+                lt = np.arange(e_len, dtype=np.float32) / sr
+                if skill_type == "heel_lift":
+                    freq = np.linspace(340.0, 1180.0, e_len, dtype=np.float32)
+                elif skill_type == "roulette":
+                    freq = 560.0 + 240.0 * np.sin(2.0 * math.pi * 9.0 * lt)
+                else:
+                    freq = np.linspace(260.0, 920.0, e_len, dtype=np.float32)
+                sfx[idx0 : idx0 + e_len] += np.sin(2.0 * math.pi * np.cumsum(freq) / sr) * np.exp(-lt * 11.0) * 0.26
         elif kind == "pass":
             c = int(ev.get("count", 1))
             f0 = penta[min(c, len(penta) - 1)]
@@ -474,9 +486,9 @@ def generate_thumbnail(action_img: Image.Image, out_png: Path):
     draw.text((68, 272), "衝撃の11人抜きGOAL!", font=font_hero, fill=(22, 163, 74))
 
     draw.text((70, 396), "ELEVEN DRIBBLE", font=font_title, fill=(2, 132, 199))
-    draw.text((70, 470), "左右スライドでランダムCPUを突破×カーブシュート", font=font_sub, fill=(51, 65, 85))
+    draw.text((70, 470), "360°自由移動×4大必殺スキル×バナナカーブ", font=font_sub, fill=(51, 65, 85))
 
-    pills = [("一人称3Dサッカー", (22, 163, 74)), ("11人抜きチャレンジ", (234, 88, 12)), ("完全無料", (2, 132, 199))]
+    pills = [("一人称3Dサッカー", (22, 163, 74)), ("鬼ベリーハード搭載", (225, 29, 72)), ("完全無料", (2, 132, 199))]
     px = 70
     for label, col in pills:
         pb = draw.textbbox((0, 0), label, font=font_tag)
@@ -564,7 +576,7 @@ def main():
 
         frames_dir = OUT_DIR / "frames"
         frames_dir.mkdir(exist_ok=True)
-        for old in frames_dir.glob("*.png"):
+        for old in frames_dir.glob("*.*"):
             old.unlink()
 
         font_big = ImageFont.truetype(FONT_SANS, 64)
@@ -572,11 +584,13 @@ def main():
         font_small = ImageFont.truetype(FONT_SANS, 38)
 
         caption_plan = [
-            (0.0, 3.05, "一人称で11人抜きサッカー!!", (255, 255, 255)),
-            (3.05, 7.20, "ランダムCPUをフェイント突破!!", (163, 230, 53)),
-            (7.20, 12.70, "スライディングも神回避で加速!!", (34, 211, 238)),
-            (12.70, 15.30, "10人突破！最後はGKと1対1!!", (250, 204, 21)),
-            (15.30, 18.10, "11人抜きGOAL!! 何人抜ける？", (250, 204, 21)),
+            (0.0, 1.55, "【鬼】ベリーハードで11人抜き!!", (255, 255, 255)),
+            (1.55, 3.95, "ダブルタッチ＆★爆速バースト!!", (34, 211, 238)),
+            (3.95, 6.55, "360°回転マルセイユルーレット!!", (192, 132, 252)),
+            (6.55, 9.15, "頭上を越える★ヒールリフト!!", (250, 204, 21)),
+            (9.15, 11.80, "連続スキルで10人全員突破!!", (163, 230, 53)),
+            (11.80, 13.12, "⚽自由軌道で29mバナナカーブ!!", (250, 204, 21)),
+            (13.12, 18.10, "11人抜きGOAL!! ベリーハード抜ける？", (250, 204, 21)),
         ]
 
         all_events = []
@@ -587,13 +601,13 @@ def main():
             step_res = cdp.eval_js(f"window.__SHORTS_STEP__({dt_ms:.6f})") or {}
             evs = step_res.get("events", [])
             for ev in evs:
-                ev["t"] = t
+                ev["t"] = round(t, 2)
                 all_events.append(ev)
 
-            shot = cdp.call("Page.captureScreenshot", {"format": "png"})
+            shot = cdp.call("Page.captureScreenshot", {"format": "jpeg", "quality": 96})
             game_img = Image.open(io.BytesIO(base64.b64decode(shot["data"]))).convert("RGB")
 
-            if f_idx == 865:
+            if f_idx == 774:
                 thumb_action_img = game_img.copy()
 
             pop_text, pop_start, pop_color = "", t, (255, 255, 255)
@@ -602,7 +616,7 @@ def main():
                     pop_text, pop_start, pop_color = txt, s0, col
                     break
 
-            end_cta = "リンクから無料で遊べるよ ▼" if t >= 15.0 else ""
+            end_cta = "リンクから無料で遊べるよ ▼" if t >= 13.3 else ""
             frame = overlay_human_captions(
                 frame_img=game_img,
                 t=t,
@@ -614,7 +628,7 @@ def main():
                 font_med=font_med,
                 font_small=font_small,
             )
-            frame.save(frames_dir / f"frame_{f_idx:04d}.png", compress_level=1)
+            frame.save(frames_dir / f"frame_{f_idx:04d}.jpg", quality=95)
 
         wav_path = OUT_DIR / "audio.wav"
         generate_audio(total_dur, all_events, wav_path)
@@ -624,7 +638,7 @@ def main():
             [
                 "ffmpeg", "-y",
                 "-framerate", str(fps),
-                "-i", str(frames_dir / "frame_%04d.png"),
+                "-i", str(frames_dir / "frame_%04d.jpg"),
                 "-i", str(wav_path),
                 "-c:v", "libx264",
                 "-preset", "medium",
