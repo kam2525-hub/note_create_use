@@ -369,8 +369,89 @@
     },
   ];
 
+  // 3 CPU Pressing Difficulty Modes: Easy (🟢 イージー) / Normal (🟡 ノーマル) / Very Hard (🔥 ベリーハード)
+  const DIFFICULTY_ORDER = ['easy', 'normal', 'very_hard'];
+  const DIFFICULTY_CONFIG = {
+    easy: {
+      id: 'easy',
+      icon: '🟢',
+      label: 'イージー',
+      fullLabel: '🟢 イージー',
+      sub: 'ゆったり練習',
+      desc: '敵の寄せがマイルド・接触耐性3回（SCORE ×1.0）',
+      color: '#4ade80',
+      col1: '#22c55e',
+      col2: '#15803d',
+      border: '#bbf7d0',
+      speedMul: 0.92,
+      pressRadius: 26,
+      closeBurstMul: 1.05,
+      accelRate: 6.0,
+      slideSpeed: 14.5,
+      slideRange: 12.0,
+      slideCooldown: 2.2,
+      allCanSlide: false,
+      chaseFromBehind: false,
+      immediatePress: false,
+      gkSpeedMul: 0.9,
+      shields: 3,
+      scoreMul: 1.0,
+    },
+    normal: {
+      id: 'normal',
+      icon: '🟡',
+      label: 'ノーマル',
+      fullLabel: '🟡 ノーマル',
+      sub: '高速プレス',
+      desc: '敵が素早く詰めてくる標準モード・耐性2回（SCORE ×1.5）',
+      color: '#facc15',
+      col1: '#eab308',
+      col2: '#a16207',
+      border: '#fef08a',
+      speedMul: 1.34,
+      pressRadius: 44,
+      closeBurstMul: 1.20,
+      accelRate: 9.5,
+      slideSpeed: 18.8,
+      slideRange: 14.8,
+      slideCooldown: 1.4,
+      allCanSlide: false,
+      chaseFromBehind: false,
+      immediatePress: true,
+      gkSpeedMul: 1.15,
+      shields: 2,
+      scoreMul: 1.5,
+    },
+    very_hard: {
+      id: 'very_hard',
+      icon: '🔥',
+      label: 'ベリーハード',
+      fullLabel: '🔥 ベリーハード',
+      sub: '猛烈プレス',
+      desc: '超高速ゲーゲンプレス＆全員スライディング！耐性1回（SCORE ×2.5）',
+      color: '#fb7185',
+      col1: '#f43f5e',
+      col2: '#9f1239',
+      border: '#fecdd3',
+      speedMul: 1.82,
+      pressRadius: 72,
+      closeBurstMul: 1.35,
+      accelRate: 14.0,
+      slideSpeed: 24.0,
+      slideRange: 17.2,
+      slideCooldown: 0.9,
+      allCanSlide: true,
+      chaseFromBehind: true,
+      immediatePress: true,
+      gkSpeedMul: 1.45,
+      shields: 1,
+      scoreMul: 2.5,
+    },
+  };
+
   const state = {
     phase: SHORTS_MODE ? 'dribble' : 'title', // 'title' | 'dribble' | 'aim_shot' | 'shot_flight' | 'loose_ball' | 'goal' | 'gameover'
+    difficulty: 'normal', // 'easy' | 'normal' | 'very_hard'
     elapsed: 0,
     stage: 1,
     score: 0,
@@ -407,7 +488,7 @@
       boostTimer: 0,
       dashActive: false,
       pullBackActive: false,
-      skillType: '',    // '' | 'accel_burst' | 'double_touch' | 'roulette'
+      skillType: '',    // '' | 'accel_burst' | 'double_touch' | 'roulette' | 'heel_lift'
       skillTimer: 0,
       skillDuration: 0.5,
       skillDir: 1,      // +1 (right) or -1 (left)
@@ -445,7 +526,7 @@
     defenders: [],
     gk: null,
     particles: [],
-    skillEffects: [],   // 3D turf visual rings & L-paths for Accel Burst, Double Touch, Roulette
+    skillEffects: [],   // 3D turf visual rings & L-paths for Accel Burst, Double Touch, Roulette, Heel Lift
     stadiumLights: [],
   };
 
@@ -483,11 +564,43 @@
     { shirt: '#8b5cf6', stripe: '#5b21b6', shorts: '#0f172a' },
   ];
 
+  function getDifficultyConfig() {
+    return DIFFICULTY_CONFIG[state.difficulty] || DIFFICULTY_CONFIG.normal;
+  }
+
+  function setDifficulty(modeId, announce = true) {
+    if (!DIFFICULTY_CONFIG[modeId]) return;
+    state.difficulty = modeId;
+    const cfg = getDifficultyConfig();
+    const stageMul = 1 + (state.stage - 1) * 0.14;
+
+    state.defenders.forEach((d, idx) => {
+      const baseSpd = 9.5 + idx * 0.35;
+      d.baseSpeed = baseSpd;
+      d.maxSpeed = baseSpd * cfg.speedMul * stageMul;
+    });
+    if (state.gk) {
+      state.gk.freq = 2.3 * cfg.gkSpeedMul * stageMul;
+    }
+
+    if (announce) {
+      playSfx('pass');
+      showBanner(
+        `${cfg.fullLabel} モード！`,
+        cfg.desc,
+        cfg.color,
+        1.35
+      );
+    }
+    emitEvent('difficulty_change', { difficulty: modeId });
+  }
+
   // Build 10 freely roaming 2D CPU field players + #11 Goalkeeper
   function buildDefenders(stage) {
     const defs = [];
-    const speedMul = 1 + (stage - 1) * 0.14;
-    const roles = ['ROAMER', 'CHASER', 'INTERCEPTOR', 'SLIDER'];
+    const cfg = getDifficultyConfig();
+    const stageMul = 1 + (stage - 1) * 0.14;
+    const roles = ['CHASER', 'INTERCEPTOR', 'ROAMER', 'SLIDER'];
 
     for (let i = 0; i < 10; i++) {
       const num = i + 1;
@@ -498,6 +611,7 @@
       const role = SHORTS_MODE
         ? (i % 3 === 2 ? 'SLIDER' : (i % 2 === 0 ? 'CHASER' : 'INTERCEPTOR'))
         : roles[i % roles.length];
+      const baseSpeed = 9.5 + i * 0.35;
 
       defs.push({
         num,
@@ -510,7 +624,9 @@
         vx: 0,
         vz: 0,
         heading: Math.PI, // Facing towards kickoff (-Z)
-        maxSpeed: (9.5 + (i * 0.35)) * speedMul,
+        baseSpeed,
+        maxSpeed: baseSpeed * cfg.speedMul * stageMul,
+        pressing: false,
         roamTargetX: homeX + randRange(-7, 7),
         roamTargetZ: homeZ + randRange(-10, 10),
         roamTimer: randRange(0.4, 1.4),
@@ -538,7 +654,7 @@
       diveDir: 0,
       diveHeight: 0,
       diveProgress: 0,
-      freq: 2.3 * speedMul,
+      freq: 2.3 * cfg.gkSpeedMul * stageMul,
       phase: randRange(0, Math.PI * 2),
       stridePhase: 0,
     };
@@ -569,6 +685,7 @@
   }
 
   function startMatch(stage = 1) {
+    const cfg = getDifficultyConfig();
     state.stage = stage;
     if (stage === 1) {
       state.score = 0;
@@ -577,7 +694,7 @@
     state.passedCount = 0;
     state.combo = 0;
     state.ankleBreakers = 0;
-    state.shields = 2;
+    state.shields = cfg.shields;
     state.invulnTimer = 0;
     state.slowMoTimer = 0;
     state.shakeTimer = 0;
@@ -620,13 +737,13 @@
 
     buildDefenders(stage);
     showBanner(
-      'KICK OFF!',
-      '左スティック（ドラッグ）で360°自由移動＆4大スキル＆自由シュート！',
-      '#a3e635',
+      `KICK OFF! (${cfg.fullLabel})`,
+      cfg.desc,
+      cfg.color,
       1.6
     );
     playSfx('whistle');
-    emitEvent('kickoff', { stage });
+    emitEvent('kickoff', { stage, difficulty: state.difficulty });
   }
 
   // Pick smart lateral evade direction away from the closest oncoming defender!
@@ -1045,6 +1162,49 @@
     return null;
   }
 
+  // Hit-test Top In-Game 3-Difficulty Switcher Bar (🟢イージー / 🟡ノーマル / 🔥ベリーハード)
+  function getTouchedTopDifficultyButton(pt) {
+    const topY = SHORTS_MODE ? 132 : 44;
+    const barY = topY + 114;
+    const h = 28;
+    const w = 162;
+    const centersX = [99, 270, 441];
+    for (let i = 0; i < DIFFICULTY_ORDER.length; i++) {
+      const cx = centersX[i];
+      if (
+        pt.x >= cx - w * 0.5 - 4 &&
+        pt.x <= cx + w * 0.5 + 4 &&
+        pt.y >= barY - h * 0.5 - 6 &&
+        pt.y <= barY + h * 0.5 + 6
+      ) {
+        return DIFFICULTY_ORDER[i];
+      }
+    }
+    return null;
+  }
+
+  // Hit-test Modal 3-Difficulty Selector Buttons (on Title / GameOver / Goal Modal)
+  function getTouchedModalDifficultyButton(pt) {
+    const cardH = 510;
+    const cardY = (H - cardH) * 0.5;
+    const cy = cardY + 340;
+    const w = 144;
+    const h = 54;
+    const centersX = [114, 270, 426];
+    for (let i = 0; i < DIFFICULTY_ORDER.length; i++) {
+      const cx = centersX[i];
+      if (
+        pt.x >= cx - w * 0.5 - 6 &&
+        pt.x <= cx + w * 0.5 + 6 &&
+        pt.y >= cy - h * 0.5 - 8 &&
+        pt.y <= cy + h * 0.5 + 8
+      ) {
+        return DIFFICULTY_ORDER[i];
+      }
+    }
+    return null;
+  }
+
   function isTouchOnShootZoneOrBall(pt) {
     // Check bottom-right ⚽ SHOOT button
     const distBtn = Math.hypot(pt.x - SHOOT_BTN.x, pt.y - SHOOT_BTN.y);
@@ -1066,20 +1226,34 @@
     ensureAudio();
     const pt = getCanvasPoint(e);
 
-    if (state.phase === 'title') {
-      startMatch(1);
-      return;
-    }
-    if (state.phase === 'gameover') {
-      startMatch(1);
-      return;
-    }
-    if (state.phase === 'goal') {
-      startMatch(state.stage + 1);
+    if (state.phase === 'title' || state.phase === 'gameover' || state.phase === 'goal') {
+      const modalDiff = getTouchedModalDifficultyButton(pt);
+      if (modalDiff) {
+        if (state.difficulty !== modalDiff) {
+          setDifficulty(modalDiff, false);
+          playSfx('pass');
+          return;
+        }
+        // Tapping the already-selected difficulty button starts the match right away!
+      }
+      if (state.phase === 'goal') {
+        startMatch(state.stage + 1);
+      } else {
+        startMatch(1);
+      }
       return;
     }
 
-    // 1. Check if tapping one of the 3 Special Dribble Skill Buttons (⚡バースト / 👟ダブルタッチ / 🌀ルーレット)!
+    // 0. Check if tapping one of the 3 Top Live Difficulty Switcher Pills (🟢イージー / 🟡ノーマル / 🔥ベリーハード)!
+    if (state.phase === 'dribble' || state.phase === 'loose_ball' || state.phase === 'aim_shot') {
+      const topDiff = getTouchedTopDifficultyButton(pt);
+      if (topDiff) {
+        setDifficulty(topDiff, true);
+        return;
+      }
+    }
+
+    // 1. Check if tapping one of the 4 Special Dribble Skill Buttons (⚡バースト / 👟ダブルタッチ / 🌀ルーレット / 🌈ヒールリフト)!
     if (state.phase === 'dribble' || state.phase === 'loose_ball') {
       const skillBtn = getTouchedSkillButton(pt);
       if (skillBtn) {
@@ -1218,7 +1392,7 @@
   window.addEventListener('pointerup', handlePointerUp);
   window.addEventListener('pointercancel', handlePointerUp);
 
-  // PC Keyboard Support (WASD / Arrows for 360 Manual Move + 1=Accel Burst, 2/C=Double Touch, 3/R=Roulette, 4/F=Heel Lift + Space=Shoot)
+  // PC Keyboard Support (WASD / Arrows for 360 Manual Move + 1..4=Skills + 5/6/7/M=Difficulty + Space=Shoot)
   const keys = { left: false, right: false, up: false, down: false, curveL: false, curveR: false };
   window.addEventListener('keydown', (e) => {
     if (SHORTS_MODE) return;
@@ -1238,6 +1412,18 @@
       triggerDribbleSkill('roulette', keys.left ? -1 : (keys.right ? 1 : 0));
     } else if (e.key === '4' || e.key === 'f' || e.key === 'F') {
       triggerDribbleSkill('heel_lift', 0);
+    }
+
+    // Difficulty Mode Shortcuts (5=Easy, 6=Normal, 7=Very Hard, M=Cycle)
+    if (e.key === '5') {
+      setDifficulty('easy', true);
+    } else if (e.key === '6') {
+      setDifficulty('normal', true);
+    } else if (e.key === '7') {
+      setDifficulty('very_hard', true);
+    } else if (e.key === 'm' || e.key === 'M') {
+      const nextIdx = (DIFFICULTY_ORDER.indexOf(state.difficulty) + 1) % DIFFICULTY_ORDER.length;
+      setDifficulty(DIFFICULTY_ORDER[nextIdx], true);
     }
 
     if (e.key === ' ' || e.key === 'Enter') {
@@ -1315,12 +1501,19 @@
       return;
     }
 
-    // 1. Update All 10 Field CPU Players (Free 2D Roaming, Pursuit, Interception & Sliding!)
-    state.defenders.forEach((d) => {
+    // 1. Update All 10 Field CPU Players (Difficulty-Driven 2D Roaming, High-Speed Pressing, Interception & Sliding!)
+    const diffCfg = getDifficultyConfig();
+    const stageMul = 1 + (state.stage - 1) * 0.14;
+
+    state.defenders.forEach((d, idx) => {
+      const baseSpd = d.baseSpeed || (9.5 + idx * 0.35);
+      d.maxSpeed = baseSpd * diffCfg.speedMul * stageMul;
+
       if (d.slideCooldown > 0) d.slideCooldown = Math.max(0, d.slideCooldown - effDt);
 
       // If stunned by an Ankle Breaker, stumble forward on momentum
       if (d.stunTimer > 0) {
+        d.pressing = false;
         d.stunTimer = Math.max(0, d.stunTimer - effDt);
         d.x = clamp(d.x + d.vx * 0.4 * effDt, -PLAYER_MAX_X, PLAYER_MAX_X);
         d.z = clamp(d.z + d.vz * 0.4 * effDt, 4, GOAL_Z - 4);
@@ -1333,6 +1526,7 @@
 
       // Sliding tackle state
       if (d.sliding) {
+        d.pressing = true;
         d.slideTimer -= effDt;
         d.x = clamp(d.x + d.slideVx * effDt, -PLAYER_MAX_X, PLAYER_MAX_X);
         d.z = clamp(d.z + d.slideVz * effDt, 4, GOAL_Z - 4);
@@ -1340,26 +1534,28 @@
         d.vz = d.slideVz;
         if (d.slideTimer <= 0) {
           d.sliding = false;
-          d.slideCooldown = 2.0;
+          d.slideCooldown = diffCfg.slideCooldown;
         }
         return;
       }
 
-      // Trigger 2D sliding tackle for SLIDER role when close!
+      // Trigger 2D sliding tackle (SLIDER role, or ALL defenders in Very Hard / late-field Chasers in Normal!)
+      const canSlideRole = d.role === 'SLIDER' || diffCfg.allCanSlide || (state.difficulty === 'normal' && d.role === 'CHASER' && d.num >= 4);
       if (
-        d.role === 'SLIDER' &&
-        !d.passed &&
+        canSlideRole &&
+        (!d.passed || diffCfg.chaseFromBehind) &&
         d.slideCooldown <= 0 &&
-        distToBall < 13.5 &&
-        distToBall > 5.0 &&
-        d.z > state.player.z + 1.5
+        distToBall < diffCfg.slideRange &&
+        distToBall > 4.2 &&
+        (d.z > state.player.z - 0.5 || diffCfg.chaseFromBehind)
       ) {
         d.sliding = true;
-        d.slideTimer = 0.58;
-        const predX = state.ball.x + state.player.vx * 0.25;
-        const predZ = state.ball.z + state.player.vz * 0.2;
+        d.pressing = true;
+        d.slideTimer = 0.56;
+        const predX = state.ball.x + state.player.vx * 0.22;
+        const predZ = state.ball.z + state.player.vz * 0.18;
         const ang = Math.atan2(predX - d.x, predZ - d.z);
-        const slideSpd = 15.5;
+        const slideSpd = diffCfg.slideSpeed * stageMul;
         d.slideVx = Math.sin(ang) * slideSpd;
         d.slideVz = Math.cos(ang) * slideSpd;
         if (SHORTS_MODE) {
@@ -1371,28 +1567,30 @@
       }
 
       // Free 2D AI Decision: Roam vs Active 2D Press/Intercept
-      // (Already-passed defenders stay roaming in their zone behind you instead of tackling from behind while you stop!)
       let targetVx = 0;
       let targetVz = 0;
 
-      if (
-        !d.passed &&
-        distToBall < 28 &&
-        (state.player.z > 0.8 || state.elapsed > 1.2) &&
+      const shouldPress = (
+        (!d.passed || diffCfg.chaseFromBehind) &&
+        distToBall < diffCfg.pressRadius &&
+        (diffCfg.immediatePress || state.player.z > 0.8 || state.elapsed > 1.2) &&
         (state.phase === 'dribble' || state.phase === 'aim_shot' || state.phase === 'loose_ball')
-      ) {
-        // Actively pursue or intercept the ball in 2D!
-        let aimX = state.ball.x;
-        let aimZ = state.ball.z;
+      );
+      d.pressing = shouldPress;
 
-        if (d.role === 'INTERCEPTOR') {
-          // Cut off player's 2D vector ahead of the ball
-          aimX = clamp(state.ball.x + state.player.vx * 0.45, -PLAYER_MAX_X, PLAYER_MAX_X);
-          aimZ = state.ball.z + Math.max(1.8, state.player.vz * 0.35);
-        } else if (d.role === 'ROAMER') {
-          // Weave unpredictably around the ball carrier's lane
-          aimX = state.ball.x + Math.sin(state.elapsed * 3.4 + d.num) * 5.2;
-          aimZ = state.ball.z + Math.cos(state.elapsed * 2.6 + d.num) * 3.5;
+      if (shouldPress) {
+        // Actively pursue or intercept the ball in 2D!
+        let aimX = state.ball.x + state.player.vx * 0.12;
+        let aimZ = state.ball.z + state.player.vz * 0.10;
+
+        if (d.role === 'INTERCEPTOR' && distToBall > 8.5) {
+          // Cut off player's 2D vector ahead of the ball, then lock straight onto ball when close!
+          aimX = clamp(state.ball.x + state.player.vx * 0.42, -PLAYER_MAX_X, PLAYER_MAX_X);
+          aimZ = state.ball.z + Math.max(1.4, state.player.vz * 0.32);
+        } else if (d.role === 'ROAMER' && distToBall > 10.5) {
+          // Weave when approaching from afar, then charge straight at the ball within 10.5m!
+          aimX = state.ball.x + Math.sin(state.elapsed * 3.4 + d.num) * 3.2;
+          aimZ = state.ball.z + Math.cos(state.elapsed * 2.6 + d.num) * 2.2;
         }
 
         if (SHORTS_MODE) {
@@ -1404,14 +1602,17 @@
         const dx = aimX - d.x;
         const dz = aimZ - d.z;
         const len = Math.hypot(dx, dz) || 1;
-        const spd = d.maxSpeed;
+        // Close-in final burst when within 12m of the ball carrier!
+        const closeBurst = distToBall < 12.5 ? diffCfg.closeBurstMul : 1.0;
+        const behindPenalty = d.passed ? 0.84 : 1.0;
+        const spd = d.maxSpeed * closeBurst * behindPenalty;
         targetVx = (dx / len) * spd;
         targetVz = (dz / len) * spd;
       } else {
         // Free 2D Pitch Roaming across X and Z!
         d.roamTimer -= effDt;
         if (d.roamTimer <= 0 || Math.hypot(d.roamTargetX - d.x, d.roamTargetZ - d.z) < 1.5) {
-          d.roamTimer = randRange(0.8, 1.9);
+          d.roamTimer = randRange(0.7, 1.7);
           d.roamTargetX = clamp(d.homeX + randRange(-8.5, 8.5), -PLAYER_MAX_X + 1, PLAYER_MAX_X - 1);
           d.roamTargetZ = clamp(d.homeZ + randRange(-11, 11), 10, GOAL_Z - 10);
         }
@@ -1423,12 +1624,12 @@
         targetVz = (dz / len) * roamSpd;
       }
 
-      // Smooth 2D acceleration
-      d.vx += (targetVx - d.vx) * 6.5 * effDt;
-      d.vz += (targetVz - d.vz) * 6.5 * effDt;
+      // Smooth 2D acceleration scaled by difficulty reaction rate
+      d.vx += (targetVx - d.vx) * diffCfg.accelRate * effDt;
+      d.vz += (targetVz - d.vz) * diffCfg.accelRate * effDt;
 
       d.x = clamp(d.x + d.vx * effDt, -PLAYER_MAX_X + 0.6, PLAYER_MAX_X - 0.6);
-      d.z = clamp(d.z + d.vz * effDt, 6, GOAL_Z - 6);
+      d.z = clamp(d.z + d.vz * effDt, 4, GOAL_Z - 6);
 
       const moveSpd = Math.hypot(d.vx, d.vz);
       d.stridePhase += effDt * (5 + moveSpd * 0.9);
@@ -1443,19 +1644,19 @@
       if (state.phase === 'shot_flight' || state.phase === 'goal') {
         state.gk.diveProgress = Math.min(1, state.gk.diveProgress + dt * 2.5);
         if (state.phase === 'shot_flight') {
-          state.gk.x = clamp(state.gk.x + state.gk.diveDir * 6.4 * dt, -GOAL_HALF_W * 0.75, GOAL_HALF_W * 0.75);
+          state.gk.x = clamp(state.gk.x + state.gk.diveDir * 6.4 * diffCfg.gkSpeedMul * dt, -GOAL_HALF_W * 0.78, GOAL_HALF_W * 0.78);
         }
       } else {
         // GK tracks ball X and comes out slightly when player enters the box
         const desiredGkX = clamp(
-          state.ball.x * 0.45 + Math.sin(state.elapsed * state.gk.freq + state.gk.phase) * 2.6,
+          state.ball.x * 0.48 + Math.sin(state.elapsed * state.gk.freq + state.gk.phase) * 2.6,
           -GOAL_HALF_W * 0.75,
           GOAL_HALF_W * 0.75
         );
         const distToGoal = GOAL_Z - state.ball.z;
-        const desiredGkZ = distToGoal < 45 ? GOAL_Z - clamp((45 - distToGoal) * 0.14, 1.5, 5.5) : GOAL_Z - 1.6;
-        state.gk.vx = (desiredGkX - state.gk.x) * 6.5;
-        state.gk.vz = (desiredGkZ - state.gk.z) * 4.5;
+        const desiredGkZ = distToGoal < 45 ? GOAL_Z - clamp((45 - distToGoal) * 0.14 * diffCfg.gkSpeedMul, 1.5, 6.2) : GOAL_Z - 1.6;
+        state.gk.vx = (desiredGkX - state.gk.x) * 6.5 * diffCfg.gkSpeedMul;
+        state.gk.vz = (desiredGkZ - state.gk.z) * 4.5 * diffCfg.gkSpeedMul;
         state.gk.x += state.gk.vx * effDt;
         state.gk.z += state.gk.vz * effDt;
       }
@@ -1718,7 +1919,7 @@
               }
               state.combo = 0;
               playSfx('tackle');
-              showBanner('フィジカル接触！', '体勢を立て直した！（残りシールド 1）', '#fbbf24', 1.0);
+              showBanner('フィジカル接触！', `体勢を立て直した！（残り耐性 ${state.shields}）`, '#fbbf24', 1.0);
               spawnTurfParticles(state.ball.x, 0.4, state.ball.z, '#fbbf24', 18);
             } else {
               state.shields = 0;
@@ -1770,17 +1971,18 @@
                   moveName = 'JUMP & CUT! スライディング神回避！';
                 }
 
-                const ptsEarned = basePts * state.combo;
+                const ptsEarned = Math.round(basePts * state.combo * diffCfg.scoreMul);
                 state.score += ptsEarned;
                 playSfx('ankle_breaker');
                 emitEvent('ankle_breaker', { num: d.num, count: state.passedCount, skill: state.player.skillType });
                 showBanner(`${state.passedCount}人抜き！！`, `${moveName} +${ptsEarned}`, bannerCol, 0.95);
                 spawnTurfParticles(state.ball.x, 0.3, state.ball.z, bannerCol, 18);
               } else {
-                state.score += 150 * state.combo;
+                const ptsEarned = Math.round(150 * state.combo * diffCfg.scoreMul);
+                state.score += ptsEarned;
                 playSfx('pass');
                 emitEvent('pass', { num: d.num, count: state.passedCount });
-                showBanner(`${state.passedCount}人抜き！`, `${d.name} を突破！ +${150 * state.combo}`, '#a3e635', 0.85);
+                showBanner(`${state.passedCount}人抜き！`, `${d.name} を突破！ +${ptsEarned}`, '#a3e635', 0.85);
                 spawnTurfParticles(state.ball.x, 0.3, state.ball.z, '#a3e635', 10);
               }
             }
@@ -1884,7 +2086,7 @@
 
             const distBonus = state.lastShotDist * 60;
             const curveBonus = Math.abs(state.ball.spinX) > 6 ? 1200 : 600;
-            const goalBonus = 2500 + distBonus + curveBonus + state.ankleBreakers * 300;
+            const goalBonus = Math.round((2500 + distBonus + curveBonus + state.ankleBreakers * 300) * diffCfg.scoreMul);
             state.score += goalBonus;
             if (state.score > state.bestScore) {
               state.bestScore = state.score;
@@ -2122,16 +2324,19 @@
     ctx.arc(0, -1.96 * s, Math.max(3, 0.26 * s), Math.PI, Math.PI * 2);
     ctx.fill();
 
-    // Overhead Badge
-    if (base.zCam < 75 && !d.passed) {
+    // Overhead Badge (shows 🔥PRESS! in Very Hard or ⚡ in Normal when actively closing down!)
+    if (base.zCam < 75 && (!d.passed || (d.pressing && state.difficulty === 'very_hard'))) {
       const badgeY = -bodyH - 0.45 * s;
       const fontSize = Math.max(11, Math.min(20, Math.round(0.32 * s)));
       ctx.font = `900 ${fontSize}px sans-serif`;
-      const label = isGK ? 'GK #11' : `DF #${d.num}`;
+      let label = isGK ? 'GK #11' : `DF #${d.num}`;
+      if (!isGK && d.pressing) {
+        label = state.difficulty === 'very_hard' ? `🔥DF #${d.num} PRESS` : `⚡DF #${d.num}`;
+      }
       const tw = ctx.measureText(label).width + 14;
-      ctx.fillStyle = isGK ? '#facc15' : 'rgba(15, 23, 42, 0.9)';
-      ctx.strokeStyle = isGK ? '#000' : '#fb7185';
-      ctx.lineWidth = 2;
+      ctx.fillStyle = isGK ? '#facc15' : (d.pressing && state.difficulty === 'very_hard' ? 'rgba(136, 19, 55, 0.92)' : 'rgba(15, 23, 42, 0.9)');
+      ctx.strokeStyle = isGK ? '#000' : (d.pressing ? (state.difficulty === 'very_hard' ? '#fda4af' : '#facc15') : '#fb7185');
+      ctx.lineWidth = d.pressing ? 2.4 : 2;
       ctx.beginPath();
       ctx.roundRect(-tw * 0.5, badgeY - fontSize * 0.7, tw, fontSize * 1.3, 999);
       ctx.fill();
@@ -2700,11 +2905,12 @@
 
   function drawHUD() {
     const topY = SHORTS_MODE ? 132 : 44;
+    const diffCfg = getDifficultyConfig();
 
     // Top Scoreboard Card
     ctx.save();
     ctx.fillStyle = 'rgba(6, 18, 14, 0.84)';
-    ctx.strokeStyle = 'rgba(163, 230, 53, 0.55)';
+    ctx.strokeStyle = diffCfg.color;
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.roundRect(18, topY, W - 116, 94, 18);
@@ -2715,10 +2921,10 @@
     drawPitchMinimap(W - 90, topY, 72, 94);
 
     const distToGoal = Math.max(0, Math.round(GOAL_Z - state.ball.z));
-    ctx.fillStyle = '#a3e635';
-    ctx.font = '900 13px sans-serif';
+    ctx.fillStyle = diffCfg.color;
+    ctx.font = '900 12.5px sans-serif';
     ctx.textAlign = 'left';
-    ctx.fillText(`STAGE ${state.stage}｜ゴールまで ${distToGoal}m`, 34, topY + 24);
+    ctx.fillText(`STAGE ${state.stage} (${diffCfg.fullLabel})｜残り ${distToGoal}m`, 34, topY + 24);
 
     ctx.fillStyle = '#ffffff';
     ctx.font = '900 30px sans-serif';
@@ -2732,7 +2938,8 @@
     ctx.font = '900 20px sans-serif';
     ctx.fillText(`${state.score.toLocaleString()} PTS`, W - 112, topY + 34);
 
-    const shieldStr = '⚡'.repeat(state.shields) + '・'.repeat(Math.max(0, 2 - state.shields));
+    const maxShields = diffCfg.shields;
+    const shieldStr = '⚡'.repeat(state.shields) + '・'.repeat(Math.max(0, maxShields - state.shields));
     ctx.fillStyle = '#38bdf8';
     ctx.font = '800 12px sans-serif';
     ctx.fillText(`耐性 ${shieldStr}`, W - 112, topY + 56);
@@ -2751,6 +2958,48 @@
       ctx.fill();
     }
     ctx.restore();
+
+    // Live 3-Difficulty Switcher Bar right below Scoreboard (🟢イージー / 🟡ノーマル / 🔥ベリーハード)
+    if (!SHORTS_MODE && (state.phase === 'dribble' || state.phase === 'aim_shot' || state.phase === 'loose_ball')) {
+      const barY = topY + 114;
+      const w = 162;
+      const h = 28;
+      const centersX = [99, 270, 441];
+      DIFFICULTY_ORDER.forEach((modeId, idx) => {
+        const cfg = DIFFICULTY_CONFIG[modeId];
+        const cx = centersX[idx];
+        const isSel = state.difficulty === modeId;
+
+        ctx.save();
+        ctx.translate(cx, barY);
+        if (isSel) {
+          ctx.shadowColor = cfg.color;
+          ctx.shadowBlur = 10;
+        }
+        const g = ctx.createLinearGradient(0, -h * 0.5, 0, h * 0.5);
+        if (isSel) {
+          g.addColorStop(0, cfg.col1);
+          g.addColorStop(1, cfg.col2);
+        } else {
+          g.addColorStop(0, 'rgba(15, 23, 42, 0.82)');
+          g.addColorStop(1, 'rgba(6, 18, 14, 0.88)');
+        }
+        ctx.beginPath();
+        ctx.roundRect(-w * 0.5, -h * 0.5, w, h, 999);
+        ctx.fillStyle = g;
+        ctx.fill();
+        ctx.lineWidth = isSel ? 2.4 : 1.3;
+        ctx.strokeStyle = isSel ? '#ffffff' : 'rgba(148, 163, 184, 0.45)';
+        ctx.stroke();
+
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = isSel ? '#ffffff' : '#cbd5e1';
+        ctx.font = isSel ? '900 11.5px sans-serif' : '800 11px sans-serif';
+        ctx.fillText(`${cfg.icon}${cfg.label} (${cfg.sub})`, 0, 0);
+        ctx.restore();
+      });
+    }
 
     // Shot Trajectory Mode Indicator Banner
     if (state.phase === 'aim_shot') {
@@ -2953,27 +3202,27 @@
         'ELEVEN DRIBBLE',
         '一人称3D・360°自由移動＆4大必殺スキルサッカー',
         [
-          '🕹️ 【完全自由移動】スティックを倒した方向に前進・後退・左右！離せばピタッと停止！',
-          '🌈 【ヒールリフト】かかとでボールを頭上3.6mに跳ね上げ相手の上をループ突破！',
+          '🕹️ 【完全自由移動】スティック方向に前後左右！指を離せばピタッと停止！',
+          '🌈 【ヒールリフト】かかとでボールを頭上に跳ね上げ相手の上をループ突破！',
           '⚡👟🌀 【バースト / ダブルタッチ / ルーレット】ボタン1タップで即発動！',
           '⚽ 【自由軌道シュート】いつでもボールか右下から軌道をなぞって発射！'
         ],
-        'タップしてキックオフ！',
-        '#a3e635'
+        `${diffCfg.fullLabel} でキックオフ！`,
+        diffCfg.color
       );
     }
 
     if (!SHORTS_MODE && state.phase === 'goal') {
       drawModalCard(
         'GOAL!!',
-        `STAGE ${state.stage} クリア！ (${state.lastShotDist}m ${state.lastShotType})`,
+        `STAGE ${state.stage} (${diffCfg.fullLabel}) クリア！ (${state.lastShotDist}m)`,
         [
           `🏆 スコア: ${state.score.toLocaleString()} PTS (ベスト: ${state.bestScore.toLocaleString()})`,
           `⚡ アンクルブレイカー突破: ${state.ankleBreakers}回`,
-          `📏 シュート飛距離: ${state.lastShotDist}m`,
-          `🔥 次は STAGE ${state.stage + 1}（CPUのプレッシャー強化！）`
+          `📏 シュート飛距離: ${state.lastShotDist}m (${state.lastShotType})`,
+          `🔥 次は STAGE ${state.stage + 1}（難易度も自由に変更OK！）`
         ],
-        `タップで STAGE ${state.stage + 1} へ進む！`,
+        `STAGE ${state.stage + 1} (${diffCfg.fullLabel}) へ進む！`,
         '#facc15'
       );
     }
@@ -2981,13 +3230,13 @@
     if (!SHORTS_MODE && state.phase === 'gameover') {
       drawModalCard(
         `${state.passedCount} / 11人突破！`,
-        '360°自由移動＆4大スキルで相手を翻弄しよう！',
+        '難易度（イージー・ノーマル・ベリーハード）を選んで挑戦！',
         [
-          `⚽ 今回の記録: ${state.passedCount}人抜き`,
+          `⚽ 今回の記録: ${state.passedCount}人抜き (${diffCfg.fullLabel})`,
           `🏆 スコア: ${state.score.toLocaleString()} PTS (ベスト: ${state.bestScore.toLocaleString()})`,
-          `💡 離すとその場で停止！バースト・ダブルタッチ・ルーレット・ヒールリフト活用！`
+          `💡 試合中も上部のボタンでいつでも敵の寄せスピードを切替可能！`
         ],
-        'タップですぐリトライ！',
+        `${diffCfg.fullLabel} でリトライ！`,
         '#fb7185'
       );
     }
@@ -2995,11 +3244,11 @@
 
   function drawModalCard(title, subtitle, bullets, btnText, accentColor) {
     ctx.save();
-    ctx.fillStyle = 'rgba(2, 8, 6, 0.72)';
+    ctx.fillStyle = 'rgba(2, 8, 6, 0.76)';
     ctx.fillRect(0, 0, W, H);
 
     const cardW = W - 48;
-    const cardH = 440;
+    const cardH = 510;
     const cardX = 24;
     const cardY = (H - cardH) * 0.5;
 
@@ -3013,24 +3262,80 @@
 
     ctx.textAlign = 'center';
     ctx.fillStyle = accentColor;
-    ctx.font = '900 36px sans-serif';
-    ctx.fillText(title, W * 0.5, cardY + 60);
+    ctx.font = '900 34px sans-serif';
+    ctx.fillText(title, W * 0.5, cardY + 52);
 
     ctx.fillStyle = '#ffffff';
-    ctx.font = '800 15px sans-serif';
-    ctx.fillText(subtitle, W * 0.5, cardY + 94);
+    ctx.font = '800 14.5px sans-serif';
+    ctx.fillText(subtitle, W * 0.5, cardY + 84);
 
     ctx.textAlign = 'left';
-    ctx.font = '700 13.2px sans-serif';
+    ctx.font = '700 12.8px sans-serif';
     ctx.fillStyle = '#e2e8f0';
     bullets.forEach((b, idx) => {
-      ctx.fillText(b, cardX + 18, cardY + 148 + idx * 42);
+      ctx.fillText(b, cardX + 18, cardY + 128 + idx * 38);
     });
 
+    // 3-Difficulty Mode Selector Section (🟢イージー / 🟡ノーマル / 🔥ベリーハード)
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '900 12.5px sans-serif';
+    ctx.fillText('▼ 敵の寄せスピード（難易度モード）を選択 ▼', W * 0.5, cardY + 296);
+
+    const cy = cardY + 340;
+    const w = 144;
+    const h = 54;
+    const centersX = [114, 270, 426];
+    DIFFICULTY_ORDER.forEach((modeId, idx) => {
+      const cfg = DIFFICULTY_CONFIG[modeId];
+      const cx = centersX[idx];
+      const isSel = state.difficulty === modeId;
+
+      ctx.save();
+      ctx.translate(cx, cy);
+      if (isSel) {
+        ctx.scale(1.05, 1.05);
+        ctx.shadowColor = cfg.color;
+        ctx.shadowBlur = 16;
+      }
+
+      const g = ctx.createLinearGradient(0, -h * 0.5, 0, h * 0.5);
+      if (isSel) {
+        g.addColorStop(0, cfg.col1);
+        g.addColorStop(1, cfg.col2);
+      } else {
+        g.addColorStop(0, 'rgba(15, 23, 42, 0.85)');
+        g.addColorStop(1, 'rgba(15, 23, 42, 0.95)');
+      }
+
+      ctx.beginPath();
+      ctx.roundRect(-w * 0.5, -h * 0.5, w, h, 14);
+      ctx.fillStyle = g;
+      ctx.fill();
+      ctx.lineWidth = isSel ? 3 : 1.5;
+      ctx.strokeStyle = isSel ? '#ffffff' : 'rgba(148, 163, 184, 0.4)';
+      ctx.stroke();
+
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '900 13.5px sans-serif';
+      ctx.fillText(`${cfg.icon}${cfg.label}`, 0, -6);
+      ctx.fillStyle = isSel ? '#fef08a' : '#94a3b8';
+      ctx.font = '800 10.5px sans-serif';
+      ctx.fillText(cfg.sub, 0, 13);
+      ctx.restore();
+    });
+
+    const activeCfg = getDifficultyConfig();
+    ctx.fillStyle = activeCfg.color;
+    ctx.font = '800 12.2px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(activeCfg.desc, W * 0.5, cardY + 394);
+
     const btnW = cardW - 56;
-    const btnH = 62;
+    const btnH = 60;
     const btnX = cardX + 28;
-    const btnY = cardY + cardH - 88;
+    const btnY = cardY + cardH - 82;
 
     ctx.fillStyle = accentColor;
     ctx.beginPath();
@@ -3038,7 +3343,7 @@
     ctx.fill();
 
     ctx.fillStyle = '#020617';
-    ctx.font = '900 21px sans-serif';
+    ctx.font = '900 20px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(btnText, W * 0.5, btnY + btnH * 0.5);
@@ -3065,6 +3370,7 @@
   window.__test = {
     state,
     startMatch,
+    setDifficulty,
     triggerDribbleSkill,
     updateShotPreviewBeads,
     fireDraftedShot,
