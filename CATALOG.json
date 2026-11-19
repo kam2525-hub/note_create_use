@@ -48,18 +48,6 @@
       "game_path": "games/day04-eleven-dribble/index.html",
       "note_path": "notes/day04/note_draft.md",
       "shorts_script": "shorts/day04/generate_shorts.py"
-    },
-    {
-      "day": 5,
-      "date": "2026-11-19",
-      "slug": "day05-dice-overdrive",
-      "title": "DICE OVERDRIVE（禁断のダイス改造ローグライト）",
-      "type": "game",
-      "genre": "ターン制ダイス改造・インフレ構築ローグライト",
-      "core_mechanic": "5個のサイコロをロック＆リロールしてポーカー役を作り、ショップでサイコロの1面を「✨黄金面×3」「⚡連鎖リトリガー」「🪞鏡面コピー」「💥爆弾」「💎ダイヤ」「🃏ワイルド」に直接改造＋12種の壊れレリックを掛け合わせてスコアを数百→数百万へ爆増させる全8ステージ＋無限エンドレスのインフレ戦略ローグライト",
-      "game_path": "games/day05-dice-overdrive/index.html",
-      "note_path": "notes/day05/note_draft.md",
-      "shorts_script": "shorts/day05/generate_shorts.py"
     }
   ]
 }
