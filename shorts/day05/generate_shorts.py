@@ -619,7 +619,7 @@ def main():
         wav_path = OUT_DIR / "audio.wav"
         generate_audio(total_dur, events, wav_path)
 
-        out_mp4 = OUT_DIR / "day05_crowd_999_shorts.mp4"
+        out_mp4 = OUT_DIR / "day05_short.mp4"
         subprocess.run(
             [
                 "ffmpeg", "-y",
