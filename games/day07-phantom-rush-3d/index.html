@@ -1,0 +1,3407 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<title>PHANTOM RUSH 3D｜一人称パルクール斬撃アクション</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:ital,wght@0,700;1,700&family=Noto+Sans+JP:wght@500;700;900&display=swap" rel="stylesheet" />
+<style>
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  html, body {
+    width: 100%;
+    height: 100%;
+    height: 100dvh;
+    overflow: hidden;
+    overscroll-behavior: none;
+    background: #03040a;
+    color: #f8fafc;
+    font-family: 'Chakra Petch', 'Noto Sans JP', system-ui, -apple-system, sans-serif;
+    touch-action: none;
+  }
+  #stage-wrap {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: radial-gradient(circle at 50% 25%, #160c28 0%, #050711 70%, #020308 100%);
+  }
+  #viewport {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    max-width: 540px;
+    max-height: 960px;
+    aspect-ratio: 9 / 16;
+    overflow: hidden;
+    background: #04060e;
+    box-shadow: 0 24px 90px rgba(0, 0, 0, 0.92), 0 0 50px rgba(0, 229, 255, 0.16);
+    touch-action: none;
+  }
+  @media (max-aspect-ratio: 9/16) {
+    #viewport {
+      max-width: 100vw;
+      max-height: 100dvh;
+      width: 100vw;
+      height: calc(100vw * 16 / 9);
+      box-shadow: none;
+    }
+  }
+  body.shorts-mode #viewport {
+    max-width: 100vw;
+    max-height: 100vh;
+    width: 100vw;
+    height: 100vh;
+    box-shadow: none;
+  }
+  #gl-canvas, #fx-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    touch-action: none;
+  }
+  #fx-canvas { z-index: 2; pointer-events: none; }
+
+  .back-link {
+    position: fixed;
+    top: max(10px, env(safe-area-inset-top));
+    left: 10px;
+    z-index: 60;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: rgba(8, 10, 20, 0.86);
+    border: 1px solid rgba(0, 229, 255, 0.35);
+    color: #f8fafc;
+    font-size: 12px;
+    font-weight: 800;
+    text-decoration: none;
+    backdrop-filter: blur(6px);
+  }
+  body.shorts-mode .back-link, body.shorts-mode .hud-bottom, body.shorts-mode #btn-sound, body.shorts-mode #boss-prompt, body.shorts-mode .od-wrap { display: none; }
+
+  #hud {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    padding: 12px 14px 16px;
+  }
+  body:not(.shorts-mode) #hud { padding-top: 44px; }
+
+  .hud-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .hud-card {
+    background: rgba(8, 11, 22, 0.82);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 12px;
+    padding: 7px 11px;
+    backdrop-filter: blur(8px);
+  }
+  .score-label {
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    color: #94a3b8;
+    font-weight: 700;
+  }
+  .score-val {
+    font-size: 24px;
+    font-weight: 900;
+    line-height: 1.05;
+    color: #fff;
+  }
+  .chain-pill {
+    display: inline-block;
+    margin-top: 3px;
+    font-size: 12px;
+    font-weight: 900;
+    color: #ffd400;
+    letter-spacing: 0.08em;
+  }
+  .hud-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+  }
+  .status-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .shield-badge {
+    font-size: 12px;
+    font-weight: 900;
+    padding: 5px 10px;
+    border-radius: 10px;
+    background: rgba(0, 229, 255, 0.14);
+    border: 1px solid rgba(0, 229, 255, 0.55);
+    color: #00e5ff;
+  }
+  .shield-badge.broken {
+    background: rgba(255, 51, 85, 0.14);
+    border-color: rgba(255, 51, 85, 0.45);
+    color: #ff6b81;
+  }
+  .mini-btn {
+    pointer-events: auto;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(10, 14, 28, 0.85);
+    color: #e2e8f0;
+    border-radius: 8px;
+    padding: 5px 10px;
+    font-size: 11px;
+    font-weight: 800;
+    cursor: pointer;
+  }
+
+  .hud-mid {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+    flex: 1;
+  }
+  .od-wrap {
+    width: 74%;
+    max-width: 300px;
+    background: rgba(6, 9, 18, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 999px;
+    padding: 3px;
+  }
+  .od-wrap.active {
+    border-color: #ffd400;
+    box-shadow: 0 0 22px rgba(255, 212, 0, 0.55);
+  }
+  .od-bg {
+    width: 100%;
+    height: 8px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+  }
+  .od-fill {
+    width: 0%;
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #00e5ff, #ff007f, #ffd400);
+  }
+  .od-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 9px;
+    font-weight: 800;
+    color: #cbd5e1;
+    padding: 2px 6px 0;
+  }
+
+  #callout-stack {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 44px;
+  }
+  .callout-badge {
+    font-weight: 900;
+    font-style: italic;
+    font-size: 24px;
+    letter-spacing: 0.06em;
+    text-shadow: 0 4px 16px rgba(0, 0, 0, 0.92), 0 0 18px currentColor;
+    animation: popIn 0.2s cubic-bezier(0.2, 1.4, 0.4, 1) forwards;
+  }
+  @keyframes popIn {
+    0% { transform: scale(1.65) translateY(6px); opacity: 0; }
+    100% { transform: scale(1) translateY(0); opacity: 1; }
+  }
+
+  .hud-bottom {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 10px;
+  }
+  .controls-hint {
+    background: rgba(6, 10, 20, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    padding: 6px 10px;
+    font-size: 10px;
+    line-height: 1.45;
+    color: #cbd5e1;
+    font-weight: 700;
+  }
+  #btn-slash {
+    pointer-events: auto;
+    width: 112px;
+    height: 66px;
+    border: none;
+    border-radius: 16px;
+    background: linear-gradient(135deg, #00e5ff 0%, #0ea5e9 100%);
+    color: #03101c;
+    font-family: 'Chakra Petch', 'Noto Sans JP', sans-serif;
+    font-weight: 900;
+    font-size: 17px;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    box-shadow: 0 5px 0 #0369a1, 0 10px 26px rgba(0, 229, 255, 0.4);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.06s ease;
+  }
+  #btn-slash small { font-size: 9px; opacity: 0.85; }
+  #btn-slash.locked {
+    background: linear-gradient(135deg, #ffd400 0%, #ff3355 100%);
+    color: #fff;
+    box-shadow: 0 5px 0 #9f1239, 0 0 28px rgba(255, 51, 85, 0.75);
+    transform: scale(1.05);
+  }
+  #btn-slash:active { transform: scale(0.94); }
+
+  /* Overlays */
+  .overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 30;
+    background: rgba(4, 6, 14, 0.8);
+    backdrop-filter: blur(7px);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 22px 18px;
+    text-align: center;
+  }
+  .hidden { display: none !important; }
+  .title-kicker {
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    color: #00e5ff;
+    font-weight: 800;
+    margin-bottom: 8px;
+  }
+  .title-logo {
+    font-size: 44px;
+    font-weight: 900;
+    font-style: italic;
+    line-height: 0.94;
+    letter-spacing: 0.03em;
+    color: #fff;
+    text-shadow: 0 0 26px rgba(0, 229, 255, 0.55), 0 5px 0 #1e1b4b;
+    margin-bottom: 10px;
+  }
+  .title-logo span { color: #ff2a6d; text-shadow: 0 0 24px rgba(255, 42, 109, 0.6), 0 5px 0 #4c0519; }
+  .title-sub {
+    font-size: 13px;
+    font-weight: 700;
+    color: #cbd5e1;
+    line-height: 1.55;
+    margin-bottom: 16px;
+  }
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 7px;
+    margin-bottom: 20px;
+    max-width: 340px;
+  }
+  .chip {
+    background: rgba(15, 23, 42, 0.9);
+    border: 1px solid rgba(0, 229, 255, 0.3);
+    border-radius: 999px;
+    padding: 5px 11px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #e2e8f0;
+  }
+  .cta-btn {
+    width: 100%;
+    max-width: 280px;
+    border: none;
+    border-radius: 14px;
+    padding: 15px 22px;
+    background: linear-gradient(135deg, #00e5ff 0%, #ff2a6d 100%);
+    color: #fff;
+    font-family: 'Chakra Petch', 'Noto Sans JP', sans-serif;
+    font-size: 20px;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    box-shadow: 0 5px 0 #831843, 0 14px 34px rgba(255, 42, 109, 0.42);
+    margin-bottom: 10px;
+  }
+  .cta-btn:active { transform: translateY(2px); }
+  .best-line {
+    font-size: 12px;
+    color: #ffd400;
+    font-weight: 800;
+    margin-top: 6px;
+  }
+
+  .result-box {
+    width: 100%;
+    max-width: 340px;
+    background: rgba(9, 13, 26, 0.94);
+    border: 1px solid rgba(255, 42, 109, 0.45);
+    border-radius: 18px;
+    padding: 20px 16px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.85);
+  }
+  .res-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 9px;
+    margin: 14px 0 18px;
+  }
+  .res-cell {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+    padding: 8px;
+  }
+  .res-cell label { display: block; font-size: 10px; color: #94a3b8; }
+  .res-cell strong { font-size: 20px; color: #fff; }
+
+  /* Boss HP Bar & Active Mods */
+  .boss-wrap {
+    width: 82%;
+    max-width: 320px;
+    background: rgba(24, 6, 16, 0.88);
+    border: 1px solid rgba(255, 42, 109, 0.75);
+    border-radius: 10px;
+    padding: 5px 8px;
+    box-shadow: 0 0 22px rgba(255, 42, 109, 0.45);
+  }
+  .boss-head {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    font-weight: 900;
+    color: #ff6b81;
+    margin-bottom: 3px;
+    letter-spacing: 0.08em;
+  }
+  .boss-bg {
+    width: 100%;
+    height: 8px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+    overflow: hidden;
+  }
+  .boss-fill {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, #ff2a6d, #ffd400);
+    transition: width 0.15s ease;
+  }
+  .mods-row {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .mod-pill {
+    background: rgba(0, 229, 255, 0.16);
+    border: 1px solid rgba(0, 229, 255, 0.45);
+    border-radius: 999px;
+    padding: 2px 8px;
+    font-size: 10px;
+    font-weight: 800;
+    color: #e2e8f0;
+  }
+
+  /* Blade Style Picker on Title */
+  .blade-picker {
+    display: flex;
+    gap: 7px;
+    justify-content: center;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .blade-btn {
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(12, 18, 34, 0.9);
+    color: #e2e8f0;
+    border-radius: 10px;
+    padding: 6px 10px;
+    font-size: 11px;
+    font-weight: 800;
+    cursor: pointer;
+  }
+  .blade-btn.active {
+    border-color: #00e5ff;
+    background: rgba(0, 229, 255, 0.18);
+    box-shadow: 0 0 14px rgba(0, 229, 255, 0.35);
+  }
+  .blade-btn.locked {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* 3-Choice Cyber MOD Overlay */
+  .mod-list {
+    width: 100%;
+    max-width: 340px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 12px;
+  }
+  .mod-card {
+    border: 1px solid rgba(0, 229, 255, 0.45);
+    background: linear-gradient(135deg, rgba(14, 22, 42, 0.96), rgba(24, 12, 38, 0.96));
+    border-radius: 14px;
+    padding: 12px 14px;
+    text-align: left;
+    color: #fff;
+    cursor: pointer;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  }
+  .mod-card:hover { border-color: #ffd400; transform: translateY(-1px); }
+  .mod-card-title { font-size: 14px; font-weight: 900; color: #ffd400; margin-bottom: 3px; }
+  .mod-card-desc { font-size: 11px; color: #cbd5e1; line-height: 1.4; font-weight: 600; }
+
+  .rank-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 3px;
+    padding: 2px 8px;
+    border-radius: 7px;
+    background: rgba(255, 42, 109, 0.22);
+    border: 1px solid rgba(255, 42, 109, 0.65);
+    font-size: 12px;
+    font-weight: 900;
+    font-style: italic;
+    color: #ffd400;
+    letter-spacing: 0.08em;
+  }
+  .boss-prompt {
+    font-size: 13px;
+    font-weight: 900;
+    color: #ffd400;
+    background: rgba(255, 42, 109, 0.24);
+    border: 1px solid rgba(255, 212, 0, 0.7);
+    padding: 4px 12px;
+    border-radius: 999px;
+    letter-spacing: 0.06em;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9);
+  }
+  .sec-btn {
+    width: 100%;
+    max-width: 280px;
+    border: 1px solid rgba(255, 42, 109, 0.65);
+    border-radius: 12px;
+    padding: 11px 18px;
+    background: rgba(40, 8, 22, 0.85);
+    color: #ffd400;
+    font-family: 'Chakra Petch', 'Noto Sans JP', sans-serif;
+    font-size: 14px;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    margin-bottom: 8px;
+  }
+  .sec-btn:active { transform: translateY(1px); }
+</style>
+</head>
+<body>
+<a class="back-link" href="../../index.html">← ゲーム一覧</a>
+<div id="stage-wrap">
+  <div id="viewport">
+    <canvas id="gl-canvas"></canvas>
+    <canvas id="fx-canvas" width="540" height="960"></canvas>
+
+    <!-- HUD -->
+    <div id="hud" class="hidden">
+      <div class="hud-top">
+        <div class="hud-card">
+          <div class="score-label">SCORE // <span id="hud-dist">0m</span></div>
+          <div class="score-val" id="hud-score">0</div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span class="chain-pill" id="hud-chain">CHAIN ×1</span>
+            <span class="rank-badge" id="hud-rank">RANK D</span>
+          </div>
+        </div>
+        <div class="hud-right">
+          <div class="status-row">
+            <div class="shield-badge" id="hud-shield">🛡 SHIELD</div>
+            <button class="mini-btn" id="btn-sound">🔊 ON</button>
+          </div>
+          <div class="hud-card" style="padding:4px 9px;font-size:10px;font-weight:800;color:#00e5ff;">
+            <span id="hud-speed">94 km/h</span> // <span id="hud-boss-dist" style="color:#ff6b81;">BOSS 160m</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="hud-mid">
+        <div class="od-wrap" id="od-wrap">
+          <div class="od-bg"><div class="od-fill" id="od-fill"></div></div>
+          <div class="od-meta">
+            <span id="od-label">OVERDRIVE</span>
+            <span id="hud-kills">KILLS 0</span>
+          </div>
+        </div>
+        <div class="boss-wrap hidden" id="boss-wrap">
+          <div class="boss-head">
+            <span>👹 紅蓮の機神・KUROGANE</span>
+            <span id="boss-hp-text">HP 12 / 12</span>
+          </div>
+          <div class="boss-bg"><div class="boss-fill" id="boss-fill"></div></div>
+        </div>
+        <div class="boss-prompt hidden" id="boss-prompt">⚡ 攻撃を回避＆パリィして斬り込め！</div>
+        <div class="mods-row" id="hud-mods"></div>
+        <div id="callout-stack"></div>
+      </div>
+
+      <div class="hud-bottom">
+        <div class="controls-hint">
+          スワイプ / WASD: 移動・ジャンプ・スライディング<br/>
+          タップ / クリック: 瞬間斬撃＆弾パリィ！
+        </div>
+        <button id="btn-slash">⚡ SLASH<small>TAP / CLICK</small></button>
+      </div>
+    </div>
+
+    <!-- Title Overlay -->
+    <div class="overlay" id="screen-title">
+      <div class="title-kicker">DAY 07 // FIRST-PERSON 3D CYBER PARKOUR</div>
+      <div class="title-logo">PHANTOM<br/><span>RUSH</span> 3D</div>
+      <div class="title-sub">ネオン屋上を駆け抜け、異界の鳥居アリーナで<br/>巨大サイバー将軍を一閃両断せよ！</div>
+      <div class="chips">
+        <span class="chip">⛩ 異界BOSSステージ</span>
+        <span class="chip">⚔️ 連撃フィニッシュ</span>
+        <span class="chip">🃏 3択MOD能力覚醒</span>
+        <span class="chip">⚡ JUST SLASH</span>
+      </div>
+      <div class="blade-picker" id="blade-picker"></div>
+      <button class="cta-btn" id="btn-start">RUN NOW</button>
+      <button class="sec-btn" id="btn-boss-rush">⛩ BOSS異界へ直行（腕試し）</button>
+      <div class="best-line" id="title-best">BEST SCORE: 0</div>
+    </div>
+
+    <!-- 3-Choice Cyber MOD Upgrade Overlay -->
+    <div class="overlay hidden" id="screen-mod">
+      <div class="title-kicker" style="color:#ffd400;">SHOGUN EXECUTED!! // ABILITY AWAKENED</div>
+      <h2 style="font-size:22px;font-weight:900;margin-bottom:4px;">新たな能力を1つ獲得！</h2>
+      <p style="font-size:11px;color:#cbd5e1;">選んだ能力を装備してネオン都市へ帰還します</p>
+      <div class="mod-list" id="mod-list"></div>
+    </div>
+
+    <!-- Game Over / Instant Retry Overlay -->
+    <div class="overlay hidden" id="screen-over">
+      <div class="result-box">
+        <div class="title-kicker" style="color:#ff2a6d;">CONNECTION SEVERED</div>
+        <h2 id="over-reason" style="font-size:24px;font-weight:900;margin-bottom:4px;">SYSTEM CRASH</h2>
+        <div class="best-line" id="over-best" style="margin-top:0;">NEW RECORD!!</div>
+        <div class="res-grid">
+          <div class="res-cell"><label>SCORE</label><strong id="res-score">0</strong></div>
+          <div class="res-cell"><label>DISTANCE</label><strong id="res-dist">0m</strong></div>
+          <div class="res-cell"><label>KILLS</label><strong id="res-kills">0</strong></div>
+          <div class="res-cell"><label>MAX RANK</label><strong id="res-chain">D</strong></div>
+        </div>
+        <button class="cta-btn" id="btn-retry" style="margin-bottom:6px;">⚡ INSTANT RETRY</button>
+        <div style="font-size:11px;color:#94a3b8;font-weight:700;">SPACE / R キーでも即リトライ</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="./three.min.js"></script>
+<script>
+(() => {
+  'use strict';
+
+  const params = new URLSearchParams(window.location.search);
+  const SHORTS_MODE = params.get('shorts') === '1';
+  if (SHORTS_MODE) document.body.classList.add('shorts-mode');
+  window.__gameEvents = [];
+  let shortsElapsed = 0;
+  function recordEv(type) {
+    if (SHORTS_MODE) window.__gameEvents.push({ t: +shortsElapsed.toFixed(3), type });
+  }
+
+  const W = 540;
+  const H = 960;
+  const viewport = document.getElementById('viewport');
+  const glCanvas = document.getElementById('gl-canvas');
+  const fxCanvas = document.getElementById('fx-canvas');
+  const fxCtx = fxCanvas.getContext('2d');
+
+  // HUD
+  const hud = document.getElementById('hud');
+  const hudScore = document.getElementById('hud-score');
+  const hudDist = document.getElementById('hud-dist');
+  const hudChain = document.getElementById('hud-chain');
+  const hudRank = document.getElementById('hud-rank');
+  const hudShield = document.getElementById('hud-shield');
+  const hudSpeed = document.getElementById('hud-speed');
+  const hudBossDist = document.getElementById('hud-boss-dist');
+  const hudKills = document.getElementById('hud-kills');
+  const odWrap = document.getElementById('od-wrap');
+  const odFill = document.getElementById('od-fill');
+  const odLabel = document.getElementById('od-label');
+  const bossWrap = document.getElementById('boss-wrap');
+  const bossFill = document.getElementById('boss-fill');
+  const bossHpText = document.getElementById('boss-hp-text');
+  const bossPrompt = document.getElementById('boss-prompt');
+  const hudMods = document.getElementById('hud-mods');
+  const calloutStack = document.getElementById('callout-stack');
+  const btnSlash = document.getElementById('btn-slash');
+  const btnSound = document.getElementById('btn-sound');
+
+  const screenTitle = document.getElementById('screen-title');
+  const screenMod = document.getElementById('screen-mod');
+  const modListEl = document.getElementById('mod-list');
+  const bladePickerEl = document.getElementById('blade-picker');
+  const screenOver = document.getElementById('screen-over');
+  const titleBestEl = document.getElementById('title-best');
+
+  const BLADE_STYLES = [
+    { id: 'phantom', name: '💠 PHANTOM', color: 0x00e5ff, hex: '#00e5ff', req: 0 },
+    { id: 'crimson', name: '🩸 CRIMSON', color: 0xff2a6d, hex: '#ff2a6d', req: 5 },
+    { id: 'emperor', name: '⚡ EMPEROR', color: 0xffd400, hex: '#ffd400', req: 15 }
+  ];
+
+  const SAVE_KEY = 'phantom_rush_3d_v2';
+  let saveData = { bestScore: 0, careerKills: 0, blade: 'phantom' };
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (raw) saveData = Object.assign(saveData, JSON.parse(raw));
+  } catch (_) {}
+  function persistSave() {
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(saveData)); } catch (_) {}
+  }
+  titleBestEl.textContent = `BEST: ${saveData.bestScore.toLocaleString()} // 累計斬撃: ${saveData.careerKills}`;
+
+  // Web Audio Synth + Driving 138 BPM Cyber Pulse
+  const SFX = (() => {
+    let ctx = null;
+    let enabled = true;
+    let beatTimer = null;
+    let beatStep = 0;
+
+    function ensure() {
+      if (!enabled) return null;
+      if (!ctx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return null;
+        ctx = new AC();
+      }
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+      return ctx;
+    }
+
+    function tone(freq, endFreq, dur, type = 'sine', vol = 0.16, delay = 0) {
+      const c = ensure();
+      if (!c) return;
+      const t = c.currentTime + delay;
+      const osc = c.createOscillator();
+      const gain = c.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, t);
+      if (endFreq !== freq) osc.frequency.exponentialRampToValueAtTime(Math.max(25, endFreq), t + dur);
+      gain.gain.setValueAtTime(0.001, t);
+      gain.gain.linearRampToValueAtTime(vol, t + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.0008, t + dur);
+      osc.connect(gain);
+      gain.connect(c.destination);
+      osc.start(t);
+      osc.stop(t + dur + 0.02);
+    }
+
+    function noise(dur, vol = 0.18, freq = 1400, delay = 0) {
+      const c = ensure();
+      if (!c) return;
+      const t = c.currentTime + delay;
+      const len = Math.floor(c.sampleRate * dur);
+      const buf = c.createBuffer(1, len, c.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+      const src = c.createBufferSource();
+      src.buffer = buf;
+      const f = c.createBiquadFilter();
+      f.type = 'bandpass';
+      f.frequency.value = freq;
+      f.Q.value = 1.2;
+      const g = c.createGain();
+      g.gain.setValueAtTime(vol, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+      src.connect(f);
+      f.connect(g);
+      g.connect(c.destination);
+      src.start(t);
+    }
+
+    const pentatonic = [523.25, 587.33, 659.25, 783.99, 880.0, 1046.5, 1174.66, 1318.51, 1567.98, 1760.0, 2093.0];
+    const bassNotes = [55, 55, 65.41, 55, 73.42, 55, 82.41, 65.41];
+    const bossNotes = [49, 49, 58.27, 49, 65.41, 49, 73.42, 65.41];
+    function startBeat(getStateFn) {
+      stopBeat();
+      beatStep = 0;
+      beatTimer = setInterval(() => {
+        if (!enabled) return;
+        const st = getStateFn();
+        if (st.state !== 'run' && st.state !== 'boss') return;
+        const step = beatStep % 8;
+        const isBoss = st.state === 'boss';
+        if (step % 2 === 0) tone(isBoss ? 130 : 110, 36, 0.12, 'sine', (st.od || isBoss) ? 0.14 : 0.08);
+        const notes = isBoss ? bossNotes : bassNotes;
+        tone(notes[step] * (st.od ? 2 : 1), notes[step] * 0.98, 0.09, 'sawtooth', (st.od || isBoss) ? 0.075 : 0.04);
+        if (step % 2 === 1) noise(0.035, isBoss ? 0.05 : 0.035, 5200);
+        beatStep++;
+      }, 108);
+    }
+    function stopBeat() {
+      if (beatTimer) { clearInterval(beatTimer); beatTimer = null; }
+    }
+
+    return {
+      toggle() {
+        enabled = !enabled;
+        if (!enabled) stopBeat();
+        return enabled;
+      },
+      isEnabled: () => enabled,
+      startBeat,
+      stopBeat,
+      jump() { tone(240, 540, 0.13, 'triangle', 0.14); },
+      slide() { noise(0.14, 0.14, 900); tone(190, 95, 0.14, 'sawtooth', 0.08); },
+      lane() { tone(320, 420, 0.05, 'sine', 0.06); },
+      slashMiss() { noise(0.09, 0.14, 2600); tone(520, 170, 0.10, 'triangle', 0.10); },
+      slashKill(chain, isJust = false) {
+        noise(0.07, 0.34, 4800, 0);
+        tone(2500, 760, 0.065, 'sawtooth', 0.14, 0);
+        tone(155, 32, 0.24, 'sine', isJust ? 0.42 : 0.36, 0);
+        tone(95, 28, 0.18, 'triangle', 0.22, 0);
+        noise(0.16, 0.25, 3200, 0.02);
+        tone(2800, 1500, 0.065, 'sine', 0.08, 0.025);
+        const note = pentatonic[Math.min(pentatonic.length - 1, Math.max(0, chain - 1))];
+        tone(note, note * 1.004, 0.28, 'triangle', 0.22, 0.02);
+        tone(note * 1.5, note * 1.5, 0.26, 'sine', 0.14, 0.045);
+        if (isJust) tone(note * 2.0, note * 2.5, 0.28, 'sine', 0.15, 0.065);
+      },
+      clash() {
+        // Metallic Samurai Blade Clash ("KIIN!! DON!!")
+        tone(140, 32, 0.28, 'sine', 0.44, 0);
+        noise(0.14, 0.35, 5600, 0);
+        tone(1760, 2637, 0.24, 'triangle', 0.25, 0);
+        tone(2637, 2637, 0.40, 'sine', 0.18, 0.02);
+        tone(3520, 3520, 0.32, 'sine', 0.12, 0.04);
+      },
+      finisher() {
+        // Massive Execution Slash + Thunder Boom
+        noise(0.28, 0.42, 4200, 0);
+        tone(160, 24, 0.55, 'sine', 0.48, 0);
+        tone(523.25, 1046.5, 0.35, 'sawtooth', 0.18, 0.04);
+        tone(1046.5, 2093.0, 0.55, 'triangle', 0.22, 0.12);
+        tone(1567.98, 1567.98, 0.60, 'sine', 0.18, 0.18);
+      },
+      warp() {
+        tone(140, 880, 0.42, 'sawtooth', 0.20, 0);
+        tone(280, 1760, 0.42, 'sine', 0.16, 0.05);
+        noise(0.32, 0.22, 2200, 0.04);
+      },
+      parry() {
+        tone(160, 38, 0.22, 'sine', 0.34, 0);
+        noise(0.12, 0.28, 4200, 0);
+        tone(1320, 2640, 0.18, 'sine', 0.22, 0.01);
+        tone(1980, 1980, 0.28, 'triangle', 0.16, 0.035);
+      },
+      overdrive() {
+        tone(140, 36, 0.28, 'sine', 0.36, 0);
+        tone(330, 660, 0.18, 'sawtooth', 0.18, 0);
+        tone(440, 880, 0.22, 'sawtooth', 0.18, 0.07);
+        tone(660, 1320, 0.38, 'triangle', 0.22, 0.14);
+      },
+      shieldBreak() {
+        noise(0.26, 0.3, 1800);
+        tone(620, 140, 0.28, 'sawtooth', 0.22);
+      },
+      crash() {
+        noise(0.35, 0.35, 500);
+        tone(180, 40, 0.38, 'sawtooth', 0.26);
+      },
+      lockOn() { tone(1046, 1280, 0.035, 'sine', 0.045); },
+      boostPad() { tone(360, 980, 0.16, 'sawtooth', 0.14); tone(540, 1480, 0.18, 'triangle', 0.12, 0.03); },
+      nearMiss() { tone(880, 1320, 0.09, 'sine', 0.10); },
+      bossAlert() {
+        tone(220, 180, 0.18, 'sawtooth', 0.18, 0);
+        tone(220, 180, 0.18, 'sawtooth', 0.18, 0.22);
+        tone(330, 140, 0.32, 'sawtooth', 0.22, 0.44);
+      }
+    };
+  })();
+
+  // Three.js Renderer & Scene
+  const renderer = new THREE.WebGLRenderer({ canvas: glCanvas, antialias: true, powerPreference: 'high-performance' });
+  renderer.setPixelRatio(SHORTS_MODE ? 1 : Math.min(window.devicePixelRatio || 1, 2));
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.22;
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x040612);
+  scene.fog = new THREE.FogExp2(0x06081a, 0.011);
+
+  const camera = new THREE.PerspectiveCamera(64, W / H, 0.1, 220);
+  scene.add(camera);
+
+  function resizeRenderer() {
+    const r = viewport.getBoundingClientRect();
+    if (r.width > 0 && r.height > 0) {
+      renderer.setSize(r.width, r.height, false);
+      camera.aspect = r.width / r.height;
+      camera.updateProjectionMatrix();
+    }
+  }
+  window.addEventListener('resize', resizeRenderer);
+  resizeRenderer();
+
+  // Lights
+  const hemi = new THREE.HemisphereLight(0x8ecae6, 0x1e0b36, 1.15);
+  scene.add(hemi);
+  const dirLight = new THREE.DirectionalLight(0xffffff, 1.15);
+  dirLight.position.set(12, 26, 18);
+  scene.add(dirLight);
+  const playerLight = new THREE.PointLight(0x00e5ff, 2.2, 28);
+  camera.add(playerLight);
+
+  // Moving Cyber Skyline Pillars (parallax city around track)
+  const skylineGroup = new THREE.Group();
+  scene.add(skylineGroup);
+  const skylineTowers = [];
+  (() => {
+    const towerMat = new THREE.MeshStandardMaterial({ color: 0x0b1024, roughness: 0.75, metalness: 0.3 });
+    const stripCyan = new THREE.MeshBasicMaterial({ color: 0x00e5ff });
+    const stripPink = new THREE.MeshBasicMaterial({ color: 0xff2a6d });
+    for (let i = 0; i < 36; i++) {
+      const side = i % 2 === 0 ? -1 : 1;
+      const g = new THREE.Group();
+      const bw = 5 + (i % 3) * 3;
+      const bh = 28 + ((i * 13) % 44);
+      const m = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, bw), towerMat);
+      m.position.y = bh * 0.5 - 24;
+      const s = new THREE.Mesh(new THREE.BoxGeometry(0.28, bh * 0.85, 0.28), i % 3 === 0 ? stripPink : stripCyan);
+      s.position.set(-side * (bw * 0.5 + 0.05), bh * 0.5 - 24, bw * 0.3);
+      g.add(m, s);
+      g.position.set(side * (15 + (i % 4) * 6), 0, -i * 6.5);
+      skylineGroup.add(g);
+      skylineTowers.push(g);
+    }
+  })();
+
+  // First-Person Cyber Katana (Right Hand) + Left Cyber Glove
+  const weaponGroup = new THREE.Group();
+  camera.add(weaponGroup);
+  const katanaPivot = new THREE.Group();
+  katanaPivot.position.set(0.42, -0.34, -0.62);
+  weaponGroup.add(katanaPivot);
+
+  let bladeGlowMat = new THREE.MeshBasicMaterial({ color: 0x00e5ff });
+  let slashArcMesh = null;
+  (() => {
+    const handleMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.4, metalness: 0.7 });
+    const goldMat = new THREE.MeshStandardMaterial({ color: 0xffd400, roughness: 0.2, metalness: 0.92 });
+    const steelMat = new THREE.MeshStandardMaterial({ color: 0xcbd5e1, roughness: 0.15, metalness: 0.95 });
+
+    // Unified Blade Group (tilted smoothly forward-upward so tip stays flush)
+    const bladeGroup = new THREE.Group();
+    bladeGroup.rotation.x = Math.PI * 0.26;
+    bladeGroup.position.set(0, 0.02, 0.02);
+
+    const tsuba = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.024, 0.11), goldMat);
+    tsuba.position.set(0, 0, 0);
+
+    const hilt = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.030, 0.28, 10), handleMat);
+    hilt.rotation.x = Math.PI / 2;
+    hilt.position.set(0, 0, 0.15);
+
+    const spine = new THREE.Mesh(new THREE.BoxGeometry(0.016, 0.028, 0.78), steelMat);
+    spine.position.set(0, 0.008, -0.39);
+
+    const edge = new THREE.Mesh(new THREE.BoxGeometry(0.009, 0.020, 0.78), bladeGlowMat);
+    edge.position.set(0, -0.006, -0.39);
+
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.016, 0.12, 4), bladeGlowMat);
+    tip.rotation.x = -Math.PI / 2;
+    tip.position.set(0, 0.0, -0.84);
+
+    bladeGroup.add(tsuba, hilt, spine, edge, tip);
+    katanaPivot.add(bladeGroup);
+
+    // Left Forearm Cyber Gauntlet (subtle balance in bottom-left when sprinting)
+    const gauntlet = new THREE.Mesh(
+      new THREE.BoxGeometry(0.09, 0.09, 0.34),
+      new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.7, roughness: 0.3 })
+    );
+    gauntlet.position.set(-0.27, -0.37, -0.48);
+    gauntlet.rotation.set(0.28, -0.32, 0.15);
+    const gStrip = new THREE.Mesh(new THREE.BoxGeometry(0.096, 0.02, 0.24), bladeGlowMat);
+    gStrip.position.set(-0.27, -0.33, -0.48);
+    gStrip.rotation.set(0.28, -0.32, 0.15);
+    weaponGroup.add(gauntlet, gStrip);
+
+    // 3D Slash Energy Arc Mesh
+    slashArcMesh = new THREE.Mesh(
+      new THREE.TorusGeometry(0.95, 0.06, 8, 26, Math.PI * 0.88),
+      new THREE.MeshBasicMaterial({ color: 0x00e5ff, transparent: true, opacity: 0 })
+    );
+    slashArcMesh.position.set(0, -0.05, -1.1);
+    slashArcMesh.rotation.z = -0.55;
+    camera.add(slashArcMesh);
+  })();
+
+  // World Chunks (Neon City Rooftop) & Dedicated Boss Dimension (Crimson Torii Shrine)
+  const worldGroup = new THREE.Group();
+  scene.add(worldGroup);
+
+  const bossArenaGroup = new THREE.Group();
+  bossArenaGroup.visible = false;
+  scene.add(bossArenaGroup);
+
+  const bossEmbers = [];
+  (() => {
+    const obsidianMat = new THREE.MeshStandardMaterial({ color: 0x12060d, roughness: 0.45, metalness: 0.55 });
+    const crimsonGlow = new THREE.MeshBasicMaterial({ color: 0xff1e56 });
+    const goldGlow = new THREE.MeshBasicMaterial({ color: 0xffd400 });
+
+    // Octagonal Shrine Dojo Platform
+    const dojoFloor = new THREE.Mesh(new THREE.CylinderGeometry(16.5, 18, 1.4, 8), obsidianMat);
+    dojoFloor.position.set(0, -0.7, -8);
+    bossArenaGroup.add(dojoFloor);
+
+    // Concentric Neon Dojo Rings
+    for (const [r1, r2, mat] of [[15.8, 16.3, crimsonGlow], [10.4, 10.7, goldGlow], [5.2, 5.45, crimsonGlow]]) {
+      const r = new THREE.Mesh(new THREE.RingGeometry(r1, r2, 32), new THREE.MeshBasicMaterial({ color: mat.color, side: THREE.DoubleSide }));
+      r.rotation.x = -Math.PI / 2;
+      r.position.set(0, 0.04, -8);
+      bossArenaGroup.add(r);
+    }
+
+    // Lane Guidance Lines in Dojo
+    for (const lx of [-1.4, 1.4]) {
+      const line = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.03, 24), crimsonGlow);
+      line.position.set(lx, 0.03, -8);
+      bossArenaGroup.add(line);
+    }
+
+    // Colossal Glowing Blood Moon behind Boss
+    const moon = new THREE.Mesh(
+      new THREE.CircleGeometry(14, 36),
+      new THREE.MeshBasicMaterial({ color: 0xff1e56, transparent: true, opacity: 0.92 })
+    );
+    moon.position.set(0, 12.5, -42);
+    const moonHalo = new THREE.Mesh(
+      new THREE.RingGeometry(14.2, 16.5, 36),
+      new THREE.MeshBasicMaterial({ color: 0xff8800, transparent: true, opacity: 0.35, side: THREE.DoubleSide })
+    );
+    moonHalo.position.set(0, 12.5, -42.2);
+    bossArenaGroup.add(moon, moonHalo);
+
+    // 4 Towering Cyber Torii Gates surrounding the Arena
+    function addTorii(x, z, ry, scale = 1) {
+      const tg = new THREE.Group();
+      const postMat = new THREE.MeshStandardMaterial({ color: 0x3b0712, emissive: 0x220208, roughness: 0.35, metalness: 0.5 });
+      const pL = new THREE.Mesh(new THREE.CylinderGeometry(0.36 * scale, 0.44 * scale, 9.5 * scale, 10), postMat);
+      pL.position.set(-3.8 * scale, 4.75 * scale, 0);
+      const pR = new THREE.Mesh(new THREE.CylinderGeometry(0.36 * scale, 0.44 * scale, 9.5 * scale, 10), postMat);
+      pR.position.set(3.8 * scale, 4.75 * scale, 0);
+      const topBeam = new THREE.Mesh(new THREE.BoxGeometry(10.8 * scale, 0.72 * scale, 0.85 * scale), postMat);
+      topBeam.position.set(0, 9.2 * scale, 0);
+      const topNeon = new THREE.Mesh(new THREE.BoxGeometry(11.1 * scale, 0.22 * scale, 0.92 * scale), crimsonGlow);
+      topNeon.position.set(0, 9.6 * scale, 0);
+      const subBeam = new THREE.Mesh(new THREE.BoxGeometry(8.8 * scale, 0.42 * scale, 0.55 * scale), postMat);
+      subBeam.position.set(0, 7.6 * scale, 0);
+      const plaque = new THREE.Mesh(new THREE.BoxGeometry(1.1 * scale, 1.5 * scale, 0.65 * scale), goldGlow);
+      plaque.position.set(0, 8.4 * scale, 0);
+      tg.add(pL, pR, topBeam, topNeon, subBeam, plaque);
+      tg.position.set(x, 0, z);
+      tg.rotation.y = ry;
+      bossArenaGroup.add(tg);
+    }
+    addTorii(0, -22, 0, 1.35);
+    addTorii(-13.5, -9, Math.PI * 0.45, 0.95);
+    addTorii(13.5, -9, -Math.PI * 0.45, 0.95);
+
+    // Floating Shrine Embers
+    const emberGeo = new THREE.OctahedronGeometry(0.14, 0);
+    for (let i = 0; i < 40; i++) {
+      const em = new THREE.Mesh(emberGeo, i % 2 === 0 ? goldGlow : crimsonGlow);
+      em.position.set((Math.random() - 0.5) * 28, Math.random() * 14, -22 + Math.random() * 24);
+      bossArenaGroup.add(em);
+      bossEmbers.push({ mesh: em, spd: 1.4 + Math.random() * 2.2, phase: Math.random() * 6.28 });
+    }
+
+    const shrineLight = new THREE.PointLight(0xff2a6d, 3.2, 48);
+    shrineLight.position.set(0, 10, -14);
+    bossArenaGroup.add(shrineLight);
+  })();
+
+  const LANE_X = [-2.8, 0, 2.8];
+  const CHUNK_LEN = 20;
+  const chunks = [];
+  const fxParticles = [];
+
+  // Shared Geometries & Materials (High-Contrast Neon Separation)
+  const floorMat = new THREE.MeshStandardMaterial({ color: 0x101c36, roughness: 0.5, metalness: 0.35 });
+  const trimCyanMat = new THREE.MeshBasicMaterial({ color: 0x00e5ff });
+  const trimPinkMat = new THREE.MeshBasicMaterial({ color: 0xff2a6d });
+  const wallPanelMat = new THREE.MeshStandardMaterial({ color: 0x00e5ff, emissive: 0x006688, roughness: 0.2, metalness: 0.5, transparent: true, opacity: 0.88 });
+  const laserMat = new THREE.MeshBasicMaterial({ color: 0xff2a6d });
+  const laserCoreMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  const pillarMat = new THREE.MeshStandardMaterial({ color: 0x334155, emissive: 0x111827, roughness: 0.35, metalness: 0.55 });
+
+  function spawnShatter(pos, color, count = 18, speed = 13) {
+    const geo = new THREE.OctahedronGeometry(0.18, 0);
+    const mat = new THREE.MeshBasicMaterial({ color });
+    for (let i = 0; i < count; i++) {
+      const m = new THREE.Mesh(geo, mat);
+      m.position.copy(pos);
+      const v = new THREE.Vector3(
+        (Math.random() - 0.5) * 2.2,
+        Math.random() * 1.4,
+        (Math.random() - 0.3) * 2
+      ).normalize().multiplyScalar(speed * (0.45 + Math.random() * 0.8));
+      scene.add(m);
+      fxParticles.push({
+        mesh: m,
+        vel: v,
+        rot: new THREE.Vector3(Math.random() * 12, Math.random() * 12, Math.random() * 12),
+        life: 0,
+        maxLife: 0.45 + Math.random() * 0.25
+      });
+    }
+  }
+
+  function spawnSplitBody(x, y, z, color = 0xff2a6d, scale = 1) {
+    const matTop = new THREE.MeshStandardMaterial({ color, emissive: 0x550018, roughness: 0.3 });
+    const matBot = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.4 });
+    const topHalf = new THREE.Mesh(new THREE.BoxGeometry(0.95 * scale, 0.95 * scale, 0.58 * scale), matTop);
+    topHalf.position.set(x, y + 1.45 * scale, z);
+    const botHalf = new THREE.Mesh(new THREE.BoxGeometry(0.88 * scale, 0.88 * scale, 0.54 * scale), matBot);
+    botHalf.position.set(x, y + 0.5 * scale, z);
+    scene.add(topHalf, botHalf);
+    fxParticles.push(
+      { mesh: topHalf, vel: new THREE.Vector3(4.2 * scale, 8.2, -4), rot: new THREE.Vector3(4, 3, -8), life: 0, maxLife: 0.85 },
+      { mesh: botHalf, vel: new THREE.Vector3(-4.0 * scale, 2.4, -3), rot: new THREE.Vector3(-3, 2, 7), life: 0, maxLife: 0.85 }
+    );
+  }
+
+  function makeBoss(z, level = 1) {
+    const g = new THREE.Group();
+    const armorMat = new THREE.MeshStandardMaterial({ color: 0x111827, emissive: 0x090d16, roughness: 0.22, metalness: 0.85 });
+    const crimsonMat = new THREE.MeshStandardMaterial({ color: 0x9f1239, emissive: 0x3f0515, roughness: 0.28, metalness: 0.58 });
+    const goldMat = new THREE.MeshStandardMaterial({ color: 0xffd400, emissive: 0x553300, roughness: 0.16, metalness: 0.92 });
+    const coreMat = new THREE.MeshBasicMaterial({ color: 0x00e5ff });
+    const bladeMat = new THREE.MeshBasicMaterial({ color: 0xff1e56 });
+
+    // Armored Samurai Legs & Greaves
+    const legGeo = new THREE.BoxGeometry(0.58, 1.48, 0.62);
+    const legL = new THREE.Mesh(legGeo, armorMat);
+    legL.position.set(-0.56, 0.74, 0);
+    const legR = new THREE.Mesh(legGeo, armorMat);
+    legR.position.set(0.56, 0.74, 0);
+    const kneeL = new THREE.Mesh(new THREE.BoxGeometry(0.64, 0.34, 0.68), goldMat);
+    kneeL.position.set(-0.56, 0.96, 0.04);
+    const kneeR = new THREE.Mesh(new THREE.BoxGeometry(0.64, 0.34, 0.68), goldMat);
+    kneeR.position.set(0.56, 0.96, 0.04);
+
+    // Kusazuri (Segmented Obsidian & Gold Samurai Waist Armor Tassets)
+    const waist = new THREE.Group();
+    waist.position.y = 1.62;
+    const belt = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.34, 1.05), goldMat);
+    const tassetCenter = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.78, 0.18), armorMat);
+    tassetCenter.position.set(0, -0.34, 0.56);
+    tassetCenter.rotation.x = -0.16;
+    const tassetL = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.72, 0.85), crimsonMat);
+    tassetL.position.set(-0.88, -0.30, 0);
+    tassetL.rotation.z = -0.20;
+    const tassetR = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.72, 0.85), crimsonMat);
+    tassetR.position.set(0.88, -0.30, 0);
+    tassetR.rotation.z = 0.20;
+    waist.add(belt, tassetCenter, tassetL, tassetR);
+
+    // Sculpted Chest Cuirass & Glowing Reactor Core
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(2.05, 1.55, 1.15), armorMat);
+    torso.position.y = 2.60;
+    const chestPlate = new THREE.Mesh(new THREE.BoxGeometry(1.78, 1.12, 1.24), crimsonMat);
+    chestPlate.position.y = 2.66;
+    const chestCore = new THREE.Mesh(new THREE.OctahedronGeometry(0.42, 0), coreMat);
+    chestCore.position.set(0, 2.66, 0.66);
+
+    // Layered Sode Shoulder Pauldrons
+    const shL = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.96, 1.20), armorMat);
+    shL.position.set(-1.38, 3.08, 0);
+    shL.rotation.z = 0.22;
+    const shLTrim = new THREE.Mesh(new THREE.BoxGeometry(0.84, 0.18, 1.24), goldMat);
+    shLTrim.position.set(-1.38, 3.48, 0);
+    shLTrim.rotation.z = 0.22;
+    const shR = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.96, 1.20), armorMat);
+    shR.position.set(1.38, 3.08, 0);
+    shR.rotation.z = -0.22;
+    const shRTrim = new THREE.Mesh(new THREE.BoxGeometry(0.84, 0.18, 1.24), goldMat);
+    shRTrim.position.set(1.38, 3.48, 0);
+    shRTrim.rotation.z = -0.22;
+
+    // Oni Kabuto Helmet + Golden Crescent Crest (Kuwagata)
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.92, 0.95), armorMat);
+    head.position.y = 3.85;
+    const kabutoDome = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.85, 0.45, 8), crimsonMat);
+    kabutoDome.position.y = 4.35;
+    const eyeL = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.12, 0.10), goldMat);
+    eyeL.position.set(-0.22, 3.92, 0.48);
+    eyeL.rotation.z = -0.22;
+    const eyeR = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.12, 0.10), goldMat);
+    eyeR.position.set(0.22, 3.92, 0.48);
+    eyeR.rotation.z = 0.22;
+    const jawMask = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.34, 0.56), crimsonMat);
+    jawMask.position.set(0, 3.56, 0.28);
+    // Golden Crescent Horns
+    const hornL = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.25, 0.10), goldMat);
+    hornL.position.set(-0.62, 4.78, 0.42);
+    hornL.rotation.z = 0.58;
+    const hornR = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.25, 0.10), goldMat);
+    hornR.position.set(0.62, 4.78, 0.42);
+    hornR.rotation.z = -0.58;
+
+    // Spinning Cyber Raijin Halo Ring behind Back (6 Energy Drums!)
+    const haloGroup = new THREE.Group();
+    haloGroup.position.set(0, 3.15, -0.82);
+    const haloRing = new THREE.Mesh(new THREE.TorusGeometry(2.15, 0.08, 10, 32), goldMat);
+    haloGroup.add(haloRing);
+    for (let i = 0; i < 6; i++) {
+      const ang = (i / 6) * Math.PI * 2;
+      const orb = new THREE.Mesh(new THREE.OctahedronGeometry(0.28, 0), i % 2 === 0 ? coreMat : goldMat);
+      orb.position.set(Math.cos(ang) * 2.15, Math.sin(ang) * 2.15, 0);
+      haloGroup.add(orb);
+    }
+
+    // Left Arm (Defensive Gauntlet)
+    const armL = new THREE.Mesh(new THREE.BoxGeometry(0.46, 1.25, 0.48), armorMat);
+    armL.position.set(-1.35, 2.22, 0.28);
+    armL.rotation.x = -0.4;
+
+    // Articulated Right Sword Arm + Giant Plasma Odachi!
+    const swordArm = new THREE.Group();
+    swordArm.position.set(1.38, 2.95, 0.1);
+    const upperArm = new THREE.Mesh(new THREE.BoxGeometry(0.48, 1.15, 0.48), armorMat);
+    upperArm.position.set(0, -0.55, 0.15);
+    const odachiHilt = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.9, 8), goldMat);
+    odachiHilt.position.set(0, -1.0, 0.65);
+    odachiHilt.rotation.x = Math.PI / 2;
+    const odachiBlade = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.28, 4.4), bladeMat);
+    odachiBlade.position.set(0, -1.0, 3.0);
+    const odachiEdge = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.08, 4.5), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+    odachiEdge.position.set(0, -1.12, 3.0);
+    swordArm.add(upperArm, odachiHilt, odachiBlade, odachiEdge);
+
+    // Ground Aura Ring (Turns GOLD during Clash Window!)
+    const auraMat = new THREE.MeshBasicMaterial({ color: 0xff2a6d, side: THREE.DoubleSide, transparent: true, opacity: 0.92 });
+    const auraRing = new THREE.Mesh(new THREE.RingGeometry(1.75, 2.35, 32), auraMat);
+    auraRing.rotation.x = -Math.PI / 2;
+    auraRing.position.y = 0.08;
+
+    g.add(
+      legL, legR, kneeL, kneeR, waist, torso, chestPlate, chestCore,
+      shL, shLTrim, shR, shRTrim, head, kabutoDome, eyeL, eyeR, jawMask, hornL, hornR,
+      haloGroup, armL, swordArm, auraRing
+    );
+    g.position.set(0, 0, z);
+    scene.add(g);
+
+    const maxHp = 10 + (level - 1) * 4;
+    return {
+      mesh: g,
+      haloGroup,
+      swordArm,
+      auraMat,
+      bladeMat,
+      x: 0,
+      y: 0,
+      z,
+      hp: maxHp,
+      maxHp,
+      level,
+      alive: true,
+      lane: 1,
+      state: 'idle', // 'idle' | 'windup_low' | 'windup_high' | 'windup_orb' | 'clash_charge' | 'staggered'
+      stateTimer: 1.2,
+      attackCount: 0,
+      staggerHits: 0
+    };
+  }
+
+  function clearWorld() {
+    for (const c of chunks) worldGroup.remove(c.group);
+    chunks.length = 0;
+    for (const p of fxParticles) scene.remove(p.mesh);
+    fxParticles.length = 0;
+  }
+
+  function makeGuard(x, y, z, shooter = false) {
+    const g = new THREE.Group();
+    const armorColor = shooter ? 0xff7b00 : 0xff2a6d;
+    const armorEmissive = shooter ? 0x882200 : 0x770022;
+    const bodyMat = new THREE.MeshStandardMaterial({
+      color: armorColor,
+      emissive: armorEmissive,
+      roughness: 0.25,
+      metalness: 0.42
+    });
+    const darkMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.45, metalness: 0.65 });
+    const visorMat = new THREE.MeshBasicMaterial({ color: shooter ? 0x00ffff : 0xffe600 });
+    const weaponGlow = new THREE.MeshBasicMaterial({ color: shooter ? 0x00e5ff : 0xffffff });
+
+    // Articulated Cyber Legs & Boots
+    const legL = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.86, 0.30), darkMat);
+    legL.position.set(-0.24, 0.43, 0);
+    const legR = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.86, 0.30), darkMat);
+    legR.position.set(0.24, 0.43, 0);
+    const bootL = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.26, 0.40), bodyMat);
+    bootL.position.set(-0.24, 0.14, 0.04);
+    const bootR = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.26, 0.40), bodyMat);
+    bootR.position.set(0.24, 0.14, 0.04);
+
+    // Armored Torso + Glowing Chest Core
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.88, 0.92, 0.52), bodyMat);
+    torso.position.y = 1.28;
+    const chestCore = new THREE.Mesh(new THREE.OctahedronGeometry(0.20, 0), visorMat);
+    chestCore.position.set(0, 1.32, 0.28);
+
+    // Angled Shoulder Pauldrons
+    const shL = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.28, 0.56), visorMat);
+    shL.position.set(-0.58, 1.62, 0);
+    shL.rotation.z = 0.25;
+    const shR = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.28, 0.56), visorMat);
+    shR.position.set(0.58, 1.62, 0);
+    shR.rotation.z = -0.25;
+
+    // Cyber Oni Helmet + Visor + Twin Horns
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.50, 0.52), darkMat);
+    head.position.y = 2.02;
+    const visor = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.18, 0.56), visorMat);
+    visor.position.y = 2.04;
+    const hornL = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.34, 5), visorMat);
+    hornL.position.set(-0.20, 2.38, 0.12);
+    hornL.rotation.z = 0.35;
+    const hornR = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.34, 5), visorMat);
+    hornR.position.set(0.20, 2.38, 0.12);
+    hornR.rotation.z = -0.35;
+
+    // Flowing Neon Cyber Scarf
+    const scarf = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.10, 0.72), visorMat);
+    scarf.position.set(0, 1.68, -0.42);
+    scarf.rotation.x = 0.25;
+
+    // Arms & Weapon (Katana for melee, Dual Plasma Rifle for shooter)
+    const armL = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.72, 0.22), darkMat);
+    armL.position.set(-0.56, 1.24, 0.18);
+    armL.rotation.x = -0.45;
+    const armR = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.72, 0.22), darkMat);
+    armR.position.set(0.56, 1.24, 0.22);
+    armR.rotation.x = -0.75;
+
+    if (shooter) {
+      const gunBody = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.24, 0.95), darkMat);
+      gunBody.position.set(0.56, 1.26, 0.65);
+      const gunGlow = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.85, 8), weaponGlow);
+      gunGlow.rotation.x = Math.PI / 2;
+      gunGlow.position.set(0.56, 1.32, 0.88);
+      g.add(gunBody, gunGlow);
+    } else {
+      const blade = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.48, 0.12), weaponGlow);
+      blade.position.set(0.62, 1.42, 0.56);
+      blade.rotation.x = 0.62;
+      g.add(blade);
+    }
+
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(0.68, 0.96, 24),
+      new THREE.MeshBasicMaterial({ color: shooter ? 0xff9900 : 0xff2a6d, side: THREE.DoubleSide, transparent: true, opacity: 0.95 })
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.05;
+
+    g.add(legL, legR, bootL, bootR, torso, chestCore, shL, shR, head, visor, hornL, hornR, scarf, armL, armR, ring);
+    g.position.set(x, y, z);
+    return { kind: 'guard', mesh: g, x, y, z, alive: true, shooter, fired: false };
+  }
+
+  function makeDrone(x, y, z) {
+    const g = new THREE.Group();
+    const core = new THREE.Mesh(
+      new THREE.OctahedronGeometry(0.76, 0),
+      new THREE.MeshStandardMaterial({ color: 0xffd400, emissive: 0x995500, roughness: 0.18, metalness: 0.5 })
+    );
+    const halo = new THREE.Mesh(
+      new THREE.TorusGeometry(1.06, 0.09, 10, 24),
+      new THREE.MeshBasicMaterial({ color: 0xffffff })
+    );
+    halo.rotation.x = Math.PI / 2;
+    g.add(core, halo);
+    g.position.set(x, y, z);
+    return { kind: 'drone', mesh: g, x, y, z, alive: true };
+  }
+
+  function makeCrystal(x, y, z) {
+    const m = new THREE.Mesh(
+      new THREE.OctahedronGeometry(0.68, 0),
+      new THREE.MeshStandardMaterial({ color: 0xffe600, emissive: 0x996600, roughness: 0.12, metalness: 0.7 })
+    );
+    m.position.set(x, y, z);
+    return { kind: 'crystal', mesh: m, x, y, z, alive: true };
+  }
+
+  function pickPatternForChunk(idx) {
+    if (boss && boss.alive) return 8; // Clean Boss Arena Runway!
+    if (idx <= 3) return 0;
+    if (idx <= 7) {
+      const pool = [0, 1, 2];
+      return pool[idx % pool.length];
+    }
+    if (idx <= 12) {
+      const pool = [0, 1, 2, 7];
+      return pool[Math.floor(Math.random() * pool.length)];
+    }
+    if (idx <= 17) {
+      const pool = [1, 2, 3, 4, 7];
+      return pool[Math.floor(Math.random() * pool.length)];
+    }
+    const pool = [1, 2, 3, 4, 5, 6];
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+
+  function buildChunk(idx, zStart) {
+    const g = new THREE.Group();
+    const zCenter = zStart - CHUNK_LEN * 0.5;
+    const obstacles = [];
+    const targets = [];
+    const orbs = [];
+    const boostPads = [];
+    let gapRange = null;
+    let wallRun = null;
+
+    const pat = pickPatternForChunk(idx);
+
+    if (pat === 3 || pat === 6) {
+      const side = Math.random() < 0.5 ? -1 : 1;
+      const seg1Len = 5;
+      const gapLen = 10;
+      const seg2Len = 5;
+
+      const f1 = new THREE.Mesh(new THREE.BoxGeometry(9.4, 1.2, seg1Len), floorMat);
+      f1.position.set(0, -0.6, zStart - seg1Len * 0.5);
+      const f2 = new THREE.Mesh(new THREE.BoxGeometry(9.4, 1.2, seg2Len), floorMat);
+      f2.position.set(0, -0.6, zStart - seg1Len - gapLen - seg2Len * 0.5);
+      g.add(f1, f2);
+
+      const wrPanel = new THREE.Mesh(new THREE.BoxGeometry(0.45, 4.4, gapLen + 2), wallPanelMat);
+      wrPanel.position.set(side * 4.7, 2.2, zCenter);
+      const wrEdge = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.25, gapLen + 2), trimCyanMat);
+      wrEdge.position.set(side * 4.7, 4.4, zCenter);
+      g.add(wrPanel, wrEdge);
+
+      gapRange = [zStart - seg1Len, zStart - seg1Len - gapLen];
+      wallRun = { side, zFront: zStart - seg1Len + 1.5, zBack: zStart - seg1Len - gapLen - 1.5 };
+
+      const drone = makeDrone(0, 2.4, zCenter);
+      g.add(drone.mesh);
+      targets.push(drone);
+
+      if (pat === 6) {
+        const guard = makeGuard(LANE_X[Math.floor(Math.random() * 3)], 0, zStart - CHUNK_LEN + 2.5, false);
+        g.add(guard.mesh);
+        targets.push(guard);
+      }
+    } else {
+      const floor = new THREE.Mesh(new THREE.BoxGeometry(9.4, 1.2, CHUNK_LEN), floorMat);
+      floor.position.set(0, -0.6, zCenter);
+      const edgeL = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.20, CHUNK_LEN), trimCyanMat);
+      edgeL.position.set(-4.65, 0.05, zCenter);
+      const edgeR = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.20, CHUNK_LEN), trimCyanMat);
+      edgeR.position.set(4.65, 0.05, zCenter);
+      g.add(floor, edgeL, edgeR);
+
+      for (const lx of [-1.4, 1.4]) {
+        const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.03, CHUNK_LEN), new THREE.MeshBasicMaterial({ color: 0x233554 }));
+        stripe.position.set(lx, 0.02, zCenter);
+        g.add(stripe);
+      }
+
+      // Occasional Turbo Boost Pad on solid floors
+      if (idx >= 2 && (pat === 0 || pat === 7 || pat === 8) && Math.random() < 0.55) {
+        const pLane = Math.floor(Math.random() * 3);
+        const padMesh = new THREE.Mesh(
+          new THREE.BoxGeometry(2.1, 0.06, 3.6),
+          new THREE.MeshBasicMaterial({ color: 0x00ff9d })
+        );
+        padMesh.position.set(LANE_X[pLane], 0.04, zStart - 3.5);
+        g.add(padMesh);
+        boostPads.push({ x: LANE_X[pLane], z: zStart - 3.5, used: false, mesh: padMesh });
+      }
+
+      if (pat === 0) {
+        if (idx === 0) {
+          const cry = makeCrystal(0, 1.1, zCenter - 4);
+          g.add(cry.mesh);
+          targets.push(cry);
+        } else {
+          const l1 = Math.floor(Math.random() * 3);
+          const guard = makeGuard(LANE_X[l1], 0, zCenter - 3, false);
+          g.add(guard.mesh);
+          targets.push(guard);
+          const cry = makeCrystal(LANE_X[(l1 + 1) % 3], 1.1, zCenter + 3);
+          g.add(cry.mesh);
+          targets.push(cry);
+        }
+      } else if (pat === 1) {
+        const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 9.2, 10), laserMat);
+        beam.rotation.z = Math.PI / 2;
+        beam.position.set(0, 0.72, zCenter + 1);
+        const inner = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 9.2, 8), laserCoreMat);
+        inner.rotation.z = Math.PI / 2;
+        inner.position.set(0, 0.72, zCenter + 1);
+        const postL = new THREE.Mesh(new THREE.BoxGeometry(0.45, 1.7, 0.45), pillarMat);
+        postL.position.set(-4.6, 0.85, zCenter + 1);
+        const postR = new THREE.Mesh(new THREE.BoxGeometry(0.45, 1.7, 0.45), pillarMat);
+        postR.position.set(4.6, 0.85, zCenter + 1);
+        g.add(beam, inner, postL, postR);
+        obstacles.push({ type: 'low_laser', z: zCenter + 1, minY: 0, maxY: 1.25, xMin: -5, xMax: 5, nearMissed: false });
+
+        if (idx >= 8) {
+          const drone = makeDrone(LANE_X[Math.floor(Math.random() * 3)], 2.3, zCenter - 4.5);
+          g.add(drone.mesh);
+          targets.push(drone);
+        } else {
+          const guard = makeGuard(LANE_X[Math.floor(Math.random() * 3)], 0, zCenter - 5.5, false);
+          g.add(guard.mesh);
+          targets.push(guard);
+        }
+      } else if (pat === 2) {
+        const gate = new THREE.Mesh(new THREE.BoxGeometry(9.4, 2.2, 0.55), new THREE.MeshBasicMaterial({ color: 0xff2a6d, transparent: true, opacity: 0.82 }));
+        gate.position.set(0, 2.38, zCenter + 2);
+        const barBot = new THREE.Mesh(new THREE.BoxGeometry(9.4, 0.16, 0.65), laserCoreMat);
+        barBot.position.set(0, 1.32, zCenter + 2);
+        const sign = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.1, 1.6), trimCyanMat);
+        sign.position.set(0, 0.03, zCenter + 5.8);
+        g.add(gate, barBot, sign);
+        obstacles.push({ type: 'high_laser', z: zCenter + 2, minY: 1.28, maxY: 3.6, xMin: -5, xMax: 5, nearMissed: false });
+
+        const guard = makeGuard(LANE_X[Math.floor(Math.random() * 3)], 0, zCenter - 6, false);
+        g.add(guard.mesh);
+        targets.push(guard);
+      } else if (pat === 7) {
+        const blockLane = Math.floor(Math.random() * 3);
+        const pil = new THREE.Mesh(new THREE.BoxGeometry(2.1, 5.2, 2.1), pillarMat);
+        pil.position.set(LANE_X[blockLane], 2.6, zCenter + 1);
+        const trimB = new THREE.Mesh(new THREE.BoxGeometry(2.22, 0.25, 2.22), trimPinkMat);
+        trimB.position.set(LANE_X[blockLane], 0.14, zCenter + 1);
+        const trimT = new THREE.Mesh(new THREE.BoxGeometry(2.22, 0.25, 2.22), trimPinkMat);
+        trimT.position.set(LANE_X[blockLane], 5.1, zCenter + 1);
+        g.add(pil, trimB, trimT);
+        obstacles.push({ type: 'pillar', z: zCenter + 1, minY: 0, maxY: 5.2, xMin: LANE_X[blockLane] - 1.05, xMax: LANE_X[blockLane] + 1.05, nearMissed: false });
+
+        const guard = makeGuard(LANE_X[(blockLane + 1) % 3], 0, zCenter - 5.5, false);
+        g.add(guard.mesh);
+        targets.push(guard);
+      } else if (pat === 4) {
+        const openLane = Math.floor(Math.random() * 3);
+        for (let l = 0; l < 3; l++) {
+          if (l === openLane) continue;
+          const pil = new THREE.Mesh(new THREE.BoxGeometry(2.1, 5.2, 2.1), pillarMat);
+          pil.position.set(LANE_X[l], 2.6, zCenter + 1);
+          const trimB = new THREE.Mesh(new THREE.BoxGeometry(2.22, 0.25, 2.22), trimPinkMat);
+          trimB.position.set(LANE_X[l], 0.14, zCenter + 1);
+          const trimT = new THREE.Mesh(new THREE.BoxGeometry(2.22, 0.25, 2.22), trimPinkMat);
+          trimT.position.set(LANE_X[l], 5.1, zCenter + 1);
+          g.add(pil, trimB, trimT);
+          obstacles.push({ type: 'pillar', z: zCenter + 1, minY: 0, maxY: 5.2, xMin: LANE_X[l] - 1.05, xMax: LANE_X[l] + 1.05, nearMissed: false });
+        }
+        const shooter = makeGuard(LANE_X[openLane], 0, zCenter - 6.5, true);
+        g.add(shooter.mesh);
+        targets.push(shooter);
+      } else if (pat === 5) {
+        const order = [0, 1, 2].sort(() => Math.random() - 0.5);
+        const g1 = makeGuard(LANE_X[order[0]], 0, zStart - 4.5, false);
+        const g2 = makeGuard(LANE_X[order[1]], 0, zStart - 11.0, false);
+        const d3 = makeDrone(LANE_X[order[2]], 2.2, zStart - 16.5);
+        g.add(g1.mesh, g2.mesh, d3.mesh);
+        targets.push(g1, g2, d3);
+      }
+    }
+
+    worldGroup.add(g);
+    chunks.push({ idx, zStart, zEnd: zStart - CHUNK_LEN, group: g, obstacles, targets, orbs, boostPads, gapRange, wallRun });
+  }
+
+  // Player & Simulation State
+  let gameState = 'title'; // 'title' | 'run' | 'boss' | 'mod' | 'over'
+  let playerX = 0;
+  let playerY = 0;
+  let playerZ = 0;
+  let velY = 0;
+  let targetLane = 1; // 0, 1, 2
+  let jumpsLeft = 2;
+  let slideTimer = 0;
+  let wallRunSide = 0; // -1, 0, +1
+  let camBank = 0;
+
+  let baseRunSpeed = 14.5;
+  let speedBonus = 0;
+  let dashTimer = 0;
+  let slashAnim = 0;
+  let slashDir = 1;
+  let slashCooldown = 0;
+  let hitstopTimer = 0;
+  let screenShake = 0;
+  let warpFlash = 0;
+  let warpColor = '#ff2a6d';
+
+  let score = 0;
+  let kills = 0;
+  let chain = 1;
+  let maxChain = 1;
+  let chainTimer = 0;
+  let overdrive = 0;
+  let overdriveTimer = 0;
+  let hasShield = true;
+  let invulnTimer = 0;
+  let nextChunkIdx = 0;
+  let nextChunkZ = 2;
+  let lockedTarget = null;
+  let prevLockedId = null;
+
+  // Style Rank & 2D Anime Slash FX
+  const RANKS = [
+    { name: 'D', min: 0, color: '#94a3b8' },
+    { name: 'C', min: 15, color: '#38bdf8' },
+    { name: 'B', min: 35, color: '#00ff9d' },
+    { name: 'A', min: 65, color: '#ffd400' },
+    { name: 'S', min: 105, color: '#ff8800' },
+    { name: 'SS', min: 150, color: '#ff2a6d' },
+    { name: 'PHANTOM', min: 205, color: '#e879f9' }
+  ];
+  let stylePts = 0;
+  let maxRankIdx = 0;
+  const slashFxList = [];
+
+  // Boss Dimension State
+  let boss = null;
+  let bossLevel = 1;
+  let savedRunZ = 0;
+  let nextBossDist = 160;
+  let pendingBossExit = false;
+  let activeMods = new Set();
+
+  const activeOrbs = [];
+  const bossWaves = [];
+
+  const CYBER_MODS = [
+    { id: 'shockwave', icon: '⚡', name: '衝撃波スラッシュ', desc: '斬撃が隣のレーンまで一閃＆ボス連撃ダメージ2倍！' },
+    { id: 'explode', icon: '💥', name: '爆散チェーン', desc: '敵を斬ると周囲の障害物・レーザーも爆発で粉砕！' },
+    { id: 'triple', icon: '🕊', name: '空中3段ジャンプ', desc: '3段ジャンプ解放＋弾パリィ判定を大幅強化！' },
+    { id: 'magnet', icon: '🧲', name: 'コア吸引＆OD延長', desc: '金色コアを自動吸引＆OVERDRIVE時間が+2.5秒延長！' },
+    { id: 'aegis', icon: '🛡', name: 'ナノアーマー＆連撃', desc: 'シールド即回復＋キル毎のCHAIN上昇量が2倍！' }
+  ];
+
+  function getRankIdx() {
+    let idx = 0;
+    for (let i = RANKS.length - 1; i >= 0; i--) {
+      if (stylePts >= RANKS[i].min) { idx = i; break; }
+    }
+    return idx;
+  }
+
+  function addStyle(pts) {
+    stylePts = Math.min(260, stylePts + pts);
+    const idx = getRankIdx();
+    if (idx > maxRankIdx) maxRankIdx = idx;
+  }
+
+  function spawnSlashFx(color = '#00e5ff', big = false, forceAngle = null) {
+    slashDir *= -1;
+    const baseAngle = forceAngle !== null ? forceAngle : (slashDir > 0 ? -0.58 : 0.58) + (Math.random() - 0.5) * 0.22;
+    slashFxList.push({
+      angle: baseAngle,
+      cx: W * (0.5 + (Math.random() - 0.5) * 0.14),
+      cy: H * (0.46 + (Math.random() - 0.5) * 0.12),
+      len: big ? 640 : 420,
+      width: big ? 18 : 11,
+      color,
+      life: 0,
+      maxLife: big ? 0.34 : 0.22
+    });
+  }
+
+  function getActiveBlade() {
+    return BLADE_STYLES.find(b => b.id === saveData.blade) || BLADE_STYLES[0];
+  }
+
+  function renderBladePicker() {
+    bladePickerEl.innerHTML = '';
+    for (const b of BLADE_STYLES) {
+      const unlocked = saveData.careerKills >= b.req;
+      const btn = document.createElement('button');
+      btn.className = 'blade-btn' + (saveData.blade === b.id ? ' active' : '') + (!unlocked ? ' locked' : '');
+      btn.textContent = unlocked ? b.name : `🔒 ${b.name} (${b.req}殺)`;
+      if (unlocked) {
+        btn.addEventListener('click', () => {
+          saveData.blade = b.id;
+          persistSave();
+          bladeGlowMat.color.setHex(b.color);
+          renderBladePicker();
+        });
+      }
+      bladePickerEl.appendChild(btn);
+    }
+  }
+  renderBladePicker();
+  bladeGlowMat.color.setHex(getActiveBlade().color);
+
+  function renderModsHud() {
+    hudMods.innerHTML = '';
+    for (const mid of activeMods) {
+      const m = CYBER_MODS.find(x => x.id === mid);
+      if (!m) continue;
+      const sp = document.createElement('span');
+      sp.className = 'mod-pill';
+      sp.textContent = `${m.icon} ${m.name}`;
+      hudMods.appendChild(sp);
+    }
+  }
+
+  function addCallout(text, color = '#00e5ff') {
+    const el = document.createElement('div');
+    el.className = 'callout-badge';
+    el.style.color = color;
+    el.textContent = text;
+    calloutStack.prepend(el);
+    while (calloutStack.children.length > 2) calloutStack.lastChild.remove();
+    setTimeout(() => { if (el.parentNode) el.remove(); }, 950);
+  }
+
+  function setBossPrompt(text, color = '#ffd400', borderColor = 'rgba(255, 212, 0, 0.7)') {
+    if (!text) {
+      bossPrompt.classList.add('hidden');
+      return;
+    }
+    bossPrompt.textContent = text;
+    bossPrompt.style.color = color;
+    bossPrompt.style.borderColor = borderColor;
+    bossPrompt.classList.remove('hidden');
+  }
+
+  function clearBossEntities() {
+    if (boss) {
+      scene.remove(boss.mesh);
+      boss = null;
+    }
+    for (const w of bossWaves) scene.remove(w.mesh);
+    bossWaves.length = 0;
+    for (const o of activeOrbs) scene.remove(o.mesh);
+    activeOrbs.length = 0;
+  }
+
+  function enterBossArena() {
+    savedRunZ = playerZ;
+    clearBossEntities();
+
+    worldGroup.visible = false;
+    skylineGroup.visible = false;
+    bossArenaGroup.visible = true;
+    scene.background.setHex(0x16030a);
+    scene.fog.color.setHex(0x1c040d);
+    scene.fog.density = 0.0085;
+
+    playerX = 0;
+    playerY = 0;
+    playerZ = 0;
+    velY = 0;
+    targetLane = 1;
+    slideTimer = 0;
+    wallRunSide = 0;
+    jumpsLeft = activeMods.has('triple') ? 3 : 2;
+    invulnTimer = 1.0;
+
+    boss = makeBoss(-12.5, bossLevel);
+    gameState = 'boss';
+    warpFlash = 1.0;
+    warpColor = '#ff2a6d';
+    screenShake = 0.55;
+
+    SFX.warp();
+    recordEv('warp_boss');
+    setTimeout(() => { if (gameState === 'boss') SFX.bossAlert(); }, 220);
+    addCallout(`⛩ 異界突入：紅蓮の機神 Lv.${bossLevel}!!`, '#ff2a6d');
+    setBossPrompt('⛩ 紅蓮の異界！攻撃を回避＆パリィで斬り込め！', '#ffd400', 'rgba(255,212,0,0.75)');
+    updateHud();
+  }
+
+  function exitBossArena() {
+    clearBossEntities();
+    worldGroup.visible = true;
+    skylineGroup.visible = true;
+    bossArenaGroup.visible = false;
+    scene.background.setHex(0x040612);
+    scene.fog.color.setHex(0x06081a);
+    scene.fog.density = 0.011;
+
+    playerX = 0;
+    playerY = 0;
+    playerZ = savedRunZ;
+    velY = 0;
+    targetLane = 1;
+    slideTimer = 0;
+    wallRunSide = 0;
+    jumpsLeft = activeMods.has('triple') ? 3 : 2;
+    invulnTimer = 2.0;
+
+    // Clear immediate hazards around return point so player never spawns inside an obstacle
+    for (const c of chunks) {
+      for (const ob of c.obstacles) {
+        if (ob.z <= savedRunZ + 4 && ob.z >= savedRunZ - 26) {
+          ob.minY = 99;
+          ob.maxY = 99;
+        }
+      }
+      for (const t of c.targets) {
+        if (t.alive && t.z <= savedRunZ + 4 && t.z >= savedRunZ - 16) {
+          t.alive = false;
+          t.mesh.visible = false;
+        }
+      }
+    }
+
+    warpFlash = 0.85;
+    warpColor = '#00e5ff';
+    setBossPrompt(null);
+    gameState = 'run';
+    SFX.warp();
+    recordEv('warp_return');
+    updateHud();
+  }
+
+  function updateHud() {
+    const dist = gameState === 'boss' ? Math.max(0, Math.floor(-savedRunZ)) : Math.max(0, Math.floor(-playerZ));
+    hudScore.textContent = Math.floor(score).toLocaleString();
+    hudDist.textContent = `${dist}m`;
+    hudChain.textContent = `CHAIN ×${chain}`;
+    hudChain.style.color = chain >= 5 ? '#ff2a6d' : '#ffd400';
+    hudKills.textContent = `KILLS ${kills}`;
+
+    const rIdx = getRankIdx();
+    const rk = RANKS[rIdx];
+    hudRank.textContent = rk.name === 'PHANTOM' ? '✦ PHANTOM' : `RANK ${rk.name}`;
+    hudRank.style.color = rk.color;
+    hudRank.style.borderColor = rk.color;
+
+    if (gameState === 'boss') {
+      hudSpeed.textContent = 'DUEL MODE';
+      hudBossDist.textContent = `⛩ 紅蓮ノ社 Lv.${bossLevel}`;
+      hudBossDist.style.color = '#ffd400';
+    } else {
+      const kmh = Math.round((baseRunSpeed + speedBonus + (overdriveTimer > 0 ? 11 : 0)) * 6.5);
+      hudSpeed.textContent = `${kmh} km/h`;
+      const rem = Math.max(0, Math.ceil(nextBossDist - dist));
+      hudBossDist.textContent = rem <= 30 ? `⛩ 異界接近 ${rem}m!` : `BOSS ${rem}m`;
+      hudBossDist.style.color = rem <= 30 ? '#ffd400' : '#ff6b81';
+    }
+
+    if (hasShield) {
+      hudShield.textContent = '🛡 SHIELD';
+      hudShield.classList.remove('broken');
+    } else {
+      hudShield.textContent = '⚠ NO SHIELD';
+      hudShield.classList.add('broken');
+    }
+
+    const odMax = activeMods.has('magnet') ? 7.0 : 4.5;
+    const odPct = overdriveTimer > 0 ? (overdriveTimer / odMax) * 100 : overdrive;
+    odFill.style.width = `${Math.min(100, odPct)}%`;
+    odWrap.classList.toggle('active', overdriveTimer > 0);
+    odLabel.textContent = overdriveTimer > 0 ? '🔥 OVERDRIVE INVINCIBLE!!' : 'OVERDRIVE';
+
+    if (boss && boss.alive) {
+      bossWrap.classList.remove('hidden');
+      bossFill.style.width = `${Math.max(0, (boss.hp / boss.maxHp) * 100)}%`;
+      bossHpText.textContent = `HP ${boss.hp} / ${boss.maxHp}`;
+    } else {
+      bossWrap.classList.add('hidden');
+    }
+
+    btnSlash.classList.toggle('locked', !!lockedTarget);
+  }
+
+  function startRun() {
+    clearWorld();
+    clearBossEntities();
+    slashFxList.length = 0;
+
+    worldGroup.visible = true;
+    skylineGroup.visible = true;
+    bossArenaGroup.visible = false;
+    scene.background.setHex(0x040612);
+    scene.fog.color.setHex(0x06081a);
+    scene.fog.density = 0.011;
+
+    playerX = 0;
+    playerY = 0;
+    playerZ = 0;
+    savedRunZ = 0;
+    velY = 0;
+    targetLane = 1;
+    jumpsLeft = 2;
+    slideTimer = 0;
+    wallRunSide = 0;
+    camBank = 0;
+
+    baseRunSpeed = 14.5;
+    speedBonus = 0;
+    dashTimer = 0;
+    slashAnim = 0;
+    slashCooldown = 0;
+    hitstopTimer = 0;
+    screenShake = 0;
+    warpFlash = 0;
+
+    score = 0;
+    kills = 0;
+    chain = 1;
+    maxChain = 1;
+    chainTimer = 0;
+    stylePts = 0;
+    maxRankIdx = 0;
+    overdrive = 0;
+    overdriveTimer = 0;
+    hasShield = true;
+    invulnTimer = 0;
+    lockedTarget = null;
+    prevLockedId = null;
+    bossLevel = 1;
+    nextBossDist = 160;
+    pendingBossExit = false;
+    activeMods = new Set();
+    renderModsHud();
+    setBossPrompt(null);
+
+    nextChunkIdx = 0;
+    nextChunkZ = 2;
+    for (let i = 0; i < 8; i++) {
+      buildChunk(nextChunkIdx++, nextChunkZ);
+      nextChunkZ -= CHUNK_LEN;
+    }
+
+    gameState = 'run';
+    screenTitle.classList.add('hidden');
+    screenMod.classList.add('hidden');
+    screenOver.classList.add('hidden');
+    hud.classList.remove('hidden');
+    weaponGroup.visible = true;
+    bladeGlowMat.color.setHex(getActiveBlade().color);
+    updateHud();
+
+    SFX.startBeat(() => ({ state: gameState, od: overdriveTimer > 0 }));
+  }
+
+  function startBossRush() {
+    startRun();
+    enterBossArena();
+  }
+
+  function openModSelect(fromBossDimension = false) {
+    pendingBossExit = fromBossDimension;
+    gameState = 'mod';
+    SFX.stopBeat();
+    const available = CYBER_MODS.filter(m => !activeMods.has(m.id));
+    const pool = (available.length >= 3 ? available : CYBER_MODS).slice().sort(() => Math.random() - 0.5).slice(0, 3);
+    modListEl.innerHTML = '';
+    for (const m of pool) {
+      const btn = document.createElement('button');
+      btn.className = 'mod-card';
+      btn.innerHTML = `<div class="mod-card-title">${m.icon} ${m.name}</div><div class="mod-card-desc">${m.desc}</div>`;
+      btn.addEventListener('click', () => {
+        activeMods.add(m.id);
+        if (m.id === 'aegis') hasShield = true;
+        if (m.id === 'triple') jumpsLeft = Math.max(jumpsLeft, 3);
+        renderModsHud();
+        screenMod.classList.add('hidden');
+        if (pendingBossExit) {
+          pendingBossExit = false;
+          exitBossArena();
+        } else {
+          invulnTimer = 1.6;
+          gameState = 'run';
+        }
+        SFX.overdrive();
+        addCallout(`${m.icon} ${m.name} 覚醒!!`, '#ffd400');
+        updateHud();
+        SFX.startBeat(() => ({ state: gameState, od: overdriveTimer > 0 }));
+      });
+      modListEl.appendChild(btn);
+    }
+    screenMod.classList.remove('hidden');
+  }
+
+  function damageBoss(dmg = 1, forceStagger = false) {
+    if (!boss || !boss.alive) return;
+    boss.hp = Math.max(0, boss.hp - dmg);
+    addStyle(forceStagger ? 22 : 9);
+    chain += 1;
+    if (chain > maxChain) maxChain = chain;
+    chainTimer = 4.0;
+
+    spawnShatter(new THREE.Vector3(boss.x, 2.3, boss.z), 0xffd400, forceStagger ? 24 : 14, 16);
+
+    if (boss.hp <= 0) {
+      // EXECUTION FINISHER!!
+      boss.alive = false;
+      const bx = boss.x, bz = boss.z;
+      scene.remove(boss.mesh);
+      for (const w of bossWaves) scene.remove(w.mesh);
+      bossWaves.length = 0;
+      for (const o of activeOrbs) scene.remove(o.mesh);
+      activeOrbs.length = 0;
+
+      spawnSplitBody(bx, 0, bz, 0xffd400, 2.35);
+      spawnShatter(new THREE.Vector3(bx, 2.4, bz), 0xff2a6d, 36, 22);
+      spawnShatter(new THREE.Vector3(bx, 2.4, bz), 0xffd400, 30, 18);
+      spawnSlashFx('#ffd400', true, -0.62);
+      spawnSlashFx('#ff2a6d', true, 0.62);
+
+      warpFlash = 0.95;
+      warpColor = '#ffd400';
+      hitstopTimer = 0.14;
+      screenShake = 0.85;
+      kills += 3;
+      saveData.careerKills += 3;
+      score += 2500 + bossLevel * 500;
+      addStyle(55);
+      hasShield = true;
+      bossLevel++;
+      nextBossDist = Math.max(240, Math.floor(-savedRunZ) + 260);
+      setBossPrompt(null);
+      SFX.finisher();
+      recordEv('finisher');
+      addCallout('⚔️ 紅蓮の機神・一閃両断!! +2500', '#ffd400');
+      persistSave();
+      updateHud();
+
+      if (!SHORTS_MODE) {
+        setTimeout(() => {
+          if (gameState === 'boss') openModSelect(true);
+        }, 900);
+      }
+      return;
+    }
+
+    if (forceStagger && boss.state !== 'staggered') {
+      boss.state = 'staggered';
+      boss.stateTimer = 2.6;
+      boss.staggerHits = 0;
+      boss.auraMat.color.setHex(0x00e5ff);
+      boss.bladeMat.color.setHex(0x00e5ff);
+      hitstopTimer = 0.08;
+      screenShake = 0.6;
+      spawnSlashFx('#00e5ff', true);
+      SFX.clash();
+      recordEv('clash');
+      addCallout('⚡ GUARD BREAK!! 連打チャンス!!', '#00e5ff');
+      setBossPrompt('🔥 連打チャンス!! SLASH連打で斬り刻め!!', '#00e5ff', 'rgba(0,229,255,0.85)');
+    } else if (boss.state === 'staggered') {
+      boss.staggerHits++;
+      hitstopTimer = 0.025;
+      screenShake = 0.30;
+      score += 220 * dmg;
+      spawnSlashFx(boss.staggerHits % 2 === 0 ? '#ffd400' : '#00e5ff', true);
+      SFX.slashKill(4 + boss.staggerHits, true);
+      recordEv('rush_hit');
+      addCallout(`🔥 RUSH ×${boss.staggerHits}!!`, '#ffd400');
+    } else {
+      hitstopTimer = 0.05;
+      screenShake = 0.45;
+      spawnSlashFx('#ff2a6d', false);
+      SFX.slashKill(chain + 3, false);
+    }
+    updateHud();
+  }
+
+  function gameOver(reason) {
+    const finalDist = gameState === 'boss' ? Math.max(0, Math.floor(-savedRunZ)) : Math.max(0, Math.floor(-playerZ));
+    gameState = 'over';
+    clearBossEntities();
+    setBossPrompt(null);
+    SFX.stopBeat();
+    SFX.crash();
+    screenShake = 0.7;
+
+    const finalScore = Math.floor(score);
+    const isNew = finalScore > saveData.bestScore;
+    if (isNew) saveData.bestScore = finalScore;
+    persistSave();
+    titleBestEl.textContent = `BEST: ${saveData.bestScore.toLocaleString()} // 累計斬撃: ${saveData.careerKills}`;
+    renderBladePicker();
+
+    hud.classList.add('hidden');
+    screenOver.classList.remove('hidden');
+    document.getElementById('over-reason').textContent = reason;
+    document.getElementById('over-best').textContent = isNew ? '🔥 NEW HIGH SCORE!!' : `BEST: ${saveData.bestScore.toLocaleString()}`;
+    document.getElementById('res-score').textContent = finalScore.toLocaleString();
+    document.getElementById('res-dist').textContent = `${finalDist}m`;
+    document.getElementById('res-kills').textContent = kills;
+    const bestRk = RANKS[maxRankIdx];
+    const resRankEl = document.getElementById('res-chain');
+    resRankEl.textContent = bestRk.name;
+    resRankEl.style.color = bestRk.color;
+  }
+
+  function absorbHit(reason) {
+    if (invulnTimer > 0 || overdriveTimer > 0) return;
+    if (hasShield) {
+      hasShield = false;
+      invulnTimer = 1.1;
+      screenShake = 0.65;
+      hitstopTimer = 0.08;
+      chain = 1;
+      stylePts = Math.max(0, stylePts - 35);
+      SFX.shieldBreak();
+      addCallout('🛡 SHIELD SAVED YOU!', '#00e5ff');
+      updateHud();
+    } else {
+      gameOver(reason);
+    }
+  }
+
+  // Player Actions (Active in BOTH Run & Boss Dimension!)
+  function isPlayable() {
+    return gameState === 'run' || gameState === 'boss';
+  }
+
+  function moveLane(dir) {
+    if (!isPlayable()) return;
+    targetLane = Math.max(0, Math.min(2, targetLane + dir));
+    SFX.lane();
+  }
+
+  function triggerJump() {
+    if (!isPlayable()) return;
+    const maxJ = activeMods.has('triple') ? 3 : 2;
+    if (wallRunSide !== 0) {
+      wallRunSide = 0;
+      velY = 12.2;
+      targetLane = 1;
+      jumpsLeft = maxJ - 1;
+      slideTimer = 0;
+      SFX.jump();
+      addCallout('WALL LEAP!', '#00e5ff');
+      return;
+    }
+    if (jumpsLeft > 0) {
+      velY = jumpsLeft === maxJ ? 12.6 : 11.4;
+      jumpsLeft--;
+      slideTimer = 0;
+      SFX.jump();
+    }
+  }
+
+  function triggerSlide() {
+    if (!isPlayable()) return;
+    if (playerY > 0.2 && wallRunSide === 0) {
+      velY = -28;
+    }
+    slideTimer = 0.68;
+    SFX.slide();
+  }
+
+  function findLockOnTarget() {
+    let best = null;
+    let bestScoreDist = 999;
+
+    const parryRange = activeMods.has('triple') ? 8.2 : 6.2;
+    for (const o of activeOrbs) {
+      if (!o.alive || o.reflected) continue;
+      const dz = playerZ - o.z;
+      if (dz >= -0.9 && dz <= parryRange && Math.abs(o.x - playerX) < 2.3) {
+        return { isOrb: true, obj: o, x: o.x, y: o.y, z: o.z, dz };
+      }
+    }
+
+    if (gameState === 'boss' && boss && boss.alive) {
+      if (boss.state === 'staggered') {
+        return { isBoss: true, isRush: true, obj: boss, x: boss.x, y: 2.3, z: boss.z, dz: playerZ - boss.z };
+      }
+      if (boss.state === 'clash_charge' && boss.z >= -11.2) {
+        return { isBoss: true, isClash: true, obj: boss, x: boss.x, y: 2.4, z: boss.z, dz: playerZ - boss.z };
+      }
+      return null;
+    }
+
+    const xReach = activeMods.has('shockwave') ? 4.8 : 2.2;
+    for (const c of chunks) {
+      for (const t of c.targets) {
+        if (!t.alive) continue;
+        const dz = playerZ - t.z;
+        if (dz >= -0.6 && dz <= 7.8) {
+          const dx = Math.abs(t.x - playerX);
+          const targetY = t.y + (t.kind === 'guard' ? 1.15 : 0);
+          const dy = Math.abs(targetY - (playerY + 1.0));
+          if (dx <= xReach && dy <= 2.1 && dz < bestScoreDist) {
+            bestScoreDist = dz;
+            best = { isOrb: false, obj: t, x: t.x, y: targetY, z: t.z, dz };
+          }
+        }
+      }
+    }
+    return best;
+  }
+
+  function sliceEnemyTarget(t, isJust = false) {
+    if (!t.alive) return;
+    t.alive = false;
+    t.mesh.visible = false;
+
+    if (t.kind === 'guard') {
+      spawnSplitBody(t.x, t.y, t.z, t.shooter ? 0xff7b00 : 0xff2a6d, 1.0);
+    }
+
+    if (t.kind === 'drone') {
+      playerY = Math.max(playerY, t.y - 0.5);
+      velY = 8.4;
+      jumpsLeft = activeMods.has('triple') ? 2 : 1;
+      addCallout(isJust ? `⚡ JUST AIR SLASH ×${chain}!!` : `AIR SLASH ×${chain}!!`, '#ffd400');
+    } else if (t.kind === 'crystal') {
+      overdrive = Math.min(100, overdrive + 34);
+      addCallout(`OVERDRIVE CORE! +${300 * chain}`, '#ffd400');
+    } else if (isJust) {
+      addCallout(`⚡ JUST SLASH ×${chain}!!`, '#ffd400');
+    } else {
+      addCallout(chain >= 2 ? `CHAIN SLASH ×${chain}!!` : 'SLASH!!', '#ff2a6d');
+    }
+
+    // Explosive Kill MOD: clears nearby obstacles around the kill!
+    if (activeMods.has('explode')) {
+      for (const c of chunks) {
+        for (const ob of c.obstacles) {
+          if (Math.abs(ob.z - t.z) < 9.5) {
+            ob.minY = 99; ob.maxY = 99;
+            spawnShatter(new THREE.Vector3(t.x, 1.4, ob.z), 0xff8800, 10, 12);
+          }
+        }
+      }
+    }
+
+    kills++;
+    saveData.careerKills++;
+    chain += activeMods.has('aegis') ? 2 : 1;
+    if (chain > maxChain) maxChain = chain;
+    chainTimer = 3.5;
+    addStyle(isJust ? 26 : 16);
+    const rankMult = 1 + getRankIdx() * 0.15;
+    score += Math.round(((t.kind === 'crystal' ? 350 : 250) + (isJust ? 180 : 0)) * chain * rankMult);
+    overdrive = Math.min(100, overdrive + (isJust ? 28 : 20));
+    if (!hasShield && kills % 6 === 0) {
+      hasShield = true;
+      addCallout('🛡 SHIELD RECHARGED!', '#00e5ff');
+    }
+  }
+
+  function triggerSlash() {
+    if (!isPlayable() || slashCooldown > 0) return;
+    slashAnim = 1.0;
+
+    const target = findLockOnTarget();
+    if (!target) {
+      slashCooldown = gameState === 'boss' ? 0.30 : 0.44;
+      SFX.slashMiss();
+      return;
+    }
+
+    if (target.isOrb) {
+      slashCooldown = 0.14;
+      const o = target.obj;
+      o.reflected = true;
+      o.mesh.material.color.setHex(0x00e5ff);
+      hitstopTimer = 0.05;
+      screenShake = 0.44;
+      chain += activeMods.has('aegis') ? 2 : 1;
+      if (chain > maxChain) maxChain = chain;
+      chainTimer = 3.6;
+      addStyle(25);
+      score += 450 * chain;
+      overdrive = Math.min(100, overdrive + 25);
+      spawnSlashFx('#00e5ff', true);
+      SFX.parry();
+      recordEv('parry');
+      addCallout(`⚡ PARRY DEFLECT ×${chain}!!`, '#00e5ff');
+      updateHud();
+      return;
+    }
+
+    if (target.isBoss) {
+      if (target.isClash) {
+        // GOLDEN BLADE CLASH COUNTER!!
+        slashCooldown = 0.10;
+        boss.state = 'staggered';
+        boss.stateTimer = 2.7;
+        boss.staggerHits = 0;
+        boss.z = -7.2;
+        boss.auraMat.color.setHex(0x00e5ff);
+        boss.bladeMat.color.setHex(0x00e5ff);
+        hitstopTimer = 0.085;
+        screenShake = 0.65;
+        warpFlash = 0.42;
+        warpColor = '#ffd400';
+        addStyle(32);
+        score += 600;
+        spawnShatter(new THREE.Vector3(boss.x, 2.2, boss.z + 1.0), 0xffd400, 28, 18);
+        spawnSlashFx('#ffd400', true, -0.55);
+        spawnSlashFx('#ffffff', true, 0.55);
+        SFX.clash();
+        recordEv('clash');
+        addCallout('⚔️ CLASH!! GUARD BREAK!!', '#ffd400');
+        setBossPrompt('🔥 連打チャンス!! SLASH連打で斬り刻め!!', '#00e5ff', 'rgba(0,229,255,0.85)');
+        updateHud();
+        return;
+      }
+      if (target.isRush) {
+        // ULTRA-SNAPPY RAPID-FIRE BOSS RUSH COMBO!!
+        slashCooldown = 0.085;
+        const dmg = activeMods.has('shockwave') ? 2 : 1;
+        damageBoss(dmg, false);
+        return;
+      }
+    }
+
+    slashCooldown = 0.16;
+    const t = target.obj;
+    const isJust = target.dz <= 4.6 && t.kind !== 'crystal';
+    playerX += (t.x - playerX) * 0.45;
+    dashTimer = 0.14;
+    speedBonus = Math.min(12, speedBonus + 2.2);
+
+    sliceEnemyTarget(t, isJust);
+
+    // Shockwave MOD: cleave nearby targets in adjacent lanes too!
+    if (activeMods.has('shockwave')) {
+      for (const c of chunks) {
+        for (const other of c.targets) {
+          if (other.alive && Math.abs(other.z - t.z) < 4.5) {
+            sliceEnemyTarget(other, false);
+          }
+        }
+      }
+    }
+
+    spawnSlashFx(isJust ? '#ffd400' : getActiveBlade().hex, isJust);
+
+    if (overdrive >= 100 && overdriveTimer <= 0) {
+      overdrive = 0;
+      overdriveTimer = activeMods.has('magnet') ? 7.0 : 4.5;
+      SFX.overdrive();
+      recordEv('overdrive');
+      addCallout('🔥 OVERDRIVE MODE!!', '#ffd400');
+    } else {
+      SFX.slashKill(chain, isJust);
+      recordEv(isJust ? 'just_slash' : 'slash_kill');
+    }
+
+    hitstopTimer = isJust ? 0.055 : 0.04;
+    screenShake = isJust ? 0.44 : 0.34;
+    spawnShatter(new THREE.Vector3(t.x, t.y + 1.0, t.z), isJust ? 0xffd400 : (t.kind === 'crystal' ? 0xffd400 : 0xff2a6d), isJust ? 22 : 16, 15);
+    persistSave();
+    updateHud();
+  }
+
+  // Input Handling (0-Frame Latency Swipe + Tap + Keyboard)
+  let pDown = false;
+  let pStartX = 0;
+  let pStartY = 0;
+  let pSwiped = false;
+
+  glCanvas.addEventListener('pointerdown', (e) => {
+    if (!isPlayable()) return;
+    pDown = true;
+    pStartX = e.clientX;
+    pStartY = e.clientY;
+    pSwiped = false;
+    glCanvas.setPointerCapture(e.pointerId);
+  });
+
+  glCanvas.addEventListener('pointermove', (e) => {
+    if (!pDown || pSwiped || !isPlayable()) return;
+    const dx = e.clientX - pStartX;
+    const dy = e.clientY - pStartY;
+    if (Math.hypot(dx, dy) > 20) {
+      pSwiped = true;
+      if (Math.abs(dx) > Math.abs(dy)) {
+        moveLane(dx > 0 ? 1 : -1);
+      } else if (dy < 0) {
+        triggerJump();
+      } else {
+        triggerSlide();
+      }
+    }
+  });
+
+  glCanvas.addEventListener('pointerup', () => {
+    if (pDown && !pSwiped && isPlayable()) {
+      triggerSlash();
+    }
+    pDown = false;
+  });
+  glCanvas.addEventListener('pointercancel', () => { pDown = false; });
+
+  btnSlash.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    triggerSlash();
+  });
+
+  window.addEventListener('keydown', (e) => {
+    if (gameState === 'title' && (e.code === 'Space' || e.code === 'Enter')) {
+      e.preventDefault();
+      startRun();
+      return;
+    }
+    if (gameState === 'over' && (e.code === 'Space' || e.code === 'KeyR' || e.code === 'Enter')) {
+      e.preventDefault();
+      startRun();
+      return;
+    }
+    if (!isPlayable()) return;
+    if (e.code === 'ArrowLeft' || e.code === 'KeyA') moveLane(-1);
+    else if (e.code === 'ArrowRight' || e.code === 'KeyD') moveLane(1);
+    else if (e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'Space') { e.preventDefault(); triggerJump(); }
+    else if (e.code === 'ArrowDown' || e.code === 'KeyS' || e.code === 'KeyC') triggerSlide();
+    else if (e.code === 'KeyJ' || e.code === 'KeyK' || e.code === 'KeyE' || e.code === 'ShiftLeft' || e.code === 'Enter') triggerSlash();
+  });
+
+  document.getElementById('btn-start').addEventListener('click', startRun);
+  document.getElementById('btn-boss-rush').addEventListener('click', startBossRush);
+  document.getElementById('btn-retry').addEventListener('click', startRun);
+  btnSound.addEventListener('click', () => {
+    const on = SFX.toggle();
+    btnSound.textContent = on ? '🔊 ON' : '🔇 OFF';
+  });
+
+  // 2D Overlay FX Canvas (Speed Lines, Anime Diagonal Slash Cuts, Lock-on Diamond, Warp Flash)
+  function drawFx(timeSec, dt) {
+    fxCtx.clearRect(0, 0, W, H);
+    if (!isPlayable() && gameState !== 'mod') return;
+
+    const cx = W * 0.5;
+    const cy = H * 0.48;
+
+    if (gameState === 'run') {
+      const speedRatio = Math.min(1, (baseRunSpeed + speedBonus - 14) / 24 + (overdriveTimer > 0 ? 0.55 : 0));
+      const lineCount = Math.floor(8 + speedRatio * 18);
+      fxCtx.strokeStyle = overdriveTimer > 0 ? 'rgba(255, 212, 0, 0.35)' : 'rgba(0, 229, 255, 0.22)';
+      fxCtx.lineWidth = overdriveTimer > 0 ? 2.5 : 1.7;
+      for (let i = 0; i < lineCount; i++) {
+        const ang = (i / lineCount) * Math.PI * 2 + Math.sin(timeSec * 4 + i) * 0.05;
+        const r1 = 215 + ((timeSec * 650 + i * 41) % 85);
+        const r2 = r1 + 90 + speedRatio * 50;
+        fxCtx.beginPath();
+        fxCtx.moveTo(cx + Math.cos(ang) * r1, cy + Math.sin(ang) * r1);
+        fxCtx.lineTo(cx + Math.cos(ang) * r2, cy + Math.sin(ang) * r2);
+        fxCtx.stroke();
+      }
+    } else if (gameState === 'boss') {
+      // Crimson / Gold Duel Aura Vignette
+      const isRush = boss && boss.state === 'staggered';
+      const isClash = boss && boss.state === 'clash_charge';
+      const grad = fxCtx.createRadialGradient(cx, cy, W * 0.25, cx, cy, H * 0.65);
+      grad.addColorStop(0, 'rgba(0,0,0,0)');
+      grad.addColorStop(1, isRush ? 'rgba(0,229,255,0.24)' : (isClash ? 'rgba(255,212,0,0.28)' : 'rgba(255,30,86,0.20)'));
+      fxCtx.fillStyle = grad;
+      fxCtx.fillRect(0, 0, W, H);
+    }
+
+    if (overdriveTimer > 0) {
+      fxCtx.strokeStyle = 'rgba(255, 212, 0, 0.55)';
+      fxCtx.lineWidth = 10;
+      fxCtx.strokeRect(5, 5, W - 10, H - 10);
+    }
+
+    // Center Sprint Reticle
+    fxCtx.strokeStyle = gameState === 'boss' ? 'rgba(255, 212, 0, 0.6)' : 'rgba(0, 229, 255, 0.55)';
+    fxCtx.lineWidth = 1.6;
+    fxCtx.beginPath();
+    fxCtx.arc(cx, cy, 8, 0, Math.PI * 2);
+    fxCtx.stroke();
+
+    // Lock-on Diamond over nearest slashable target!
+    if (lockedTarget && isPlayable()) {
+      const p = new THREE.Vector3(lockedTarget.x, lockedTarget.y, lockedTarget.z);
+      p.project(camera);
+      if (p.z < 1) {
+        const sx = (p.x * 0.5 + 0.5) * W;
+        const sy = (-p.y * 0.5 + 0.5) * H;
+        let col = '#ffd400';
+        let tag = 'SLASH!';
+        let sz = 22;
+        if (lockedTarget.isOrb) {
+          col = '#00e5ff'; tag = '⚡ PARRY!'; sz = 24;
+        } else if (lockedTarget.isClash) {
+          col = '#ffd400'; tag = '⚔️ CLASH!!'; sz = 36;
+        } else if (lockedTarget.isRush) {
+          col = '#00e5ff'; tag = '🔥 RUSH!!'; sz = 34;
+        } else if (lockedTarget.dz <= 4.6) {
+          col = '#ffd400'; tag = '⚡ JUST SLASH!'; sz = 25;
+        }
+
+        sz += Math.sin(timeSec * 24) * 3.5;
+        fxCtx.strokeStyle = col;
+        fxCtx.lineWidth = 3.2;
+        fxCtx.beginPath();
+        fxCtx.moveTo(sx, sy - sz);
+        fxCtx.lineTo(sx + sz, sy);
+        fxCtx.lineTo(sx, sy + sz);
+        fxCtx.lineTo(sx - sz, sy);
+        fxCtx.closePath();
+        fxCtx.stroke();
+
+        fxCtx.fillStyle = col;
+        fxCtx.font = '900 14px "Chakra Petch", sans-serif';
+        fxCtx.textAlign = 'center';
+        fxCtx.fillText(tag, sx, sy - sz - 8);
+      }
+    }
+
+    // Crisp Anime Diagonal Slash Cuts
+    for (let i = slashFxList.length - 1; i >= 0; i--) {
+      const s = slashFxList[i];
+      s.life += dt;
+      if (s.life >= s.maxLife) {
+        slashFxList.splice(i, 1);
+        continue;
+      }
+      const prog = s.life / s.maxLife;
+      const alpha = Math.pow(1 - prog, 1.5);
+      fxCtx.save();
+      fxCtx.translate(s.cx, s.cy);
+      fxCtx.rotate(s.angle);
+      fxCtx.globalAlpha = alpha;
+      const halfL = s.len * 0.5 * (0.65 + prog * 0.55);
+      const halfW = s.width * (1 - prog * 0.65);
+
+      // Outer Neon Glow Blade Streak
+      fxCtx.fillStyle = s.color;
+      fxCtx.beginPath();
+      fxCtx.moveTo(-halfL, 0);
+      fxCtx.quadraticCurveTo(0, -halfW, halfL, 0);
+      fxCtx.quadraticCurveTo(0, halfW, -halfL, 0);
+      fxCtx.fill();
+
+      // Inner Pure White Razor Core
+      fxCtx.fillStyle = '#ffffff';
+      fxCtx.beginPath();
+      fxCtx.moveTo(-halfL * 0.85, 0);
+      fxCtx.quadraticCurveTo(0, -halfW * 0.42, halfL * 0.85, 0);
+      fxCtx.quadraticCurveTo(0, halfW * 0.42, -halfL * 0.85, 0);
+      fxCtx.fill();
+      fxCtx.restore();
+    }
+
+    // Dimension Warp / Finisher Screen Flash
+    if (warpFlash > 0) {
+      warpFlash = Math.max(0, warpFlash - dt * 2.1);
+      fxCtx.save();
+      fxCtx.globalAlpha = warpFlash * 0.72;
+      fxCtx.fillStyle = warpColor;
+      fxCtx.fillRect(0, 0, W, H);
+      fxCtx.restore();
+    }
+  }
+
+  function spawnBossWave(type) {
+    const isLow = type === 'low_wave';
+    const g = new THREE.Group();
+    const yPos = isLow ? 0.52 : 1.58;
+    const mat = new THREE.MeshBasicMaterial({ color: isLow ? 0xff1e56 : 0xff8800, transparent: true, opacity: 0.92 });
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(10.6, isLow ? 0.55 : 0.72, 0.55), mat);
+    const core = new THREE.Mesh(new THREE.BoxGeometry(10.8, 0.16, 0.65), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+    g.add(bar, core);
+    g.position.set(0, yPos, boss.z + 1.4);
+    scene.add(g);
+    bossWaves.push({
+      type,
+      mesh: g,
+      z: boss.z + 1.4,
+      speed: 19 + bossLevel * 1.4,
+      alive: true,
+      dodged: false
+    });
+  }
+
+  function spawnBossOrb(laneIdx) {
+    const bx = LANE_X[laneIdx];
+    const orbMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(0.50, 14, 14),
+      new THREE.MeshBasicMaterial({ color: 0xff2a6d })
+    );
+    orbMesh.position.set(bx, 1.42, boss.z + 1.5);
+    scene.add(orbMesh);
+    activeOrbs.push({
+      mesh: orbMesh,
+      x: bx,
+      y: 1.42,
+      z: boss.z + 1.5,
+      alive: true,
+      reflected: false,
+      owner: null,
+      isBossOrb: true
+    });
+  }
+
+  function updateKatanaAnim(dt) {
+    if (slashAnim > 0) {
+      slashAnim = Math.max(0, slashAnim - dt * 7.2);
+      const s = 1 - slashAnim;
+      const dir = slashDir;
+      katanaPivot.position.set(0.24 - s * 0.62 * dir, -0.30 + Math.sin(s * Math.PI) * 0.24, -0.56 - Math.sin(s * Math.PI) * 0.24);
+      katanaPivot.rotation.set(-0.55 + s * 1.4, 0.45 - s * 1.6 * dir, 0.28 + s * 1.8 * dir);
+      slashArcMesh.material.opacity = Math.sin(s * Math.PI) * 0.92;
+      slashArcMesh.scale.setScalar(0.85 + s * 0.55);
+    } else {
+      slashArcMesh.material.opacity = 0;
+      const slideTilt = slideTimer > 0 ? 0.85 : 0;
+      katanaPivot.position.set(
+        0.34 + Math.cos(elapsedSec * 7.5) * 0.012,
+        -0.32 + Math.sin(elapsedSec * 15) * 0.016 - (slideTimer > 0 ? 0.06 : 0),
+        -0.56
+      );
+      katanaPivot.rotation.set(0.06, 0.20, 0.06 + slideTilt + Math.sin(elapsedSec * 7.5) * 0.04);
+    }
+  }
+
+  // Main Game Loop
+  let prevTime = performance.now();
+  let elapsedSec = 0;
+
+  function stepFrame(rawDt) {
+    elapsedSec += rawDt;
+
+    // Update Shatter Particles & Split Body Halves
+    for (let i = fxParticles.length - 1; i >= 0; i--) {
+      const p = fxParticles[i];
+      p.life += rawDt;
+      const t = p.life / p.maxLife;
+      if (t >= 1) {
+        scene.remove(p.mesh);
+        fxParticles.splice(i, 1);
+        continue;
+      }
+      p.vel.y -= 24 * rawDt;
+      p.mesh.position.addScaledVector(p.vel, rawDt);
+      p.mesh.rotation.x += p.rot.x * rawDt;
+      p.mesh.rotation.y += p.rot.y * rawDt;
+      p.mesh.scale.setScalar(Math.max(0.01, 1 - t));
+    }
+
+    if (screenShake > 0) screenShake = Math.max(0, screenShake - rawDt * 2.8);
+
+    if (gameState === 'title') {
+      camera.fov = 62;
+      camera.updateProjectionMatrix();
+      camera.position.set(Math.sin(elapsedSec * 0.4) * 2.5, 2.5, 4);
+      camera.lookAt(0, 1.5, -24);
+      weaponGroup.visible = true;
+      katanaPivot.rotation.set(0, 0, Math.sin(elapsedSec * 2) * 0.04);
+      renderer.render(scene, camera);
+      drawFx(elapsedSec, rawDt);
+      return;
+    }
+
+    if (!isPlayable()) {
+      renderer.render(scene, camera);
+      drawFx(elapsedSec, rawDt);
+      return;
+    }
+
+    if (hitstopTimer > 0) {
+      hitstopTimer -= rawDt;
+      if (slashCooldown > 0) slashCooldown = Math.max(0, slashCooldown - rawDt);
+      renderer.render(scene, camera);
+      drawFx(elapsedSec, rawDt);
+      return;
+    }
+
+    const dt = rawDt;
+    if (slashCooldown > 0) slashCooldown = Math.max(0, slashCooldown - dt);
+    if (invulnTimer > 0) invulnTimer = Math.max(0, invulnTimer - dt);
+    if (dashTimer > 0) dashTimer = Math.max(0, dashTimer - dt);
+    if (slideTimer > 0) slideTimer = Math.max(0, slideTimer - dt);
+    if (stylePts > 0) stylePts = Math.max(0, stylePts - dt * 4.2);
+
+    if (chainTimer > 0) {
+      chainTimer -= dt;
+      if (chainTimer <= 0 && chain > 1) {
+        chain = 1;
+        updateHud();
+      }
+    }
+
+    if (overdriveTimer > 0) {
+      overdriveTimer = Math.max(0, overdriveTimer - dt);
+      bladeGlowMat.color.setHex(0xffd400);
+    } else {
+      bladeGlowMat.color.setHex(getActiveBlade().color);
+    }
+
+    // =========================================================================
+    // DEDICATED BOSS DIMENSION STAGE LOOP ('boss')
+    // =========================================================================
+    if (gameState === 'boss') {
+      // Animate floating Crimson Shrine Embers
+      for (const em of bossEmbers) {
+        em.mesh.position.y += em.spd * dt;
+        em.mesh.position.x += Math.sin(elapsedSec * 2 + em.phase) * 0.4 * dt;
+        em.mesh.rotation.y += dt * 3;
+        if (em.mesh.position.y > 14.5) em.mesh.position.y = 0.3;
+      }
+
+      // Player lateral + vertical physics in Dojo Arena
+      const desiredX = (boss && boss.alive && boss.state === 'staggered') ? boss.x : LANE_X[targetLane];
+      playerX += (desiredX - playerX) * (1 - Math.exp(-16 * dt));
+      velY -= 32 * dt;
+      playerY += velY * dt;
+      if (playerY <= 0) {
+        playerY = 0;
+        velY = 0;
+        jumpsLeft = activeMods.has('triple') ? 3 : 2;
+      }
+
+      // Boss AI State Machine
+      if (boss && boss.alive) {
+        boss.haloGroup.rotation.z += dt * (boss.state === 'staggered' ? 0.5 : 2.1);
+        boss.stateTimer -= dt;
+
+        if (boss.state === 'idle') {
+          boss.auraMat.color.setHex(0xff2a6d);
+          boss.bladeMat.color.setHex(0xff1e56);
+          boss.z += (-12.5 - boss.z) * (1 - Math.exp(-6 * dt));
+          boss.x += (LANE_X[boss.lane] - boss.x) * (1 - Math.exp(-4 * dt));
+          boss.swordArm.rotation.set(Math.sin(elapsedSec * 3) * 0.08, 0, -0.15);
+          boss.mesh.rotation.x += (0 - boss.mesh.rotation.x) * (1 - Math.exp(-8 * dt));
+
+          if (boss.stateTimer <= 0) {
+            boss.attackCount++;
+            // Every 3rd move (or 2nd on first clash) is guaranteed Clash Charge for awesome rhythm!
+            let nextMove;
+            if (boss.attackCount % 3 === 2) {
+              nextMove = 'clash_charge';
+            } else {
+              const pool = ['windup_low', 'windup_high', 'windup_orb'];
+              nextMove = pool[boss.attackCount % pool.length];
+            }
+            boss.state = nextMove;
+            boss.lane = targetLane;
+
+            if (nextMove === 'windup_low') {
+              boss.stateTimer = 0.78;
+              setBossPrompt('⬆ JUMP!! 下段・紅蓮斬波が来る！', '#ff4d80', 'rgba(255,42,109,0.85)');
+            } else if (nextMove === 'windup_high') {
+              boss.stateTimer = 0.78;
+              setBossPrompt('⬇ SLIDE!! 上段・薙ぎ払い斬波！', '#ff9900', 'rgba(255,153,0,0.85)');
+            } else if (nextMove === 'windup_orb') {
+              boss.stateTimer = 0.52;
+              setBossPrompt('⚡ PARRY!! 紅蓮プラズマ弾を斬り返せ！', '#00e5ff', 'rgba(0,229,255,0.85)');
+            } else if (nextMove === 'clash_charge') {
+              boss.stateTimer = 1.05;
+              boss.auraMat.color.setHex(0xffd400);
+              boss.bladeMat.color.setHex(0xffd400);
+              SFX.bossAlert();
+              setBossPrompt('⚔️ 今だ!! 突進をSLASHで弾き返せ!!', '#ffd400', 'rgba(255,212,0,0.95)');
+            }
+          }
+        } else if (boss.state === 'windup_low') {
+          boss.swordArm.rotation.set(0.75, -0.35, -0.6);
+          if (boss.stateTimer <= 0) {
+            spawnBossWave('low_wave');
+            SFX.slashMiss();
+            boss.state = 'idle';
+            boss.stateTimer = Math.max(0.85, 1.35 - bossLevel * 0.08);
+            boss.lane = Math.floor(Math.random() * 3);
+          }
+        } else if (boss.state === 'windup_high') {
+          boss.swordArm.rotation.set(-0.95, 0.55, 1.15);
+          if (boss.stateTimer <= 0) {
+            spawnBossWave('high_wave');
+            SFX.slashMiss();
+            boss.state = 'idle';
+            boss.stateTimer = Math.max(0.85, 1.35 - bossLevel * 0.08);
+            boss.lane = Math.floor(Math.random() * 3);
+          }
+        } else if (boss.state === 'windup_orb') {
+          boss.swordArm.rotation.set(-0.4, 0, -0.2);
+          if (boss.stateTimer <= 0) {
+            spawnBossOrb(targetLane);
+            SFX.nearMiss();
+            boss.state = 'idle';
+            boss.stateTimer = Math.max(1.05, 1.5 - bossLevel * 0.08);
+            boss.lane = Math.floor(Math.random() * 3);
+          }
+        } else if (boss.state === 'clash_charge') {
+          // Dramatic golden-aura dash right toward player!
+          const pulse = (Math.sin(elapsedSec * 36) > 0) ? 0xffd400 : 0xffffff;
+          boss.auraMat.color.setHex(pulse);
+          boss.bladeMat.color.setHex(0xffd400);
+          boss.x += (LANE_X[boss.lane] - boss.x) * (1 - Math.exp(-8 * dt));
+          boss.z += 9.5 * dt;
+          boss.swordArm.rotation.set(-1.15, 0.25, -0.35);
+
+          if (boss.z >= -3.6 || boss.stateTimer <= 0) {
+            if (Math.abs(boss.x - playerX) < 1.85) {
+              absorbHit('SHOGUN ODACHI SLASH!');
+              if (gameState !== 'boss') return;
+            } else {
+              addStyle(15);
+              score += 250;
+              SFX.nearMiss();
+              addCallout('⚡ SIDESTEP DODGE! +250', '#00e5ff');
+            }
+            boss.state = 'idle';
+            boss.stateTimer = 1.1;
+            boss.lane = Math.floor(Math.random() * 3);
+            setBossPrompt('⛩ 次の攻撃を見切れ！', '#ffd400', 'rgba(255,212,0,0.65)');
+          }
+        } else if (boss.state === 'staggered') {
+          // Boss knocked back & stunned right in front of player for rapid-fire Rush Combo!
+          boss.z += (-7.2 - boss.z) * (1 - Math.exp(-10 * dt));
+          boss.mesh.rotation.x += (-0.22 - boss.mesh.rotation.x) * (1 - Math.exp(-10 * dt));
+          boss.swordArm.rotation.set(0.6, 0.8, 0.7);
+          if (boss.stateTimer <= 0) {
+            boss.state = 'idle';
+            boss.stateTimer = 1.1;
+            boss.lane = Math.floor(Math.random() * 3);
+            setBossPrompt('⛩ 体勢を立て直した！回避＆パリィに備えろ！', '#ff6b81', 'rgba(255,42,109,0.75)');
+          }
+        }
+
+        boss.mesh.position.set(boss.x, Math.sin(elapsedSec * 3.5) * 0.08, boss.z);
+      }
+
+      // Update Boss Shockwaves (Jump / Slide dodge!)
+      for (let i = bossWaves.length - 1; i >= 0; i--) {
+        const w = bossWaves[i];
+        if (!w.alive) {
+          scene.remove(w.mesh);
+          bossWaves.splice(i, 1);
+          continue;
+        }
+        w.z += w.speed * dt;
+        w.mesh.position.z = w.z;
+
+        if (Math.abs(w.z - playerZ) < 0.72) {
+          const hitLow = w.type === 'low_wave' && playerY < 1.0;
+          const hitHigh = w.type === 'high_wave' && slideTimer <= 0;
+          if (hitLow || hitHigh) {
+            w.alive = false;
+            absorbHit(w.type === 'low_wave' ? 'JUMP OVER CRIMSON WAVE!' : 'SLIDE UNDER HIGH SLASH!');
+            if (gameState !== 'boss') return;
+          } else if (!w.dodged) {
+            w.dodged = true;
+            addStyle(14);
+            score += 250 * chain;
+            overdrive = Math.min(100, overdrive + 14);
+            SFX.nearMiss();
+            addCallout(w.type === 'low_wave' ? '⚡ JUMP DODGE! +250' : '⚡ SLIDE DODGE! +250', '#00e5ff');
+          }
+        }
+        if (w.z > 4) w.alive = false;
+      }
+
+      // Update Boss Plasma Orbs (Parry right back into Boss for instant Guard Break!)
+      for (let i = activeOrbs.length - 1; i >= 0; i--) {
+        const o = activeOrbs[i];
+        if (!o.alive) {
+          scene.remove(o.mesh);
+          activeOrbs.splice(i, 1);
+          continue;
+        }
+        o.z += (o.reflected ? -56 : 14.5) * dt;
+        o.mesh.position.z = o.z;
+        if (o.reflected) {
+          if (boss && boss.alive && Math.abs(o.z - boss.z) < 2.6) {
+            o.alive = false;
+            damageBoss(2, true);
+          } else if (o.z < -25) {
+            o.alive = false;
+          }
+        } else {
+          if (Math.abs(o.z - playerZ) < 1.15 && Math.abs(o.x - playerX) < 1.05 && playerY < 1.8 && slideTimer <= 0) {
+            o.alive = false;
+            absorbHit('HIT BY CRIMSON ORB!');
+            if (gameState !== 'boss') return;
+          } else if (o.z > 5) {
+            o.alive = false;
+          }
+        }
+      }
+
+      // Lock-On Detection in Boss Arena
+      lockedTarget = findLockOnTarget();
+      if (lockedTarget && lockedTarget.obj !== prevLockedId) {
+        prevLockedId = lockedTarget.obj;
+        SFX.lockOn();
+      } else if (!lockedTarget) {
+        prevLockedId = null;
+      }
+
+      // Dramatic Duel Camera framing the Boss & Blood Moon
+      const eyeY = playerY + (slideTimer > 0 ? 0.78 : 1.72);
+      const lungeZ = (boss && boss.alive && boss.state === 'staggered') ? -0.45 : 0;
+      camera.position.set(playerX, eyeY, playerZ + lungeZ);
+      const lookX = boss && boss.alive ? boss.x * 0.45 : 0;
+      const lookY = boss && boss.alive ? 2.25 : 2.0;
+      const lookZ = boss && boss.alive ? boss.z : -12.5;
+      camera.lookAt(lookX, lookY, lookZ);
+      camBank += ((LANE_X[targetLane] - playerX) * -0.035 - camBank) * (1 - Math.exp(-12 * dt));
+      camera.rotateZ(camBank);
+
+      if (screenShake > 0) {
+        camera.position.x += (Math.random() - 0.5) * screenShake * 0.35;
+        camera.position.y += (Math.random() - 0.5) * screenShake * 0.35;
+      }
+
+      const targetFov = (boss && boss.state === 'staggered') ? 70 : 64;
+      camera.fov += (targetFov - camera.fov) * (1 - Math.exp(-10 * dt));
+      camera.updateProjectionMatrix();
+
+      updateKatanaAnim(dt);
+      updateHud();
+      renderer.render(scene, camera);
+      drawFx(elapsedSec, dt);
+      return;
+    }
+
+    // =========================================================================
+    // NEON ROOFTOP PARKOUR RUN LOOP ('run')
+    // =========================================================================
+    baseRunSpeed = Math.min(33, 14.5 + (-playerZ) * 0.013);
+    speedBonus = Math.max(0, speedBonus - dt * 2.4);
+    const runSpeed = baseRunSpeed + speedBonus + (overdriveTimer > 0 ? 10 : 0) + (dashTimer > 0 ? 16 : 0);
+
+    const prevZ = playerZ;
+    playerZ -= runSpeed * dt;
+    score += runSpeed * dt * 2.5 * chain * (1 + getRankIdx() * 0.1);
+
+    // Warp into Dedicated Boss Dimension Stage at distance milestone!
+    if (!SHORTS_MODE && -playerZ >= nextBossDist) {
+      enterBossArena();
+      renderer.render(scene, camera);
+      drawFx(elapsedSec, dt);
+      return;
+    }
+
+    // Recycle & Generate Chunks ahead
+    while (nextChunkZ > playerZ - 140) {
+      buildChunk(nextChunkIdx++, nextChunkZ);
+      nextChunkZ -= CHUNK_LEN;
+    }
+    while (chunks.length > 0 && chunks[0].zEnd > playerZ + 24) {
+      const old = chunks.shift();
+      worldGroup.remove(old.group);
+    }
+
+    // Recycle Parallax Skyline
+    for (const tw of skylineTowers) {
+      if (tw.position.z > playerZ + 22) tw.position.z -= 234;
+    }
+
+    // Find current chunk under player
+    let curChunk = null;
+    for (const c of chunks) {
+      if (playerZ <= c.zStart && playerZ >= c.zEnd) {
+        curChunk = c;
+        break;
+      }
+    }
+
+    // Check Wall-Run Latch
+    wallRunSide = 0;
+    if (curChunk && curChunk.wallRun) {
+      const wr = curChunk.wallRun;
+      if (playerZ <= wr.zFront && playerZ >= wr.zBack) {
+        const desiredSide = targetLane === 0 ? -1 : targetLane === 2 ? 1 : 0;
+        if (desiredSide === wr.side && (playerY > 0.1 || Math.abs(playerX - wr.side * 2.8) < 1.8)) {
+          wallRunSide = wr.side;
+          velY = Math.max(velY, -0.4);
+          playerY = Math.max(1.2, Math.min(2.8, playerY + velY * dt));
+          jumpsLeft = activeMods.has('triple') ? 2 : 1;
+        }
+      }
+    }
+
+    // Horizontal & Vertical Physics
+    const targetX = wallRunSide !== 0 ? wallRunSide * 3.75 : LANE_X[targetLane];
+    playerX += (targetX - playerX) * (1 - Math.exp(-18 * dt));
+
+    const overGap = curChunk && curChunk.gapRange && playerZ <= curChunk.gapRange[0] && playerZ >= curChunk.gapRange[1];
+
+    if (wallRunSide === 0) {
+      velY -= 32 * dt;
+      playerY += velY * dt;
+
+      if (!overGap && playerY <= 0) {
+        playerY = 0;
+        velY = 0;
+        jumpsLeft = activeMods.has('triple') ? 3 : 2;
+      }
+      if (playerY < -6.5) {
+        gameOver('FELL INTO THE ABYSS');
+        return;
+      }
+    }
+
+    // Check Boost Pads
+    if (curChunk && curChunk.boostPads) {
+      for (const pad of curChunk.boostPads) {
+        if (!pad.used && playerY < 0.6 && Math.abs(playerZ - pad.z) < 2.2 && Math.abs(playerX - pad.x) < 1.35) {
+          pad.used = true;
+          speedBonus = Math.min(14, speedBonus + 6.5);
+          addStyle(10);
+          score += 150 * chain;
+          overdrive = Math.min(100, overdrive + 12);
+          SFX.boostPad();
+          addCallout('⚡ TURBO PAD!!', '#00ff9d');
+        }
+      }
+    }
+
+    // Rotate Crystals/Drones, Magnet Pull, & Spawn Shooter Orbs
+    for (const c of chunks) {
+      for (const t of c.targets) {
+        if (!t.alive) continue;
+        if (t.kind === 'drone' || t.kind === 'crystal') {
+          t.mesh.rotation.y += dt * 2.6;
+          t.mesh.position.y = t.y + Math.sin(elapsedSec * 4 + t.z) * 0.18;
+        } else {
+          // Subtle menacing idle stance for Cyber Ronin guards facing the player
+          t.mesh.rotation.y = Math.sin(elapsedSec * 3 + t.z) * 0.14;
+        }
+        // Magnet MOD: auto-collect crystals when passing near!
+        if (activeMods.has('magnet') && t.kind === 'crystal' && Math.abs(playerZ - t.z) < 7.0) {
+          t.x += (playerX - t.x) * Math.min(1, dt * 8);
+          t.mesh.position.x = t.x;
+          if (Math.abs(playerZ - t.z) < 2.2 && Math.abs(playerX - t.x) < 1.8) {
+            sliceEnemyTarget(t, false);
+            SFX.slashKill(chain, false);
+            continue;
+          }
+        }
+        if (t.shooter && !t.fired && playerZ - t.z < 36 && playerZ - t.z > 8) {
+          t.fired = true;
+          const orbMesh = new THREE.Mesh(
+            new THREE.SphereGeometry(0.36, 12, 12),
+            new THREE.MeshBasicMaterial({ color: 0xff3355 })
+          );
+          orbMesh.position.set(t.x, 1.35, t.z + 0.5);
+          scene.add(orbMesh);
+          activeOrbs.push({ mesh: orbMesh, x: t.x, y: 1.35, z: t.z + 0.5, alive: true, reflected: false, owner: t });
+        }
+      }
+    }
+
+    // Update Enemy Plasma Orbs
+    for (let i = activeOrbs.length - 1; i >= 0; i--) {
+      const o = activeOrbs[i];
+      if (!o.alive) {
+        scene.remove(o.mesh);
+        activeOrbs.splice(i, 1);
+        continue;
+      }
+      o.z += (o.reflected ? -62 : 14) * dt;
+      o.mesh.position.z = o.z;
+
+      if (o.reflected) {
+        if (o.owner && o.owner.alive && Math.abs(o.z - o.owner.z) < 1.6) {
+          o.owner.alive = false;
+          o.owner.mesh.visible = false;
+          o.alive = false;
+          kills++;
+          saveData.careerKills++;
+          addStyle(20);
+          score += 500 * chain;
+          spawnSplitBody(o.owner.x, 0, o.owner.z, 0xff7b00, 1.0);
+          spawnShatter(new THREE.Vector3(o.owner.x, 1.2, o.owner.z), 0x00e5ff, 20, 16);
+          SFX.slashKill(chain + 2, true);
+          addCallout('PARRY KILL!! +500', '#00e5ff');
+        } else if (o.z < playerZ - 85) {
+          o.alive = false;
+        }
+      } else {
+        if (Math.abs(o.z - playerZ) < 1.1 && Math.abs(o.x - playerX) < 0.95 && playerY < 1.8 && slideTimer <= 0) {
+          o.alive = false;
+          absorbHit('HIT BY PLASMA ORB');
+        } else if (o.z > playerZ + 8) {
+          o.alive = false;
+        }
+      }
+    }
+
+    // Check Obstacles, Near Misses & Unslashed Guard Collision
+    const playerH = slideTimer > 0 ? 0.78 : 1.75;
+    if (curChunk) {
+      for (const ob of curChunk.obstacles) {
+        if (playerZ <= ob.z + 0.9 && prevZ >= ob.z - 0.9) {
+          if (playerX >= ob.xMin && playerX <= ob.xMax) {
+            const pBottom = playerY;
+            const pTop = playerY + playerH;
+            if (pTop > ob.minY && pBottom < ob.maxY) {
+              if (overdriveTimer > 0) {
+                score += 200;
+                addStyle(10);
+                spawnShatter(new THREE.Vector3(playerX, 1.2, ob.z), 0xffd400, 14, 14);
+                addCallout('OVERDRIVE SMASH!', '#ffd400');
+              } else {
+                absorbHit(ob.type === 'high_laser' ? 'SLIDE UNDER LASERS!' : 'OBSTACLE COLLISION');
+                if (gameState !== 'run') return;
+              }
+            } else if (!ob.nearMissed && ob.minY < 50) {
+              const gapDist = ob.type === 'low_laser' ? (pBottom - ob.maxY) : (ob.minY - pTop);
+              if (gapDist >= 0 && gapDist < 0.75) {
+                ob.nearMissed = true;
+                addStyle(12);
+                score += 150 * chain;
+                overdrive = Math.min(100, overdrive + 8);
+                SFX.nearMiss();
+                addCallout('NEAR MISS! +150', '#00e5ff');
+              }
+            }
+          } else if (!ob.nearMissed && ob.type === 'pillar' && Math.min(Math.abs(playerX - ob.xMin), Math.abs(playerX - ob.xMax)) < 0.75) {
+            ob.nearMissed = true;
+            addStyle(12);
+            score += 150 * chain;
+            overdrive = Math.min(100, overdrive + 8);
+            SFX.nearMiss();
+            addCallout('NEAR MISS! +150', '#00e5ff');
+          }
+        }
+      }
+      for (const t of curChunk.targets) {
+        if (!t.alive || t.kind !== 'guard') continue;
+        if (Math.abs(t.z - playerZ) < 1.1 && Math.abs(t.x - playerX) < 1.05 && playerY < 1.9) {
+          if (overdriveTimer > 0) {
+            t.alive = false;
+            t.mesh.visible = false;
+            kills++;
+            addStyle(14);
+            score += 300 * chain;
+            spawnSplitBody(t.x, 0, t.z, 0xffd400, 1.0);
+            spawnShatter(new THREE.Vector3(t.x, 1.2, t.z), 0xffd400, 18, 15);
+            SFX.slashKill(chain, true);
+          } else {
+            absorbHit('AMBUSHED BY GUARD');
+            if (gameState !== 'run') return;
+          }
+        }
+      }
+    }
+
+    // Lock-On Detection
+    lockedTarget = findLockOnTarget();
+    if (lockedTarget && lockedTarget.obj !== prevLockedId) {
+      prevLockedId = lockedTarget.obj;
+      SFX.lockOn();
+    } else if (!lockedTarget) {
+      prevLockedId = null;
+    }
+
+    // Camera Positioning, FOV Warp, Sprint Bob & Wall-Run Tilt
+    const eyeY = playerY + (slideTimer > 0 ? 0.78 : 1.68);
+    const bobY = (playerY === 0 && slideTimer <= 0 && wallRunSide === 0) ? Math.sin(elapsedSec * 15) * 0.055 : 0;
+    camera.position.set(playerX, eyeY + bobY, playerZ);
+
+    const desiredBank = wallRunSide !== 0 ? wallRunSide * 0.30 : (LANE_X[targetLane] - playerX) * -0.04;
+    camBank += (desiredBank - camBank) * (1 - Math.exp(-12 * dt));
+    camera.lookAt(playerX * 0.85, eyeY - 0.12, playerZ - 20);
+    camera.rotateZ(camBank);
+
+    if (screenShake > 0) {
+      camera.position.x += (Math.random() - 0.5) * screenShake * 0.35;
+      camera.position.y += (Math.random() - 0.5) * screenShake * 0.35;
+    }
+
+    const targetFov = Math.min(82, 63 + (runSpeed - 19) * 0.65 + (dashTimer > 0 ? 10 : 0));
+    camera.fov += (targetFov - camera.fov) * (1 - Math.exp(-10 * dt));
+    camera.updateProjectionMatrix();
+
+    updateKatanaAnim(dt);
+    updateHud();
+    renderer.render(scene, camera);
+    drawFx(elapsedSec, dt);
+  }
+
+  // Build initial background chunks for title screen
+  for (let i = 0; i < 6; i++) {
+    buildChunk(i, 10 - i * CHUNK_LEN);
+  }
+
+  // Deterministic 23.0s YouTube Shorts Choreography (Active ONLY when ?shorts=1)
+  const shortsDone = new Set();
+  function shortsOnce(key, fn) {
+    if (!shortsDone.has(key)) { shortsDone.add(key); fn(); }
+  }
+
+  function buildShowcaseRunway() {
+    clearWorld();
+    nextChunkIdx = 2;
+    nextChunkZ = 2;
+    // Build a cinematic neon runway stocked with Cyber Ronin guards, Turbo Pads, Low Laser, Drone & Shooter!
+    for (let i = 0; i < 12; i++) {
+      const zStart = 2 - i * CHUNK_LEN;
+      const g = new THREE.Group();
+      const zCenter = zStart - CHUNK_LEN * 0.5;
+      const floor = new THREE.Mesh(new THREE.BoxGeometry(9.4, 1.2, CHUNK_LEN), floorMat);
+      floor.position.set(0, -0.6, zCenter);
+      const edgeL = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.20, CHUNK_LEN), trimCyanMat);
+      edgeL.position.set(-4.65, 0.05, zCenter);
+      const edgeR = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.20, CHUNK_LEN), trimCyanMat);
+      edgeR.position.set(4.65, 0.05, zCenter);
+      g.add(floor, edgeL, edgeR);
+      for (const lx of [-1.4, 1.4]) {
+        const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.03, CHUNK_LEN), new THREE.MeshBasicMaterial({ color: 0x233554 }));
+        stripe.position.set(lx, 0.02, zCenter);
+        g.add(stripe);
+      }
+
+      const obstacles = [];
+      const targets = [];
+      const boostPads = [];
+
+      if (i === 0) {
+        const g1 = makeGuard(0, 0, -14, false);
+        g.add(g1.mesh); targets.push(g1);
+      } else if (i === 1) {
+        const pad = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.06, 3.6), new THREE.MeshBasicMaterial({ color: 0x00ff9d }));
+        pad.position.set(0, 0.04, zStart - 3.5);
+        g.add(pad); boostPads.push({ x: 0, z: zStart - 3.5, used: false, mesh: pad });
+        const g2 = makeGuard(LANE_X[2], 0, zStart - 13, false);
+        g.add(g2.mesh); targets.push(g2);
+      } else if (i === 2) {
+        const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 9.2, 10), laserMat);
+        beam.rotation.z = Math.PI / 2; beam.position.set(0, 0.72, zStart - 5);
+        const inner = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 9.2, 8), laserCoreMat);
+        inner.rotation.z = Math.PI / 2; inner.position.set(0, 0.72, zStart - 5);
+        g.add(beam, inner);
+        obstacles.push({ type: 'low_laser', z: zStart - 5, minY: 0, maxY: 1.25, xMin: -5, xMax: 5, nearMissed: false });
+        const g3 = makeGuard(LANE_X[0], 0, zStart - 14, false);
+        g.add(g3.mesh); targets.push(g3);
+      } else if (i === 3) {
+        const shooter = makeGuard(LANE_X[1], 0, zStart - 15, true);
+        g.add(shooter.mesh); targets.push(shooter);
+      } else {
+        const l1 = i % 3;
+        const gA = makeGuard(LANE_X[l1], 0, zStart - 6, false);
+        const gB = makeGuard(LANE_X[(l1 + 1) % 3], 0, zStart - 14, i % 2 === 0);
+        g.add(gA.mesh, gB.mesh); targets.push(gA, gB);
+      }
+      worldGroup.add(g);
+      chunks.push({ idx: i, zStart, zEnd: zStart - CHUNK_LEN, group: g, obstacles, targets, orbs: [], boostPads, gapRange: null, wallRun: null });
+      nextChunkZ = zStart - CHUNK_LEN;
+    }
+  }
+
+  function autoSteerAndSlashInRun() {
+    if (gameState !== 'run') return;
+    // Auto-jump low lasers just in time
+    for (const c of chunks) {
+      for (const ob of c.obstacles) {
+        const dz = playerZ - ob.z;
+        if (ob.type === 'low_laser' && dz > 0.5 && dz < 4.5 && playerY <= 0.05) {
+          triggerJump();
+        }
+      }
+    }
+    // Auto-align to nearest upcoming orb or enemy
+    for (const o of activeOrbs) {
+      if (o.alive && !o.reflected && playerZ - o.z > 0 && playerZ - o.z < 12) {
+        targetLane = o.x < -1 ? 0 : (o.x > 1 ? 2 : 1);
+        if (playerZ - o.z < 5.2 && slashCooldown <= 0) triggerSlash();
+        return;
+      }
+    }
+    let nearest = null, bestDz = 22;
+    for (const c of chunks) {
+      for (const t of c.targets) {
+        if (!t.alive) continue;
+        const dz = playerZ - t.z;
+        if (dz > 0.4 && dz < bestDz) { bestDz = dz; nearest = t; }
+      }
+    }
+    if (nearest) {
+      targetLane = nearest.x < -1 ? 0 : (nearest.x > 1 ? 2 : 1);
+      if (bestDz <= 4.3 && slashCooldown <= 0) triggerSlash();
+    }
+  }
+
+  function runShortsChoreography(t) {
+    // ACT 1 (0.00s..1.85s): NUCLEAR COLD-OPEN CLIMAX (Golden Clash -> Rush -> Finisher!)
+    shortsOnce('act1_init', () => {
+      startRun();
+      enterBossArena();
+      if (boss) {
+        boss.hp = 4;
+        boss.maxHp = 10;
+        boss.state = 'clash_charge';
+        boss.z = -8.5;
+        boss.stateTimer = 0.9;
+        boss.lane = 1;
+        boss.auraMat.color.setHex(0xffd400);
+        boss.bladeMat.color.setHex(0xffd400);
+        setBossPrompt('⚔️ 今だ!! 突進をSLASHで弾き返せ!!', '#ffd400', 'rgba(255,212,0,0.95)');
+      }
+      warpFlash = 0.0;
+    });
+    if (t >= 0.24) shortsOnce('act1_clash', () => { slashCooldown = 0; triggerSlash(); });
+    if (t >= 0.55) shortsOnce('act1_r1', () => { slashCooldown = 0; hitstopTimer = 0; triggerSlash(); });
+    if (t >= 0.72) shortsOnce('act1_r2', () => { slashCooldown = 0; hitstopTimer = 0; triggerSlash(); });
+    if (t >= 0.88) shortsOnce('act1_r3', () => { slashCooldown = 0; hitstopTimer = 0; triggerSlash(); });
+    if (t >= 1.05) shortsOnce('act1_fin', () => { slashCooldown = 0; hitstopTimer = 0; triggerSlash(); });
+
+    // ACT 2 & 3 (1.85s..9.45s): NEON ROOFTOP SPRINT -> JUST SLASH -> PARRY -> OVERDRIVE!
+    if (t >= 1.85) {
+      shortsOnce('act2_start', () => {
+        startRun();
+        buildShowcaseRunway();
+        nextBossDist = 160;
+        baseRunSpeed = 18.5;
+        recordEv('cut');
+      });
+    }
+    if (t >= 1.85 && t < 9.45) {
+      if (t >= 6.85) shortsOnce('act3_od', () => {
+        overdrive = 100;
+      });
+      autoSteerAndSlashInRun();
+    }
+
+    // ACT 4 (9.45s..15.35s): DIMENSION WARP -> FULL CRIMSON TORII BOSS DUEL!
+    if (t >= 9.45) {
+      shortsOnce('act4_warp', () => {
+        bossLevel = 1;
+        enterBossArena();
+        if (boss) {
+          boss.hp = 6;
+          boss.maxHp = 10;
+          boss.state = 'windup_low';
+          boss.stateTimer = 0.50;
+          setBossPrompt('⬆ JUMP!! 下段・紅蓮斬波が来る！', '#ff4d80', 'rgba(255,42,109,0.85)');
+        }
+      });
+    }
+    if (t >= 10.35) shortsOnce('act4_jump', () => { triggerJump(); });
+    if (t >= 11.45) shortsOnce('act4_charge', () => {
+      if (boss && boss.alive) {
+        boss.state = 'clash_charge';
+        boss.z = -11.5;
+        boss.stateTimer = 1.0;
+        boss.lane = 1;
+        setBossPrompt('⚔️ 今だ!! 突進をSLASHで弾き返せ!!', '#ffd400', 'rgba(255,212,0,0.95)');
+      }
+    });
+    if (t >= 12.10) shortsOnce('act4_clash', () => { slashCooldown = 0; hitstopTimer = 0; triggerSlash(); });
+    if (t >= 12.60) shortsOnce('act4_r1', () => { slashCooldown = 0; hitstopTimer = 0; triggerSlash(); });
+    if (t >= 12.88) shortsOnce('act4_r2', () => { slashCooldown = 0; hitstopTimer = 0; triggerSlash(); });
+    if (t >= 13.15) shortsOnce('act4_r3', () => { slashCooldown = 0; hitstopTimer = 0; triggerSlash(); });
+    if (t >= 13.42) shortsOnce('act4_r4', () => { slashCooldown = 0; hitstopTimer = 0; triggerSlash(); });
+    if (t >= 13.70) shortsOnce('act4_r5', () => { slashCooldown = 0; hitstopTimer = 0; triggerSlash(); });
+    if (t >= 14.00) shortsOnce('act4_fin', () => {
+      if (boss && boss.alive) { boss.hp = 1; slashCooldown = 0; hitstopTimer = 0; triggerSlash(); }
+    });
+
+    // ACT 5 (15.35s..18.10s): 3-CHOICE MOD ABILITY AWAKENING -> RETURN TO NEON CITY!
+    if (t >= 15.35) shortsOnce('act5_mod_open', () => { openModSelect(true); recordEv('mod_open'); });
+    if (t >= 17.35) shortsOnce('act5_mod_pick', () => {
+      const card = document.querySelector('.mod-card');
+      if (card) card.click();
+      buildShowcaseRunway();
+      playerZ = 0;
+      nextBossDist = 260;
+      overdriveTimer = 5.5;
+      baseRunSpeed = 22.0;
+      recordEv('overdrive');
+    });
+
+    // ACT 6 (18.10s..23.20s): HIGH-SPEED OVERDRIVE FINALE UNDER SUBSCRIBE + COMMENT CTA!
+    if (t >= 18.10) {
+      autoSteerAndSlashInRun();
+    }
+  }
+
+  window.__manualStep = SHORTS_MODE;
+  window.__stepFrame = (dtSec = 1 / 24) => {
+    shortsElapsed += dtSec;
+    runShortsChoreography(shortsElapsed);
+    stepFrame(dtSec);
+  };
+
+  function tick(now) {
+    requestAnimationFrame(tick);
+    const rawDt = Math.min(0.05, (now - prevTime) / 1000);
+    prevTime = now;
+    if (!window.__manualStep) stepFrame(rawDt);
+  }
+
+  window.__PHANTOM_RUSH_DEBUG__ = {
+    getState: () => ({
+      gameState,
+      score: Math.floor(score),
+      kills,
+      chain,
+      rank: RANKS[getRankIdx()].name,
+      playerX,
+      playerY,
+      playerZ,
+      boss: boss ? { alive: boss.alive, hp: boss.hp, maxHp: boss.maxHp, state: boss.state, z: boss.z } : null
+    }),
+    start: () => startRun(),
+    enterBoss: () => enterBossArena(),
+    forceBossClash: () => {
+      if (boss && boss.alive) {
+        boss.state = 'clash_charge';
+        boss.z = -7.0;
+        boss.stateTimer = 0.8;
+        boss.lane = targetLane;
+      }
+    },
+    forceBossKill: () => {
+      if (boss && boss.alive) {
+        boss.hp = 1;
+        damageBoss(1, false);
+      }
+    },
+    slash: () => triggerSlash(),
+    jump: () => triggerJump(),
+    slide: () => triggerSlide(),
+    move: (d) => moveLane(d)
+  };
+
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>

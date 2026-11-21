@@ -9,6 +9,13 @@
 ## 制作ログ（重複防止カタログ）
 - 一覧表: [CATALOG.md](CATALOG.md) / 機械可読データ: [CATALOG.json](CATALOG.json)
 
+## Day 07: PHANTOM RUSH 3D（一人称パルクール斬撃×異界ボス決戦）
+- ゲーム本体: [games/day07-phantom-rush-3d/index.html](games/day07-phantom-rush-3d/index.html)
+- 1クリックコピペヘルパー: [notes/day07/copy_helper.html](notes/day07/copy_helper.html)
+- note 記事原稿: [notes/day07/note_draft.md](notes/day07/note_draft.md)
+- ショート動画生成スクリプト（1080×1920・チャンネル登録＆リクエストCTA込み）: [shorts/day07/generate_shorts.py](shorts/day07/generate_shorts.py)
+- ショート動画 毎回必須CTAルール: [shorts/SHORTS_RULES.md](shorts/SHORTS_RULES.md)
+
 ## Day 06: COUNTER KO 3D（Three.js 一人称ネオン3Dボクシング・全4難度×5試合）
 - ゲーム本体: [games/day06-counter-ko-3d/index.html](games/day06-counter-ko-3d/index.html)
 - 1クリックコピペヘルパー: [notes/day06/copy_helper.html](notes/day06/copy_helper.html)

@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Day 07 投稿ヘルパー｜PHANTOM RUSH 3D</title>
+  <style>
+    :root {
+      --bg: #05070e;
+      --card: #0e1322;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #ff2a6d;
+      --cyan: #00e5ff;
+      --gold: #ffd400;
+      --border: #222c46;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px 16px 60px;
+      background: radial-gradient(circle at 20% 0%, #240c24 0%, #05070e 65%);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
+      line-height: 1.65;
+    }
+    .wrap { max-width: 760px; margin: 0 auto; }
+    h1 { font-size: 22px; margin: 0 0 8px; }
+    .lead { margin: 0 0 20px; color: var(--muted); font-size: 14px; }
+    .quick-bar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 12px;
+      margin-bottom: 22px;
+    }
+    .action-link {
+      display: block;
+      text-align: center;
+      text-decoration: none;
+      border-radius: 14px;
+      padding: 14px 16px;
+      font-weight: 900;
+      font-size: 14px;
+      background: linear-gradient(90deg, #00e5ff, #ff2a6d);
+      color: #ffffff;
+    }
+    .action-link.secondary { background: #141c30; color: var(--text); border: 1px solid var(--border); }
+    .section {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 18px 20px;
+      margin-bottom: 18px;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+    }
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+    .section-title { font-size: 15px; font-weight: 800; color: var(--cyan); }
+    .copy-btn {
+      border: none;
+      border-radius: 10px;
+      padding: 8px 14px;
+      background: var(--accent);
+      color: #ffffff;
+      font-weight: 800;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .copy-btn.done { background: var(--gold); color: #09090b; }
+    textarea {
+      width: 100%;
+      background: #080c17;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-family: inherit;
+      font-size: 14px;
+      line-height: 1.6;
+      resize: vertical;
+    }
+    .thumb-preview { width: 100%; border-radius: 12px; display: block; margin-top: 8px; border: 1px solid var(--border); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Day 07 投稿ヘルパー（ゲーム7日目：PHANTOM RUSH 3D）</h1>
+    <p class="lead">Three.js 一人称3Dパルクール斬撃×異界ボス決戦『PHANTOM RUSH 3D』のYouTube Shorts・X・note投稿用コピペ画面です。</p>
+
+    <div class="quick-bar">
+      <a class="action-link" id="xIntentBtn" href="#" target="_blank" rel="noopener">X（Twitter）の投稿画面を開く</a>
+      <a class="action-link secondary" href="https://note.com/notes/new" target="_blank" rel="noopener">note 新規記事作成を開く</a>
+      <a class="action-link secondary" href="../../games/day07-phantom-rush-3d/">ゲーム本体を開く</a>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">YouTube Shorts タイトル</span>
+        <button class="copy-btn" data-target="ytTitle">コピー</button>
+      </div>
+      <textarea id="ytTitle" rows="2" readonly>音速パルクール斬撃×異界ボス決戦!! Three.js一人称3D『PHANTOM RUSH 3D』を作った【7日目】 #Shorts #ゲーム制作 #個人開発</textarea>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">YouTube Shorts 説明文</span>
+        <button class="copy-btn" data-target="ytDesc">コピー</button>
+      </div>
+      <textarea id="ytDesc" rows="12" readonly>スマホ・PCで今すぐ無料で遊べます▼
+https://kam2525-hub.github.io/note_create_use/games/day07-phantom-rush-3d/
+
+🔥 100日後にバズるゲームを見たい人、ぜひチャンネル登録よろしく！
+💬 作って欲しいゲームのアイデアがあったらコメント欄で教えてください！
+
+100日後にバズるゲームを作る男【ゲーム7日目】
+『PHANTOM RUSH 3D（Three.js 一人称3Dパルクール斬撃アクション）』
+
+⚔️ ネオン屋上を音速疾走＆JUST SLASHで敵を3D真っ二つ両断！
+⚡ 敵の弾を刀でPARRY跳ね返し＆無敵OVERDRIVEモード！
+⛩ 紅蓮の異界ステージへワープ→突進弾き返し→連打ラッシュ→一閃両断！
+🃏 ボス撃破で3択のサイバーMOD能力覚醒！
+
+#Shorts #ゲーム制作 #個人開発 #ThreeJS #パルクール #斬撃アクション #一人称3D #無料ゲーム #ブラウザゲーム #100日後にバズるゲームを作る男 #PHANTOMRUSH3D</textarea>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">YouTube 固定コメント案（登録＆コメント率UP用）</span>
+        <button class="copy-btn" data-target="ytPin">コピー</button>
+      </div>
+      <textarea id="ytPin" rows="5" readonly>🔥 100日後にバズるゲームを見たい人、チャンネル登録よろしく！！
+💬 「こんなゲーム作って欲しい！」ってアイデアがあったらぜひコメント欄に書いてね👇
+▼今すぐ無料でプレイ（スマホ・PC対応）
+https://kam2525-hub.github.io/note_create_use/games/day07-phantom-rush-3d/</textarea>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">X（Twitter）投稿テキスト</span>
+        <button class="copy-btn" data-target="xText">コピー</button>
+      </div>
+      <textarea id="xText" rows="9" readonly>【100日後にバズるゲームを作る男｜7日目】
+Three.js 一人称3Dパルクール斬撃アクション『PHANTOM RUSH 3D』を作りました！⚔️⚡
+
+✅ ネオン屋上を音速で駆け抜け、JUST SLASHで敵を真っ二つ！
+✅ 紅蓮の異界ステージへワープして巨大サイバー将軍と決戦⛩
+✅ 突進を弾き返し → 超高速連打 → 一閃両断で3択MOD能力覚醒！
+
+スマホ・PCで今すぐ無料プレイ▼
+https://kam2525-hub.github.io/note_create_use/games/day07-phantom-rush-3d/
+#個人開発 #ゲーム制作 #ThreeJS #100日後にバズるゲームを作る男</textarea>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">note 見出し画像プレビュー</span>
+      </div>
+      <img class="thumb-preview" src="../../shorts/day07/output/note_thumbnail.png" alt="Day 07 Thumbnail" />
+    </div>
+  </div>
+  <script>
+    const xText = document.getElementById('xText').value;
+    document.getElementById('xIntentBtn').href = 'https://twitter.com/intent/tweet?text=' + encodeURIComponent(xText);
+    document.querySelectorAll('.copy-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const el = document.getElementById(btn.dataset.target);
+        try {
+          await navigator.clipboard.writeText(el.value);
+        } catch (_) {
+          el.select();
+          document.execCommand('copy');
+        }
+        const orig = btn.textContent;
+        btn.textContent = 'コピー完了!';
+        btn.classList.add('done');
+        setTimeout(() => { btn.textContent = orig; btn.classList.remove('done'); }, 1400);
+      });
+    });
+  </script>
+</body>
+</html>

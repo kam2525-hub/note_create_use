@@ -72,6 +72,18 @@
       "game_path": "games/day06-counter-ko-3d/index.html",
       "note_path": "notes/day06/note_draft.md",
       "shorts_script": "shorts/day06/generate_shorts.py"
+    },
+    {
+      "day": 7,
+      "date": "2026-11-21",
+      "slug": "day07-phantom-rush-3d",
+      "title": "PHANTOM RUSH 3D（一人称パルクール斬撃×異界ボス決戦）",
+      "type": "game",
+      "genre": "Three.js 一人称3Dパルクール / 高速斬撃アクション",
+      "core_mechanic": "一人称3D視点でサイバー刀を構えてネオン屋上を音速疾走！0フレームスワイプ移動・2段ジャンプ・スライディング・壁走りに加え、引きつけて斬るJUST SLASH（3D真っ二つ切断）・敵弾パリィ反射・無敵OVERDRIVE・スタイルランク(D〜PHANTOM)を搭載。さらに160m到達で紅蓮の満月と鳥居がそびえる専用異界ステージ『紅蓮ノ社』へワープし、巨大ボス『紅蓮の機神・KUROGANE』の衝撃波回避＆突進弾き返し(CLASH)→超高速連打(RUSH)→一閃両断フィニッシャーで撃破して3択サイバーMOD能力を覚醒させる",
+      "game_path": "games/day07-phantom-rush-3d/index.html",
+      "note_path": "notes/day07/note_draft.md",
+      "shorts_script": "shorts/day07/generate_shorts.py"
     }
   ]
 }
