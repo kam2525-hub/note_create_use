@@ -9,7 +9,7 @@
 ## 制作ログ（重複防止カタログ）
 - 一覧表: [CATALOG.md](CATALOG.md) / 機械可読データ: [CATALOG.json](CATALOG.json)
 
-## Day 06: COUNTER KO 3D（一人称3Dカウンターボクシング・全15強敵）
+## Day 06: COUNTER KO 3D（Three.js 一人称ネオン3Dボクシング・全4難度×5試合）
 - ゲーム本体: [games/day06-counter-ko-3d/index.html](games/day06-counter-ko-3d/index.html)
 - 1クリックコピペヘルパー: [notes/day06/copy_helper.html](notes/day06/copy_helper.html)
 - note 記事原稿: [notes/day06/note_draft.md](notes/day06/note_draft.md)

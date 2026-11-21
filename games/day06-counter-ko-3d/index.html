@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-<title>COUNTER KO 3D｜一人称3Dカウンターボクシング（全15強敵）</title>
+<title>COUNTER KO 3D｜一人称3Dネオンボクシング（全4難度×5試合）</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:ital,wght@0,700;1,700&family=Noto+Sans+JP:wght@700;900&display=swap" rel="stylesheet" />
@@ -23,45 +23,57 @@
     height: 100dvh;
     overflow: hidden;
     overscroll-behavior: none;
-    background: #06070c;
+    background: #020308;
     font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', system-ui, -apple-system, sans-serif;
     touch-action: none;
   }
-  #game-wrap {
+  #stage-wrap {
     position: relative;
     width: 100%;
     height: 100%;
     display: flex;
     justify-content: center;
     align-items: center;
-    background: radial-gradient(circle at 50% 25%, #1d1024 0%, #090a12 65%, #040508 100%);
+    background: radial-gradient(circle at 50% 30%, #110b20 0%, #03040a 70%, #010104 100%);
   }
-  canvas {
-    display: block;
+  #viewport {
+    position: relative;
     width: 100%;
     height: 100%;
     max-width: 540px;
     max-height: 960px;
     aspect-ratio: 9 / 16;
-    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.85);
+    overflow: hidden;
+    box-shadow: 0 24px 90px rgba(0, 0, 0, 0.92), 0 0 50px rgba(0, 229, 255, 0.12);
+    background: #020308;
     touch-action: none;
   }
   @media (max-aspect-ratio: 9/16) {
-    canvas {
+    #viewport {
       max-width: 100vw;
       max-height: 100dvh;
       width: 100vw;
       height: calc(100vw * 16 / 9);
-      max-height: 100dvh;
       box-shadow: none;
     }
   }
-  body.shorts-mode canvas {
+  body.shorts-mode #viewport {
     max-width: 100vw;
     max-height: 100vh;
     width: 100vw;
     height: 100vh;
     box-shadow: none;
+  }
+  #gl-canvas, #hud-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    touch-action: none;
+  }
+  #hud-canvas {
+    z-index: 2;
   }
   .back-link {
     position: fixed;
@@ -70,8 +82,8 @@
     z-index: 50;
     padding: 6px 12px;
     border-radius: 999px;
-    background: rgba(12, 14, 24, 0.82);
-    border: 1px solid rgba(255, 255, 255, 0.25);
+    background: rgba(8, 10, 18, 0.86);
+    border: 1px solid rgba(0, 229, 255, 0.38);
     color: #f8fafc;
     font-size: 12px;
     font-weight: 800;
@@ -85,10 +97,14 @@
 </head>
 <body>
 <a class="back-link" href="../../index.html">← ゲーム一覧</a>
-<div id="game-wrap">
-  <canvas id="game" width="540" height="960"></canvas>
+<div id="stage-wrap">
+  <div id="viewport">
+    <canvas id="gl-canvas"></canvas>
+    <canvas id="hud-canvas" width="540" height="960"></canvas>
+  </div>
 </div>
 
+<script src="./three.min.js"></script>
 <script>
 (() => {
   'use strict';
@@ -97,17 +113,19 @@
   const SHORTS_MODE = params.get('shorts') === '1';
   if (SHORTS_MODE) document.body.classList.add('shorts-mode');
 
-  const canvas = document.getElementById('game');
-  const ctx = canvas.getContext('2d');
   const W = 540;
   const H = 960;
   const DPR = SHORTS_MODE ? 2 : Math.min(window.devicePixelRatio || 1, 2);
-  canvas.width = W * DPR;
-  canvas.height = H * DPR;
+
+  const glCanvas = document.getElementById('gl-canvas');
+  const hudCanvas = document.getElementById('hud-canvas');
+  const ctx = hudCanvas.getContext('2d');
+  hudCanvas.width = W * DPR;
+  hudCanvas.height = H * DPR;
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
 
-  // Deterministic PRNG for Shorts, true random for live play
-  let rngSeed = SHORTS_MODE ? 20260606 : ((Date.now() ^ (Math.random() * 0xffffffff)) >>> 0);
+  // Deterministic PRNG for Shorts, live random for normal play
+  let rngSeed = SHORTS_MODE ? 20260666 : ((Date.now() ^ (Math.random() * 0xffffffff)) >>> 0);
   function rand() {
     rngSeed = (rngSeed * 1664525 + 1013904223) >>> 0;
     return rngSeed / 4294967296;
@@ -117,12 +135,6 @@
   function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
   function lerp(a, b, t) { return a + (b - a) * t; }
   function easeOutCubic(t) { return 1 - Math.pow(1 - clamp(t, 0, 1), 3); }
-  function easeOutBack(t) {
-    const c1 = 1.70158;
-    const c3 = c1 + 1;
-    const x = clamp(t, 0, 1);
-    return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
-  }
 
   window.__gameEvents = [];
   let shortsElapsed = 0;
@@ -135,30 +147,31 @@
   }
 
   // =========================================================================
-  // PERSISTENT SAVE DATA
+  // SAVE DATA (4 DIFFICULTIES x 5 MATCHES = 20 RIVALS)
   // =========================================================================
-  const SAVE_KEY = 'counter_ko_3d_v1';
+  const SAVE_KEY = 'counter_ko_3d_v2';
   function loadSave() {
     try {
-      const raw = localStorage.getItem(SAVE_KEY);
-      if (raw) {
-        const d = JSON.parse(raw);
+      const r = localStorage.getItem(SAVE_KEY);
+      if (r) {
+        const d = JSON.parse(r);
         return {
           cleared: {
             easy: Array.isArray(d?.cleared?.easy) ? d.cleared.easy : [],
+            normal: Array.isArray(d?.cleared?.normal) ? d.cleared.normal : [],
             hard: Array.isArray(d?.cleared?.hard) ? d.cleared.hard : [],
             vhard: Array.isArray(d?.cleared?.vhard) ? d.cleared.vhard : [],
           },
-          totalKOs: d.totalKOs || 0,
           bestCombo: d.bestCombo || 0,
+          totalKOs: d.totalKOs || 0,
           muted: !!d.muted,
         };
       }
     } catch (_) {}
     return {
-      cleared: { easy: [], hard: [], vhard: [] },
-      totalKOs: 0,
+      cleared: { easy: [], normal: [], hard: [], vhard: [] },
       bestCombo: 0,
+      totalKOs: 0,
       muted: false,
     };
   }
@@ -168,173 +181,766 @@
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (_) {}
   }
   function countTotalCleared() {
-    return save.cleared.easy.length + save.cleared.hard.length + save.cleared.vhard.length;
+    return save.cleared.easy.length + save.cleared.normal.length + save.cleared.hard.length + save.cleared.vhard.length;
   }
 
   // =========================================================================
-  // 3 DIFFICULTIES × 5 STAGES = 15 UNIQUE FIGHTERS
+  // 4 DIFFICULTIES x 5 ESCALATING MATCHES = 20 DISTINCT 3D FIGHTERS
   // =========================================================================
   const DIFFICULTIES = {
     easy: {
-      id: 'easy',
-      label: 'EASY',
-      jp: 'イージー',
-      sub: 'ROOKIE CIRCUIT',
-      color: '#22d3ee',
-      accent: '#0ea5e9',
-      justWin: 0.25,
-      goodWin: 0.34,
-      earlyPunish: 0.65,
-      dmgMult: 0.92,
-      counterWindow: 1.15,
-      showHintArrows: true,
+      id: 'easy', label: 'EASY', jp: 'イージー', sub: 'ROOKIE ARENA',
+      color: '#22d3ee', hex: 0x22d3ee,
+      justWin: 0.25, goodWin: 0.34, earlyMult: 0.9, dmgMult: 0.85,
+      counterWindow: 1.18, showHints: true,
+    },
+    normal: {
+      id: 'normal', label: 'NORMAL', jp: 'ノーマル', sub: 'PRO CIRCUIT',
+      color: '#4ade80', hex: 0x4ade80,
+      justWin: 0.20, goodWin: 0.27, earlyMult: 1.05, dmgMult: 1.08,
+      counterWindow: 1.00, showHints: true,
     },
     hard: {
-      id: 'hard',
-      label: 'HARD',
-      jp: 'ハード',
-      sub: 'WORLD PRO CLASS',
-      color: '#f59e0b',
-      accent: '#ea580c',
-      justWin: 0.175,
-      goodWin: 0.23,
-      earlyPunish: 1.0,
-      dmgMult: 1.28,
-      counterWindow: 0.88,
-      showHintArrows: true,
+      id: 'hard', label: 'HARD', jp: 'ハード', sub: 'WORLD RANKER',
+      color: '#f59e0b', hex: 0xf59e0b,
+      justWin: 0.16, goodWin: 0.21, earlyMult: 1.20, dmgMult: 1.32,
+      counterWindow: 0.84, showHints: true,
     },
     vhard: {
-      id: 'vhard',
-      label: 'VERY HARD',
-      jp: 'ベリーハード',
-      sub: 'UNDERGROUND GODS',
-      color: '#f43f5e',
-      accent: '#be123c',
-      justWin: 0.13,
-      goodWin: 0.165,
-      earlyPunish: 1.35,
-      dmgMult: 1.62,
-      counterWindow: 0.72,
-      showHintArrows: false,
+      id: 'vhard', label: 'VERY HARD', jp: 'ベリーハード', sub: 'NEON UNDERGROUND',
+      color: '#f43f5e', hex: 0xf43f5e,
+      justWin: 0.125, goodWin: 0.16, earlyMult: 1.40, dmgMult: 1.62,
+      counterWindow: 0.70, showHints: false,
     },
   };
 
   const ROSTER = {
     easy: [
       {
-        id: 'e1', stage: 1, name: 'JASON COLE', jpName: 'ジェイソン・コール', title: 'ストリートルーキー',
-        hp: 150, dmg: 14, windup: 0.70, cooldown: 0.95, feintRate: 0.0, upperRate: 0.10, comboMax: 1,
-        scale: 0.96, bulk: 0.94, skin: '#e6b18a', skinShade: '#b87d56', hair: '#2b1e16', hairStyle: 'short',
-        glove: '#ef4444', gloveTrim: '#fef2f2', trunks: '#1e293b', trunksTrim: '#38bdf8',
-        arenaTint: '#1d4ed8', accessory: 'none', boss: false,
+        stage: 1, name: 'JASON COLE', jpName: 'ジェイソン', title: '新人ストリートボクサー',
+        hp: 150, dmg: 13, windup: 0.72, cooldown: 0.98, guardRate: 0.22, feintRate: 0.0, upperRate: 0.14, sweepRate: 0.05, comboMax: 1,
+        height: 0.97, bulk: 0.95, skin: 0xd9a17a, hair: 0x1e1b18, hairStyle: 'buzz',
+        glove: 0xef4444, trim: 0xf8fafc, trunks: 0x111827, neon: 0x00e5ff, accessory: 'none', boss: false,
       },
       {
-        id: 'e2', stage: 2, name: 'KENJI SATO', jpName: '鉄壁のケンジ', title: 'アイアンガード',
-        hp: 185, dmg: 16, windup: 0.66, cooldown: 0.88, feintRate: 0.08, upperRate: 0.16, comboMax: 2,
-        scale: 1.00, bulk: 1.04, skin: '#edc29c', skinShade: '#bf8b62', hair: '#111827', hairStyle: 'spiky',
-        glove: '#2563eb', gloveTrim: '#93c5fd', trunks: '#0f172a', trunksTrim: '#facc15',
-        arenaTint: '#0369a1', accessory: 'headband', accessoryCol: '#ffffff', boss: false,
+        stage: 2, name: 'KENJI SATO', jpName: '鉄壁のケンジ', title: 'ハイガードの番人',
+        hp: 185, dmg: 15, windup: 0.68, cooldown: 0.90, guardRate: 0.50, feintRate: 0.06, upperRate: 0.18, sweepRate: 0.10, comboMax: 2,
+        height: 1.00, bulk: 1.03, skin: 0xe3b18c, hair: 0x0f172a, hairStyle: 'spiky',
+        glove: 0x2563eb, trim: 0x93c5fd, trunks: 0x0f172a, neon: 0x38bdf8, accessory: 'headband', boss: false,
       },
       {
-        id: 'e3', stage: 3, name: 'CARLOS VEGA', jpName: '毒蛇カルロス', title: '高速ジャブの魔術師',
-        hp: 205, dmg: 17, windup: 0.58, cooldown: 0.76, feintRate: 0.12, upperRate: 0.24, comboMax: 2,
-        scale: 0.98, bulk: 0.92, skin: '#c88c61', skinShade: '#965d37', hair: '#18181b', hairStyle: 'slick',
-        glove: '#10b981', gloveTrim: '#d1fae5', trunks: '#064e3b', trunksTrim: '#34d399',
-        arenaTint: '#047857', accessory: 'beard', boss: false,
+        stage: 3, name: 'CARLOS VEGA', jpName: '毒蛇カルロス', title: '連撃ジャブ使い',
+        hp: 210, dmg: 16, windup: 0.62, cooldown: 0.80, guardRate: 0.42, feintRate: 0.12, upperRate: 0.24, sweepRate: 0.14, comboMax: 2,
+        height: 0.99, bulk: 0.94, skin: 0xb87e54, hair: 0x111111, hairStyle: 'slick',
+        glove: 0x10b981, trim: 0xd1fae5, trunks: 0x064e3b, neon: 0x34d399, accessory: 'beard', boss: false,
       },
       {
-        id: 'e4', stage: 4, name: 'BIG HANK', jpName: '重戦車ハンク', title: '鋼鉄ブルドーザー',
-        hp: 250, dmg: 22, windup: 0.68, cooldown: 0.90, feintRate: 0.10, upperRate: 0.28, comboMax: 2,
-        scale: 1.10, bulk: 1.20, skin: '#d89b72', skinShade: '#a46942', hair: '#7c2d12', hairStyle: 'bald',
-        glove: '#f97316', gloveTrim: '#ffedd5', trunks: '#431407', trunksTrim: '#fb923c',
-        arenaTint: '#9a3412', accessory: 'beard', boss: false,
+        stage: 4, name: 'BIG HANK', jpName: '重戦車ハンク', title: '鋼鉄スラッガー',
+        hp: 255, dmg: 20, windup: 0.68, cooldown: 0.88, guardRate: 0.55, feintRate: 0.10, upperRate: 0.28, sweepRate: 0.18, comboMax: 2,
+        height: 1.08, bulk: 1.22, skin: 0xc98b63, hair: 0x5c2b16, hairStyle: 'bald',
+        glove: 0xf97316, trim: 0xffedd5, trunks: 0x2a1205, neon: 0xfb923c, accessory: 'beard', boss: false,
       },
       {
-        id: 'e5', stage: 5, name: 'MARCO CRUZ', jpName: '紅蓮のマルコ', title: 'ルーキーリーグ王者',
-        hp: 290, dmg: 22, windup: 0.56, cooldown: 0.72, feintRate: 0.18, upperRate: 0.34, comboMax: 2,
-        scale: 1.05, bulk: 1.08, skin: '#d49a6e', skinShade: '#9f663e', hair: '#1c1917', hairStyle: 'mohawk',
-        glove: '#dc2626', gloveTrim: '#fde047', trunks: '#7f1d1d', trunksTrim: '#facc15',
-        arenaTint: '#b91c1c', accessory: 'headband', accessoryCol: '#ef4444', boss: true, belt: '#facc15',
+        stage: 5, name: 'MARCO CRUZ', jpName: '紅蓮マルコ', title: 'ルーキー王者',
+        hp: 295, dmg: 21, windup: 0.58, cooldown: 0.74, guardRate: 0.58, feintRate: 0.18, upperRate: 0.34, sweepRate: 0.20, comboMax: 2,
+        height: 1.04, bulk: 1.08, skin: 0xc88c60, hair: 0x171717, hairStyle: 'mohawk',
+        glove: 0xdc2626, trim: 0xfde047, trunks: 0x450a0a, neon: 0xf43f5e, accessory: 'headband', boss: true,
+      },
+    ],
+    normal: [
+      {
+        stage: 1, name: 'RYO TAKAHASHI', jpName: '蒼閃リョウ', title: '高速インファイター',
+        hp: 230, dmg: 17, windup: 0.58, cooldown: 0.74, guardRate: 0.52, feintRate: 0.16, upperRate: 0.26, sweepRate: 0.18, comboMax: 2,
+        height: 1.00, bulk: 0.98, skin: 0xe6b995, hair: 0x1e293b, hairStyle: 'spiky',
+        glove: 0x06b6d4, trim: 0xe0f2fe, trunks: 0x0f172a, neon: 0x00e5ff, accessory: 'visor', boss: false,
+      },
+      {
+        stage: 2, name: 'TYSON BROOKS', jpName: '黒豹タイソン', title: 'ダック狩り入門師',
+        hp: 265, dmg: 20, windup: 0.55, cooldown: 0.70, guardRate: 0.58, feintRate: 0.18, upperRate: 0.36, sweepRate: 0.16, comboMax: 2,
+        height: 1.04, bulk: 1.12, skin: 0x734429, hair: 0x09090b, hairStyle: 'buzz',
+        glove: 0xeab308, trim: 0x18181b, trunks: 0x18181b, neon: 0xfacc15, accessory: 'scar', boss: false,
+      },
+      {
+        stage: 3, name: 'ANTONIO ROSSI', jpName: '蒼穹アントニオ', title: 'ワイドスイープ使い',
+        hp: 290, dmg: 21, windup: 0.53, cooldown: 0.66, guardRate: 0.60, feintRate: 0.22, upperRate: 0.30, sweepRate: 0.32, comboMax: 3,
+        height: 1.03, bulk: 1.04, skin: 0xd8a17c, hair: 0x292524, hairStyle: 'slick',
+        glove: 0x16a34a, trim: 0xf0fdf4, trunks: 0x052e16, neon: 0x4ade80, accessory: 'headband', boss: false,
+      },
+      {
+        stage: 4, name: 'GORO IRONFIST', jpName: '鉄拳ゴロウ', title: '難攻不落の鉄壁',
+        hp: 340, dmg: 24, windup: 0.56, cooldown: 0.68, guardRate: 0.72, feintRate: 0.20, upperRate: 0.36, sweepRate: 0.24, comboMax: 3,
+        height: 1.11, bulk: 1.24, skin: 0xd49d78, hair: 0x18181b, hairStyle: 'bald',
+        glove: 0x475569, trim: 0x38bdf8, trunks: 0x0f172a, neon: 0x38bdf8, accessory: 'mask', boss: false,
+      },
+      {
+        stage: 5, name: 'VIPER NEON', jpName: 'ネオン・ヴァイパー', title: 'プロサーキット王者',
+        hp: 380, dmg: 25, windup: 0.50, cooldown: 0.60, guardRate: 0.66, feintRate: 0.28, upperRate: 0.40, sweepRate: 0.28, comboMax: 3,
+        height: 1.06, bulk: 1.10, skin: 0xc58a62, hair: 0x22c55e, hairStyle: 'mohawk',
+        glove: 0x10b981, trim: 0xfde047, trunks: 0x022c22, neon: 0x22c55e, accessory: 'visor', boss: true,
       },
     ],
     hard: [
       {
-        id: 'h1', stage: 1, name: 'REN KURODA', jpName: '幻影のレン', title: 'フェイント殺法',
-        hp: 270, dmg: 20, windup: 0.50, cooldown: 0.64, feintRate: 0.30, upperRate: 0.30, comboMax: 2,
-        scale: 1.00, bulk: 0.96, skin: '#e8bf9c', skinShade: '#b88864', hair: '#1e1b4b', hairStyle: 'spiky',
-        glove: '#7c3aed', gloveTrim: '#ddd6fe', trunks: '#1e1b4b', trunksTrim: '#a78bfa',
-        arenaTint: '#5b21b6', accessory: 'scar', boss: false,
+        stage: 1, name: 'REN KURODA', jpName: '幻影のレン', title: 'フェイント殺法',
+        hp: 320, dmg: 22, windup: 0.48, cooldown: 0.58, guardRate: 0.64, feintRate: 0.34, upperRate: 0.34, sweepRate: 0.24, comboMax: 3,
+        height: 1.02, bulk: 0.99, skin: 0xe4ba96, hair: 0x6366f1, hairStyle: 'spiky',
+        glove: 0x7c3aed, trim: 0xddd6fe, trunks: 0x1e1b4b, neon: 0xa855f7, accessory: 'scar', boss: false,
       },
       {
-        id: 'h2', stage: 2, name: 'DMITRI VOLKOV', jpName: '凍土のドミトリ', title: 'シベリアン・ベア',
-        hp: 340, dmg: 26, windup: 0.54, cooldown: 0.68, feintRate: 0.22, upperRate: 0.38, comboMax: 2,
-        scale: 1.12, bulk: 1.24, skin: '#f0cbb0', skinShade: '#c29374', hair: '#78350f', hairStyle: 'short',
-        glove: '#0284c7', gloveTrim: '#e0f2fe', trunks: '#0c4a6e', trunksTrim: '#38bdf8',
-        arenaTint: '#075985', accessory: 'scar', boss: false,
+        stage: 2, name: 'DMITRI VOLKOV', jpName: '凍土のドミトリ', title: 'シベリアン・ベア',
+        hp: 390, dmg: 26, windup: 0.51, cooldown: 0.60, guardRate: 0.70, feintRate: 0.26, upperRate: 0.40, sweepRate: 0.26, comboMax: 3,
+        height: 1.13, bulk: 1.26, skin: 0xebc3a6, hair: 0x78350f, hairStyle: 'buzz',
+        glove: 0x0284c7, trim: 0xe0f2fe, trunks: 0x082f49, neon: 0x38bdf8, accessory: 'scar', boss: false,
       },
       {
-        id: 'h3', stage: 3, name: 'LEO SILVA', jpName: '雷光レオ', title: '3連ラッシュの閃光',
-        hp: 320, dmg: 21, windup: 0.46, cooldown: 0.56, feintRate: 0.28, upperRate: 0.34, comboMax: 3,
-        scale: 1.01, bulk: 0.98, skin: '#a96e46', skinShade: '#784624', hair: '#facc15', hairStyle: 'mohawk',
-        glove: '#eab308', gloveTrim: '#fef9c3', trunks: '#14532d', trunksTrim: '#facc15',
-        arenaTint: '#ca8a04', accessory: 'headband', accessoryCol: '#facc15', boss: false,
+        stage: 3, name: 'LEO SILVA', jpName: '雷光レオ', title: '3連ラッシュの閃光',
+        hp: 370, dmg: 23, windup: 0.45, cooldown: 0.52, guardRate: 0.62, feintRate: 0.32, upperRate: 0.36, sweepRate: 0.30, comboMax: 3,
+        height: 1.03, bulk: 1.02, skin: 0x99603b, hair: 0xfacc15, hairStyle: 'mohawk',
+        glove: 0xf59e0b, trim: 0xfef9c3, trunks: 0x1c1917, neon: 0xfacc15, accessory: 'headband', boss: false,
       },
       {
-        id: 'h4', stage: 4, name: 'VIKTOR KRANE', jpName: '顎砕きヴィクター', title: 'ダック狩りの死神',
-        hp: 375, dmg: 27, windup: 0.48, cooldown: 0.58, feintRate: 0.32, upperRate: 0.48, comboMax: 3,
-        scale: 1.08, bulk: 1.14, skin: '#d8a582', skinShade: '#a16e4d', hair: '#09090b', hairStyle: 'bald',
-        glove: '#18181b', gloveTrim: '#f43f5e', trunks: '#18181b', trunksTrim: '#f43f5e',
-        arenaTint: '#881337', accessory: 'scar', boss: false,
+        stage: 4, name: 'VIKTOR KRANE', jpName: '顎砕きヴィクター', title: 'ダック狩りの死神',
+        hp: 430, dmg: 28, windup: 0.46, cooldown: 0.54, guardRate: 0.72, feintRate: 0.36, upperRate: 0.52, sweepRate: 0.24, comboMax: 3,
+        height: 1.10, bulk: 1.18, skin: 0xd49f7c, hair: 0x09090b, hairStyle: 'bald',
+        glove: 0x18181b, trim: 0xf43f5e, trunks: 0x18181b, neon: 0xf43f5e, accessory: 'mask', boss: false,
       },
       {
-        id: 'h5', stage: 5, name: 'TITAN REX', jpName: '黄金牙タイタン', title: '世界プロ統一王者',
-        hp: 430, dmg: 28, windup: 0.45, cooldown: 0.52, feintRate: 0.36, upperRate: 0.44, comboMax: 3,
-        scale: 1.13, bulk: 1.20, skin: '#8d5534', skinShade: '#5d3219', hair: '#fde047', hairStyle: 'mohawk',
-        glove: '#f59e0b', gloveTrim: '#ffffff', trunks: '#111827', trunksTrim: '#fde047',
-        arenaTint: '#b45309', accessory: 'beard', boss: true, belt: '#fde047', aura: '#f59e0b',
+        stage: 5, name: 'TITAN REX', jpName: '黄金牙タイタン', title: '世界プロ統一王者',
+        hp: 490, dmg: 29, windup: 0.44, cooldown: 0.48, guardRate: 0.74, feintRate: 0.40, upperRate: 0.46, sweepRate: 0.30, comboMax: 3,
+        height: 1.15, bulk: 1.24, skin: 0x824c2d, hair: 0xfde047, hairStyle: 'mohawk',
+        glove: 0xf59e0b, trim: 0xffffff, trunks: 0x111827, neon: 0xfde047, accessory: 'crown', boss: true, neonPads: true,
       },
     ],
     vhard: [
       {
-        id: 'v1', stage: 1, name: 'KAZUYA SHIN', jpName: '零閃のカズヤ', title: '0.1秒のカウンター師',
-        hp: 390, dmg: 24, windup: 0.41, cooldown: 0.46, feintRate: 0.42, upperRate: 0.40, comboMax: 3,
-        scale: 1.02, bulk: 1.00, skin: '#eac2a0', skinShade: '#b88964', hair: '#e2e8f0', hairStyle: 'spiky',
-        glove: '#06b6d4', gloveTrim: '#ffffff', trunks: '#0f172a', trunksTrim: '#22d3ee',
-        arenaTint: '#0e7490', accessory: 'headband', accessoryCol: '#22d3ee', boss: false, aura: '#22d3ee',
+        stage: 1, name: 'KAZUYA SHIN', jpName: '零閃のカズヤ', title: '0.1秒のカウンター師',
+        hp: 440, dmg: 25, windup: 0.40, cooldown: 0.44, guardRate: 0.74, feintRate: 0.44, upperRate: 0.42, sweepRate: 0.28, comboMax: 3,
+        height: 1.03, bulk: 1.02, skin: 0xe6bc9a, hair: 0xe2e8f0, hairStyle: 'spiky',
+        glove: 0x06b6d4, trim: 0xffffff, trunks: 0x090d16, neon: 0x00e5ff, accessory: 'visor', boss: false, neonPads: true,
       },
       {
-        id: 'v2', stage: 2, name: 'BRUTUS WARD', jpName: '破砕神ブルータス', title: '絶対圧殺の巨人',
-        hp: 470, dmg: 30, windup: 0.44, cooldown: 0.50, feintRate: 0.34, upperRate: 0.52, comboMax: 3,
-        scale: 1.15, bulk: 1.28, skin: '#7c482a', skinShade: '#4f2812', hair: '#18181b', hairStyle: 'bald',
-        glove: '#b91c1c', gloveTrim: '#fca5a5', trunks: '#1c1917', trunksTrim: '#ef4444',
-        arenaTint: '#7f1d1d', accessory: 'scar', boss: false, aura: '#ef4444',
+        stage: 2, name: 'BRUTUS WARD', jpName: '破砕神ブルータス', title: '絶対圧殺の巨人',
+        hp: 530, dmg: 31, windup: 0.42, cooldown: 0.46, guardRate: 0.78, feintRate: 0.38, upperRate: 0.50, sweepRate: 0.28, comboMax: 3,
+        height: 1.18, bulk: 1.32, skin: 0x6e3d21, hair: 0x09090b, hairStyle: 'bald',
+        glove: 0xb91c1c, trim: 0xfca5a5, trunks: 0x181010, neon: 0xef4444, accessory: 'mask', boss: false, neonPads: true,
       },
       {
-        id: 'v3', stage: 3, name: 'RAVEN VANCE', jpName: '虚像のレイヴン', title: '二重フェイントの悪魔',
-        hp: 440, dmg: 26, windup: 0.39, cooldown: 0.44, feintRate: 0.50, upperRate: 0.46, comboMax: 3,
-        scale: 1.04, bulk: 1.02, skin: '#d8a684', skinShade: '#a4704d', hair: '#6d28d9', hairStyle: 'slick',
-        glove: '#a21caf', gloveTrim: '#f5d0fe', trunks: '#1e1b4b', trunksTrim: '#e879f9',
-        arenaTint: '#701a75', accessory: 'visor', boss: false, aura: '#d946ef',
+        stage: 3, name: 'RAVEN VANCE', jpName: '虚像レイヴン', title: '二重フェイントの悪魔',
+        hp: 495, dmg: 27, windup: 0.38, cooldown: 0.42, guardRate: 0.76, feintRate: 0.52, upperRate: 0.44, sweepRate: 0.34, comboMax: 4,
+        height: 1.05, bulk: 1.04, skin: 0xd4a280, hair: 0xc026d3, hairStyle: 'slick',
+        glove: 0xa21caf, trim: 0xf5d0fe, trunks: 0x1a0b2e, neon: 0xe879f9, accessory: 'visor', boss: false, neonPads: true,
       },
       {
-        id: 'v4', stage: 4, name: 'AZRAEL MOON', jpName: '紅月アズラエル', title: '4連狂乱の修羅',
-        hp: 500, dmg: 27, windup: 0.38, cooldown: 0.42, feintRate: 0.46, upperRate: 0.50, comboMax: 4,
-        scale: 1.07, bulk: 1.10, skin: '#c88d68', skinShade: '#905938', hair: '#f43f5e', hairStyle: 'spiky',
-        glove: '#be123c', gloveTrim: '#fda4af', trunks: '#09090b', trunksTrim: '#fb7185',
-        arenaTint: '#9f1239', accessory: 'headband', accessoryCol: '#f43f5e', boss: false, aura: '#f43f5e',
+        stage: 4, name: 'AZRAEL MOON', jpName: '紅月アズラエル', title: '4連狂乱の修羅',
+        hp: 560, dmg: 28, windup: 0.37, cooldown: 0.40, guardRate: 0.78, feintRate: 0.48, upperRate: 0.48, sweepRate: 0.32, comboMax: 4,
+        height: 1.09, bulk: 1.14, skin: 0xb97f5c, hair: 0xf43f5e, hairStyle: 'spiky',
+        glove: 0xbe123c, trim: 0xfda4af, trunks: 0x09090b, neon: 0xf43f5e, accessory: 'mask', boss: false, neonPads: true,
       },
       {
-        id: 'v5', stage: 5, name: 'ZEUS OMEGA', jpName: '雷帝ゼウス・オメガ', title: '裏世界最強・15人目の神',
-        hp: 580, dmg: 31, windup: 0.36, cooldown: 0.40, feintRate: 0.48, upperRate: 0.54, comboMax: 4,
-        scale: 1.14, bulk: 1.22, skin: '#d4a37f', skinShade: '#9e6b48', hair: '#f8fafc', hairStyle: 'spiky',
-        glove: '#f8fafc', gloveTrim: '#fde047', trunks: '#0f172a', trunksTrim: '#fde047',
-        arenaTint: '#4338ca', accessory: 'crown', boss: true, belt: '#fde047', aura: '#38bdf8',
+        stage: 5, name: 'ZEUS OMEGA', jpName: '雷帝ゼウス・オメガ', title: '裏世界最強・20人目の神',
+        hp: 650, dmg: 32, windup: 0.35, cooldown: 0.38, guardRate: 0.80, feintRate: 0.50, upperRate: 0.52, sweepRate: 0.30, comboMax: 4,
+        height: 1.16, bulk: 1.24, skin: 0xcea07c, hair: 0xf8fafc, hairStyle: 'spiky',
+        glove: 0xf8fafc, trim: 0xfde047, trunks: 0x090d16, neon: 0x00e5ff, accessory: 'crown', boss: true, neonPads: true,
       },
     ],
   };
 
   // =========================================================================
-  // WEB AUDIO ENGINE (iOS Safari compatible, muted in SHORTS_MODE)
+  // THREE.JS REAL 3D SCENE, LIGHTING, NEON RING & SCULPTED 3D CHARACTERS
+  // =========================================================================
+  const renderer = new THREE.WebGLRenderer({
+    canvas: glCanvas,
+    antialias: true,
+    alpha: false,
+    powerPreference: 'high-performance',
+    preserveDrawingBuffer: true,
+  });
+  renderer.setPixelRatio(SHORTS_MODE ? 1.25 : DPR);
+  renderer.setSize(W, H, false);
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.02;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x020307);
+  scene.fog = new THREE.FogExp2(0x020307, 0.088);
+
+  const camera = new THREE.PerspectiveCamera(45, W / H, 0.08, 45);
+  camera.position.set(0, 1.60, 2.88);
+  camera.lookAt(0, 1.36, -0.35);
+
+  // Dramatic Dark-Arena + Cyber-Neon Rim Lighting Rig (high-contrast realistic PBR!)
+  const ambientLight = new THREE.AmbientLight(0x162038, 0.45);
+  scene.add(ambientLight);
+
+  const hemiLight = new THREE.HemisphereLight(0x66aaff, 0x06040d, 0.38);
+  scene.add(hemiLight);
+
+  const keySpot = new THREE.SpotLight(0xfff1de, 2.45, 18, Math.PI * 0.30, 0.62, 1.25);
+  keySpot.position.set(0.35, 5.8, 2.5);
+  keySpot.target.position.set(0, 1.25, -0.35);
+  keySpot.castShadow = true;
+  keySpot.shadow.mapSize.set(SHORTS_MODE ? 512 : 1024, SHORTS_MODE ? 512 : 1024);
+  scene.add(keySpot);
+  scene.add(keySpot.target);
+
+  // Cyber-Neon Rim Lights carving muscular 3D contours against pitch black!
+  const rimLightL = new THREE.PointLight(0x00e5ff, 4.2, 11);
+  rimLightL.position.set(-2.3, 2.2, -1.4);
+  scene.add(rimLightL);
+
+  const rimLightR = new THREE.PointLight(0xf43f5e, 3.8, 11);
+  rimLightR.position.set(2.3, 2.0, -1.2);
+  scene.add(rimLightR);
+
+  const impactLight = new THREE.PointLight(0xfde047, 0, 9);
+  impactLight.position.set(0, 1.60, 0.25);
+  scene.add(impactLight);
+
+  // Build Dark-Obsidian Neon Boxing Ring
+  const ringGroup = new THREE.Group();
+  scene.add(ringGroup);
+  const neonRingMats = [];
+
+  (function buildNeonRing() {
+    const floorMat = new THREE.MeshStandardMaterial({ color: 0x070a12, roughness: 0.28, metalness: 0.42 });
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(7.6, 7.6), floorMat);
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
+    ringGroup.add(floor);
+
+    const grid = new THREE.GridHelper(7.0, 14, 0x00e5ff, 0x131d33);
+    grid.position.y = 0.005;
+    grid.material.opacity = 0.42;
+    grid.material.transparent = true;
+    ringGroup.add(grid);
+
+    const ringEmblemMat = new THREE.MeshBasicMaterial({ color: 0x00e5ff, transparent: true, opacity: 0.72 });
+    neonRingMats.push(ringEmblemMat);
+    const emblem = new THREE.Mesh(new THREE.RingGeometry(1.18, 1.24, 48), ringEmblemMat);
+    emblem.rotation.x = -Math.PI / 2;
+    emblem.position.set(0, 0.008, -0.1);
+    ringGroup.add(emblem);
+
+    const postPositions = [[-3.1, -3.1], [3.1, -3.1], [-3.1, 3.1], [3.1, 3.1]];
+    const postCols = [0xf43f5e, 0x00e5ff, 0x00e5ff, 0xf43f5e];
+    postPositions.forEach(([px, pz], idx) => {
+      const postMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.3, metalness: 0.8 });
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.16, 2.35, 16), postMat);
+      post.position.set(px, 1.15, pz);
+      ringGroup.add(post);
+      const glowStrip = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.155, 0.155, 1.95, 16),
+        new THREE.MeshBasicMaterial({ color: postCols[idx] })
+      );
+      glowStrip.position.set(px, 1.18, pz);
+      ringGroup.add(glowStrip);
+    });
+
+    const ropeHeights = [0.62, 1.16, 1.70];
+    const ropeColors = [0x00e5ff, 0x94a3b8, 0xf43f5e];
+    ropeHeights.forEach((ry, idx) => {
+      const rMat = new THREE.MeshStandardMaterial({
+        color: ropeColors[idx],
+        emissive: ropeColors[idx],
+        emissiveIntensity: idx === 1 ? 0.25 : 0.95,
+        roughness: 0.3,
+        metalness: 0.4,
+      });
+      if (idx !== 1) neonRingMats.push(rMat);
+      const backRope = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 6.2, 10), rMat);
+      backRope.rotation.z = Math.PI / 2;
+      backRope.position.set(0, ry, -3.1);
+      ringGroup.add(backRope);
+      for (const sx of [-3.1, 3.1]) {
+        const sideRope = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 6.2, 10), rMat);
+        sideRope.rotation.x = Math.PI / 2;
+        sideRope.position.set(sx, ry, 0);
+        ringGroup.add(sideRope);
+      }
+    });
+
+    const coneMat = new THREE.MeshBasicMaterial({
+      color: 0x38bdf8, transparent: true, opacity: 0.045,
+      side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending,
+    });
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(2.6, 5.6, 32, 1, true), coneMat);
+    cone.position.set(0, 3.0, -0.35);
+    ringGroup.add(cone);
+
+    const pCount = 80;
+    const posArr = new Float32Array(pCount * 3);
+    for (let i = 0; i < pCount; i++) {
+      posArr[i * 3] = randRange(-4.2, 4.2);
+      posArr[i * 3 + 1] = randRange(0.4, 4.4);
+      posArr[i * 3 + 2] = randRange(-4.2, 1.4);
+    }
+    const ptsGeo = new THREE.BufferGeometry();
+    ptsGeo.setAttribute('position', new THREE.BufferAttribute(posArr, 3));
+    ringGroup.add(new THREE.Points(ptsGeo, new THREE.PointsMaterial({
+      color: 0x7dd3fc, size: 0.04, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending,
+    })));
+  })();
+
+  // =========================================================================
+  // SCULPTED 3D BOXING GLOVE BUILDER (GLOSSY CLEARCOAT LEATHER + THUMB + NEON CUFF!)
+  // =========================================================================
+  function createSculptedGlove3D(colorHex, trimHex, isLeft, emissiveHex = 0x000000) {
+    const g = new THREE.Group();
+
+    const leatherMat = new THREE.MeshPhysicalMaterial({
+      color: colorHex,
+      emissive: emissiveHex,
+      emissiveIntensity: 0.12,
+      roughness: 0.20,
+      metalness: 0.20,
+      clearcoat: 0.95,
+      clearcoatRoughness: 0.16,
+    });
+    const trimMat = new THREE.MeshStandardMaterial({ color: trimHex, roughness: 0.42, metalness: 0.22 });
+    const neonBandMat = new THREE.MeshStandardMaterial({
+      color: trimHex, emissive: colorHex, emissiveIntensity: 1.0, roughness: 0.2, metalness: 0.5,
+    });
+
+    // Main sculpted knuckle fist dome
+    const main = new THREE.Mesh(new THREE.SphereGeometry(0.155, 24, 20), leatherMat);
+    main.scale.set(1.04, 0.94, 1.24);
+    main.castShadow = true;
+    g.add(main);
+
+    // Padded knuckle ridge on impact face
+    const ridge = new THREE.Mesh(new THREE.SphereGeometry(0.118, 18, 14), leatherMat);
+    ridge.scale.set(1.16, 0.72, 0.80);
+    ridge.position.set(0, 0.04, 0.095);
+    g.add(ridge);
+
+    // Sculpted thumb bolster tucked along inner side
+    const sideSign = isLeft ? 1 : -1;
+    const thumb = new THREE.Mesh(new THREE.SphereGeometry(0.078, 16, 14), leatherMat);
+    thumb.scale.set(0.82, 1.08, 1.38);
+    thumb.position.set(sideSign * 0.122, -0.02, 0.035);
+    thumb.rotation.y = sideSign * -0.32;
+    g.add(thumb);
+
+    // Taped wrist cuff + glowing neon trim ring
+    const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.096, 0.086, 0.16, 18), trimMat);
+    cuff.rotation.x = Math.PI / 2;
+    cuff.position.set(0, -0.01, -0.175);
+    g.add(cuff);
+
+    const neonRing = new THREE.Mesh(new THREE.TorusGeometry(0.104, 0.015, 12, 24), neonBandMat);
+    neonRing.position.set(0, -0.01, -0.115);
+    g.add(neonRing);
+
+    g.userData = { leatherMat, neonBandMat };
+    return g;
+  }
+
+  // =========================================================================
+  // SCULPTED 3D ARTICULATED OPPONENT RIG (REAL ANATOMY & NATURAL BOXING GUARD!)
+  // =========================================================================
+  let oppRig = null;
+
+  function buildOpponentRig(cfg) {
+    if (oppRig) {
+      scene.remove(oppRig.root);
+      scene.remove(oppRig.telegraphRing);
+      scene.remove(oppRig.sweepArc);
+    }
+
+    const root = new THREE.Group();
+    root.position.set(0, 0, -0.35);
+    root.scale.setScalar(cfg.height);
+
+    const skinMat = new THREE.MeshStandardMaterial({ color: cfg.skin, roughness: 0.56, metalness: 0.04 });
+    const hairMat = new THREE.MeshStandardMaterial({ color: cfg.hair, roughness: 0.55, metalness: 0.15 });
+    const trunksMat = new THREE.MeshStandardMaterial({ color: cfg.trunks, roughness: 0.38, metalness: 0.25 });
+    const neonMat = new THREE.MeshStandardMaterial({
+      color: cfg.neon, emissive: cfg.neon, emissiveIntensity: 1.5, roughness: 0.18, metalness: 0.6,
+    });
+    const darkMetalMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.28, metalness: 0.85 });
+
+    const b = cfg.bulk;
+
+    // Legs & Trunks
+    const pelvis = new THREE.Group();
+    pelvis.position.set(0, 0.94, 0);
+    root.add(pelvis);
+
+    const trunks = new THREE.Mesh(new THREE.CylinderGeometry(0.22 * b, 0.24 * b, 0.38, 22), trunksMat);
+    trunks.position.set(0, -0.06, 0);
+    trunks.castShadow = true;
+    pelvis.add(trunks);
+
+    const beltMat = cfg.boss
+      ? new THREE.MeshStandardMaterial({ color: 0xfde047, emissive: 0xf59e0b, emissiveIntensity: 0.55, roughness: 0.2, metalness: 0.92 })
+      : neonMat;
+    const belt = new THREE.Mesh(new THREE.CylinderGeometry(0.228 * b, 0.228 * b, 0.072, 24), beltMat);
+    belt.position.set(0, 0.12, 0);
+    pelvis.add(belt);
+    if (cfg.boss) {
+      const buckle = new THREE.Mesh(new THREE.OctahedronGeometry(0.062, 1), neonMat);
+      buckle.scale.set(1.25, 0.85, 0.45);
+      buckle.position.set(0, 0.12, 0.225 * b);
+      pelvis.add(buckle);
+    }
+
+    for (const sx of [-1, 1]) {
+      const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.028, 0.30, 0.07), neonMat);
+      stripe.position.set(sx * 0.228 * b, -0.06, 0.02);
+      pelvis.add(stripe);
+
+      const thigh = new THREE.Mesh(new THREE.CylinderGeometry(0.105 * b, 0.084 * b, 0.54, 16), skinMat);
+      thigh.position.set(sx * 0.14 * b, -0.45, sx * 0.03);
+      thigh.rotation.z = sx * -0.05;
+      pelvis.add(thigh);
+
+      const boot = new THREE.Mesh(new THREE.CylinderGeometry(0.082 * b, 0.092 * b, 0.32, 14), darkMetalMat);
+      boot.position.set(sx * 0.165 * b, -0.78, sx * 0.03);
+      pelvis.add(boot);
+    }
+
+    // ATHLETIC V-TAPER TORSO (Smooth Sculpted Pecs & Subtle Toned Abs)
+    const torsoPivot = new THREE.Group();
+    torsoPivot.position.set(0, 1.06, 0);
+    root.add(torsoPivot);
+
+    const chest = new THREE.Mesh(new THREE.CylinderGeometry(0.29 * b, 0.20 * b, 0.50, 24), skinMat);
+    chest.scale.set(1.06, 1.0, 0.68);
+    chest.position.set(0, 0.25, 0);
+    chest.castShadow = true;
+    torsoPivot.add(chest);
+
+    for (const sx of [-1, 1]) {
+      const pec = new THREE.Mesh(new THREE.SphereGeometry(0.135 * b, 20, 16), skinMat);
+      pec.scale.set(1.12, 0.72, 0.42);
+      pec.position.set(sx * 0.125 * b, 0.34, 0.138 * b);
+      torsoPivot.add(pec);
+    }
+
+    // Subtle anatomical ab definition (flush, realistic!)
+    for (let row = 0; row < 3; row++) {
+      for (const sx of [-1, 1]) {
+        const ab = new THREE.Mesh(new THREE.SphereGeometry(0.048 * b, 14, 12), skinMat);
+        ab.scale.set(1.08, 0.72, 0.25);
+        ab.position.set(sx * 0.056 * b, 0.205 - row * 0.072, 0.144 * b);
+        torsoPivot.add(ab);
+      }
+    }
+
+    const traps = new THREE.Mesh(new THREE.ConeGeometry(0.22 * b, 0.16, 18), skinMat);
+    traps.scale.set(1.2, 1.0, 0.70);
+    traps.position.set(0, 0.52, -0.01);
+    torsoPivot.add(traps);
+
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.084, 0.102, 0.15, 18), skinMat);
+    neck.position.set(0, 0.58, 0.01);
+    torsoPivot.add(neck);
+
+    if (cfg.neonPads) {
+      for (const sx of [-1, 1]) {
+        const pad = new THREE.Mesh(new THREE.TorusGeometry(0.13 * b, 0.019, 10, 22), neonMat);
+        pad.rotation.y = Math.PI / 2;
+        pad.position.set(sx * 0.35 * b, 0.44, 0);
+        torsoPivot.add(pad);
+      }
+    }
+
+    // SCULPTED COHESIVE 3D HEAD (Smooth Tapered Jaw + Fierce Cyber Eyes!)
+    const headPivot = new THREE.Group();
+    headPivot.position.set(0, 0.73, 0.02);
+    torsoPivot.add(headPivot);
+
+    const cranium = new THREE.Mesh(new THREE.SphereGeometry(0.162, 28, 22), skinMat);
+    cranium.scale.set(0.90, 1.05, 0.98);
+    cranium.castShadow = true;
+    headPivot.add(cranium);
+
+    // Smooth tapered jawline & chin (no square box corners!)
+    const jaw = new THREE.Mesh(new THREE.CylinderGeometry(0.132, 0.086, 0.14, 24), skinMat);
+    jaw.scale.set(0.94, 1.0, 0.92);
+    jaw.position.set(0, -0.078, 0.018);
+    headPivot.add(jaw);
+
+    const chin = new THREE.Mesh(new THREE.SphereGeometry(0.078, 18, 14), skinMat);
+    chin.scale.set(1.0, 0.72, 0.88);
+    chin.position.set(0, -0.142, 0.044);
+    headPivot.add(chin);
+
+    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.024, 0.068, 10), skinMat);
+    nose.rotation.x = Math.PI * 0.42;
+    nose.position.set(0, -0.012, 0.158);
+    headPivot.add(nose);
+
+    const brow = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.19, 12), skinMat);
+    brow.rotation.z = Math.PI / 2;
+    brow.position.set(0, 0.048, 0.138);
+    headPivot.add(brow);
+
+    for (const sx of [-1, 1]) {
+      const ear = new THREE.Mesh(new THREE.SphereGeometry(0.034, 12, 10), skinMat);
+      ear.scale.set(0.45, 1.25, 0.75);
+      ear.position.set(sx * 0.148, -0.01, -0.005);
+      headPivot.add(ear);
+    }
+
+    // Intense Glowing Cyber-Fighter Eyes
+    const eyeMat = new THREE.MeshBasicMaterial({ color: cfg.neon });
+    for (const sx of [-1, 1]) {
+      const socket = new THREE.Mesh(new THREE.BoxGeometry(0.056, 0.020, 0.026), darkMetalMat);
+      socket.position.set(sx * 0.054, 0.022, 0.140);
+      socket.rotation.z = sx * -0.14;
+      headPivot.add(socket);
+
+      const iris = new THREE.Mesh(new THREE.BoxGeometry(0.032, 0.013, 0.022), eyeMat);
+      iris.position.set(sx * 0.054, 0.022, 0.148);
+      iris.rotation.z = sx * -0.14;
+      headPivot.add(iris);
+    }
+
+    const mouth = new THREE.Mesh(
+      new THREE.BoxGeometry(0.076, 0.018, 0.024),
+      new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.3 })
+    );
+    mouth.position.set(0, -0.090, 0.132);
+    headPivot.add(mouth);
+
+    // Distinct 3D Hair Styles
+    if (cfg.hairStyle === 'mohawk') {
+      for (let i = 0; i < 6; i++) {
+        const fin = new THREE.Mesh(new THREE.ConeGeometry(0.048, 0.17, 6), hairMat);
+        fin.position.set(0, 0.185 - i * 0.014, 0.08 - i * 0.05);
+        fin.rotation.x = -0.35 - i * 0.14;
+        headPivot.add(fin);
+      }
+    } else if (cfg.hairStyle === 'spiky') {
+      for (let i = 0; i < 11; i++) {
+        const ang = (i / 11) * Math.PI * 2;
+        const spike = new THREE.Mesh(new THREE.ConeGeometry(0.050, 0.17, 6), hairMat);
+        spike.position.set(Math.cos(ang) * 0.10, 0.155, Math.sin(ang) * 0.095);
+        spike.rotation.z = -Math.cos(ang) * 0.55;
+        spike.rotation.x = Math.sin(ang) * 0.45;
+        headPivot.add(spike);
+      }
+    } else if (cfg.hairStyle === 'buzz' || cfg.hairStyle === 'slick') {
+      const cap = new THREE.Mesh(new THREE.SphereGeometry(0.168, 22, 16, 0, Math.PI * 2, 0, Math.PI * 0.54), hairMat);
+      cap.scale.set(0.91, 1.05, 1.00);
+      cap.position.set(0, 0.012, -0.006);
+      headPivot.add(cap);
+      if (cfg.hairStyle === 'slick') {
+        const pomp = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 12), hairMat);
+        pomp.scale.set(1.0, 0.42, 1.35);
+        pomp.position.set(0, 0.155, 0.018);
+        headPivot.add(pomp);
+      }
+    }
+
+    // Distinct 3D Accessories
+    if (cfg.accessory === 'visor') {
+      const visor = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.164, 0.164, 0.056, 24, 1, true, -Math.PI * 0.34, Math.PI * 0.68),
+        new THREE.MeshStandardMaterial({ color: cfg.neon, emissive: cfg.neon, emissiveIntensity: 1.5, transparent: true, opacity: 0.85, side: THREE.DoubleSide })
+      );
+      visor.position.set(0, 0.024, 0.008);
+      headPivot.add(visor);
+    } else if (cfg.accessory === 'crown') {
+      const crownMat = new THREE.MeshStandardMaterial({ color: 0xfde047, emissive: 0xf59e0b, emissiveIntensity: 0.65, roughness: 0.18, metalness: 0.92 });
+      const baseC = new THREE.Mesh(new THREE.TorusGeometry(0.140, 0.020, 10, 24), crownMat);
+      baseC.rotation.x = Math.PI / 2;
+      baseC.position.set(0, 0.155, 0);
+      headPivot.add(baseC);
+      for (let k = 0; k < 5; k++) {
+        const a = -0.9 + k * 0.45;
+        const prong = new THREE.Mesh(new THREE.ConeGeometry(0.028, 0.115, 5), crownMat);
+        prong.position.set(Math.sin(a) * 0.132, 0.215, Math.cos(a) * 0.132);
+        headPivot.add(prong);
+      }
+    } else if (cfg.accessory === 'headband') {
+      const band = new THREE.Mesh(new THREE.TorusGeometry(0.154, 0.022, 10, 24), neonMat);
+      band.rotation.x = Math.PI / 2;
+      band.position.set(0, 0.088, 0);
+      headPivot.add(band);
+    } else if (cfg.accessory === 'mask') {
+      const mask = new THREE.Mesh(new THREE.CylinderGeometry(0.136, 0.114, 0.11, 18, 1, false, -Math.PI * 0.45, Math.PI * 0.9), darkMetalMat);
+      mask.position.set(0, -0.088, 0.036);
+      headPivot.add(mask);
+      const vent = new THREE.Mesh(new THREE.BoxGeometry(0.095, 0.022, 0.032), neonMat);
+      vent.position.set(0, -0.088, 0.155);
+      headPivot.add(vent);
+    } else if (cfg.accessory === 'beard') {
+      const beard = new THREE.Mesh(new THREE.SphereGeometry(0.130, 18, 14), hairMat);
+      beard.scale.set(0.98, 0.80, 0.88);
+      beard.position.set(0, -0.105, 0.036);
+      headPivot.add(beard);
+    } else if (cfg.accessory === 'scar') {
+      const scar = new THREE.Mesh(new THREE.BoxGeometry(0.015, 0.095, 0.018), new THREE.MeshBasicMaterial({ color: 0xf43f5e }));
+      scar.position.set(0.068, -0.005, 0.145);
+      scar.rotation.z = -0.35;
+      headPivot.add(scar);
+    }
+
+    // NATURAL ANATOMICAL 3D ARMS + GLOSSY FORWARD-FACING BOXING GLOVES!
+    function buildArm(isScreenLeft) {
+      const s = isScreenLeft ? -1 : 1;
+      const shoulder = new THREE.Group();
+      shoulder.position.set(s * 0.34 * b, 0.44, 0.0);
+      torsoPivot.add(shoulder);
+
+      // Rounded Deltoid Shoulder
+      const delt = new THREE.Mesh(new THREE.SphereGeometry(0.122 * b, 18, 14), skinMat);
+      delt.castShadow = true;
+      shoulder.add(delt);
+
+      // Upper Arm hanging DOWN to Elbow
+      const upperArm = new THREE.Mesh(new THREE.CylinderGeometry(0.088 * b, 0.076 * b, 0.34, 16), skinMat);
+      upperArm.position.set(0, -0.17, 0);
+      shoulder.add(upperArm);
+
+      // Rounded Elbow Joint Pivot
+      const elbow = new THREE.Group();
+      elbow.position.set(0, -0.34, 0);
+      shoulder.add(elbow);
+
+      const elbowCap = new THREE.Mesh(new THREE.SphereGeometry(0.078 * b, 14, 12), skinMat);
+      elbow.add(elbowCap);
+
+      // Forearm extending cleanly FORWARD along +Z!
+      const forearm = new THREE.Mesh(new THREE.CylinderGeometry(0.064 * b, 0.076 * b, 0.32, 16), skinMat);
+      forearm.rotation.x = Math.PI / 2;
+      forearm.position.set(0, 0, 0.16);
+      elbow.add(forearm);
+
+      // Sculpted Glossy 3D Boxing Glove at Wrist!
+      const glove = createSculptedGlove3D(cfg.glove, cfg.trim, !isScreenLeft, cfg.neon);
+      glove.scale.setScalar(1.16);
+      glove.position.set(0, 0, 0.36);
+      elbow.add(glove);
+
+      return { shoulder, elbow, glove };
+    }
+
+    const leftArm = buildArm(true);   // screen-left arm
+    const rightArm = buildArm(false); // screen-right arm
+
+    // Sleek 3D Translucent Neon GUARD SHIELD Arc
+    const guardShieldMat = new THREE.MeshBasicMaterial({
+      color: 0x00e5ff, transparent: true, opacity: 0, side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    const guardShield = new THREE.Mesh(new THREE.RingGeometry(0.28, 0.36, 32), guardShieldMat);
+    guardShield.position.set(0, 0.56, 0.56);
+    torsoPivot.add(guardShield);
+
+    // 3D Attack Telegraph Plasma Ring
+    const telegraphMat = new THREE.MeshBasicMaterial({
+      color: 0xf43f5e, transparent: true, opacity: 0, side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    const telegraphRing = new THREE.Mesh(new THREE.TorusGeometry(0.26, 0.026, 12, 32), telegraphMat);
+    scene.add(telegraphRing);
+
+    // 3D Wide Sweep Horizontal Energy Blade
+    const sweepArcMat = new THREE.MeshBasicMaterial({
+      color: 0x4ade80, transparent: true, opacity: 0, side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    const sweepArc = new THREE.Mesh(new THREE.RingGeometry(0.82, 1.04, 36, 1, -Math.PI * 0.35, Math.PI * 0.7), sweepArcMat);
+    sweepArc.rotation.x = Math.PI / 2;
+    sweepArc.position.set(0, 1.54, 0.55);
+    scene.add(sweepArc);
+
+    scene.add(root);
+
+    rimLightL.color.setHex(cfg.neon);
+    rimLightR.color.setHex(cfg.boss ? 0xfde047 : 0xf43f5e);
+    neonRingMats.forEach((m, i) => {
+      if (i === 0) m.color.setHex(cfg.neon);
+      else if (m.emissive) m.emissive.setHex(i % 2 === 1 ? cfg.neon : 0xf43f5e);
+    });
+
+    oppRig = {
+      root, pelvis, torsoPivot, headPivot, leftArm, rightArm,
+      skinMat, eyeMat, guardShield, guardShieldMat,
+      telegraphRing, telegraphMat, sweepArc, sweepArcMat,
+      baseSkinHex: cfg.skin, baseNeonHex: cfg.neon,
+    };
+  }
+
+  // =========================================================================
+  // FIRST-PERSON 3D PLAYER GLOVES RIG (CLEAN FOREGROUND POV!)
+  // =========================================================================
+  const playerRig = new THREE.Group();
+  camera.add(playerRig);
+  scene.add(camera);
+
+  const pLeftGlove = createSculptedGlove3D(0x0284c7, 0xe0f2fe, true, 0x00e5ff);
+  const pRightGlove = createSculptedGlove3D(0x0284c7, 0xe0f2fe, false, 0x00e5ff);
+  pLeftGlove.scale.setScalar(0.92);
+  pRightGlove.scale.setScalar(0.92);
+  pLeftGlove.rotation.set(0.28, 0.42, -0.22);
+  pRightGlove.rotation.set(0.28, -0.42, 0.22);
+  pLeftGlove.position.set(-0.30, -0.34, -0.88);
+  pRightGlove.position.set(0.30, -0.34, -0.88);
+  playerRig.add(pLeftGlove);
+  playerRig.add(pRightGlove);
+
+  const pArmMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.45, metalness: 0.35 });
+  const pLeftArm = new THREE.Mesh(new THREE.CylinderGeometry(0.082, 0.098, 0.50, 14), pArmMat);
+  pLeftArm.rotation.x = Math.PI / 2;
+  pLeftArm.position.set(0, -0.02, -0.38);
+  pLeftGlove.add(pLeftArm);
+  const pRightArm = new THREE.Mesh(new THREE.CylinderGeometry(0.082, 0.098, 0.50, 14), pArmMat);
+  pRightArm.rotation.x = Math.PI / 2;
+  pRightArm.position.set(0, -0.02, -0.38);
+  pRightGlove.add(pRightArm);
+
+  // =========================================================================
+  // 3D WORLD-SPACE SPARKS & SHOCKWAVE TORUSES
+  // =========================================================================
+  const vfx3d = [];
+  const sparkGeo = new THREE.OctahedronGeometry(0.032, 0);
+  const shockGeo = new THREE.TorusGeometry(0.28, 0.028, 10, 32);
+
+  function spawn3DImpact(worldPos, colorHex, count = 18, big = false) {
+    impactLight.position.copy(worldPos);
+    impactLight.color.setHex(colorHex);
+    impactLight.intensity = big ? 12 : 6;
+
+    // Expanding 3D shockwave ring
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: colorHex, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    const ring = new THREE.Mesh(shockGeo, ringMat);
+    ring.position.copy(worldPos);
+    ring.lookAt(camera.position);
+    scene.add(ring);
+    vfx3d.push({ mesh: ring, mat: ringMat, type: 'ring', life: big ? 0.38 : 0.24, maxLife: big ? 0.38 : 0.24, maxScale: big ? 5.2 : 2.8 });
+
+    // 3D Sparks flying outward
+    for (let i = 0; i < count; i++) {
+      const sm = new THREE.MeshBasicMaterial({
+        color: i % 3 === 0 ? 0xffffff : colorHex, transparent: true, opacity: 1, blending: THREE.AdditiveBlending,
+      });
+      const sp = new THREE.Mesh(sparkGeo, sm);
+      sp.position.copy(worldPos);
+      const spd = randRange(big ? 3.5 : 2.0, big ? 8.5 : 5.2);
+      const theta = randRange(0, Math.PI * 2);
+      const phi = randRange(-0.8, 1.1);
+      scene.add(sp);
+      vfx3d.push({
+        mesh: sp, mat: sm, type: 'spark',
+        vx: Math.cos(theta) * spd,
+        vy: Math.sin(phi) * spd + 1.2,
+        vz: randRange(-1.5, 2.5),
+        life: randRange(0.22, 0.48),
+        maxLife: 0.48,
+      });
+    }
+  }
+
+  // =========================================================================
+  // WEB AUDIO SYNTH (iOS Safari compatible, muted in SHORTS_MODE)
   // =========================================================================
   let audioCtx = null;
   function unlockAudio() {
@@ -343,89 +949,49 @@
       const AC = window.AudioContext || window.webkitAudioContext;
       if (AC) audioCtx = new AC();
     }
-    if (audioCtx && audioCtx.state === 'suspended') {
-      audioCtx.resume().catch(() => {});
-    }
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
   }
-
-  function playTone(freq, freqEnd, dur, type = 'sine', gainVal = 0.2, delay = 0) {
+  function playTone(f0, f1, dur, type = 'sine', gainVal = 0.2, delay = 0) {
     if (SHORTS_MODE || save.muted || !audioCtx) return;
     const now = audioCtx.currentTime + delay;
     const osc = audioCtx.createOscillator();
     const g = audioCtx.createGain();
     osc.type = type;
-    osc.frequency.setValueAtTime(freq, now);
-    if (freqEnd !== freq) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freqEnd), now + dur);
+    osc.frequency.setValueAtTime(f0, now);
+    if (f1 !== f0) osc.frequency.exponentialRampToValueAtTime(Math.max(20, f1), now + dur);
     g.gain.setValueAtTime(gainVal, now);
     g.gain.exponentialRampToValueAtTime(0.0008, now + dur);
-    osc.connect(g);
-    g.connect(audioCtx.destination);
-    osc.start(now);
-    osc.stop(now + dur + 0.02);
+    osc.connect(g); g.connect(audioCtx.destination);
+    osc.start(now); osc.stop(now + dur + 0.02);
   }
-
-  function playNoise(dur, gainVal = 0.2, highpass = 400, delay = 0) {
+  function playNoise(dur, gainVal = 0.2, freq = 1000) {
     if (SHORTS_MODE || save.muted || !audioCtx) return;
-    const now = audioCtx.currentTime + delay;
+    const now = audioCtx.currentTime;
     const len = Math.floor(audioCtx.sampleRate * dur);
     const buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
     const ch = buf.getChannelData(0);
     for (let i = 0; i < len; i++) ch[i] = (Math.random() * 2 - 1) * Math.exp(-i / (len * 0.35));
-    const src = audioCtx.createBufferSource();
-    src.buffer = buf;
-    const flt = audioCtx.createBiquadFilter();
-    flt.type = 'bandpass';
-    flt.frequency.setValueAtTime(highpass, now);
-    const g = audioCtx.createGain();
-    g.gain.setValueAtTime(gainVal, now);
-    g.gain.exponentialRampToValueAtTime(0.001, now + dur);
-    src.connect(flt);
-    flt.connect(g);
-    g.connect(audioCtx.destination);
+    const src = audioCtx.createBufferSource(); src.buffer = buf;
+    const flt = audioCtx.createBiquadFilter(); flt.type = 'bandpass'; flt.frequency.setValueAtTime(freq, now);
+    const g = audioCtx.createGain(); g.gain.setValueAtTime(gainVal, now); g.gain.exponentialRampToValueAtTime(0.001, now + dur);
+    src.connect(flt); flt.connect(g); g.connect(audioCtx.destination);
     src.start(now);
   }
-
   const SFX = {
-    bell() {
-      playTone(880, 860, 0.7, 'triangle', 0.22, 0);
-      playTone(1760, 1740, 0.6, 'sine', 0.14, 0);
-      playTone(2490, 2460, 0.45, 'sine', 0.08, 0);
-    },
-    whoosh() {
-      playNoise(0.11, 0.18, 900);
-      playTone(320, 140, 0.09, 'sine', 0.08);
-    },
-    upperWarn() {
-      playTone(220, 720, 0.18, 'sawtooth', 0.12);
-      playTone(440, 1180, 0.18, 'triangle', 0.10, 0.04);
-    },
-    justSlip() {
-      playTone(540, 1180, 0.14, 'sine', 0.22);
-      playTone(120, 48, 0.22, 'sine', 0.28);
-      playNoise(0.08, 0.14, 2400);
-    },
-    punchHit(heavy = false, counter = false) {
-      playTone(heavy ? 140 : 180, 38, heavy ? 0.20 : 0.12, 'sine', heavy ? 0.38 : 0.24);
+    bell() { playTone(880, 860, 0.7, 'triangle', 0.22); playTone(1760, 1740, 0.55, 'sine', 0.14); },
+    whoosh() { playNoise(0.10, 0.16, 1000); playTone(310, 130, 0.08, 'sine', 0.08); },
+    upperWarn() { playTone(260, 880, 0.22, 'sawtooth', 0.12); playTone(520, 1320, 0.22, 'triangle', 0.10, 0.04); },
+    sweepWarn() { playTone(440, 220, 0.22, 'sawtooth', 0.11); },
+    justSlip() { playTone(560, 1280, 0.14, 'sine', 0.22); playTone(125, 44, 0.24, 'sine', 0.30); },
+    hit(heavy = false, counter = false) {
+      playTone(heavy ? 140 : 185, 36, heavy ? 0.22 : 0.12, 'sine', heavy ? 0.40 : 0.24);
       playNoise(heavy ? 0.14 : 0.08, heavy ? 0.30 : 0.18, heavy ? 1100 : 1600);
-      if (counter) {
-        playTone(660, 990, 0.10, 'triangle', 0.16);
-        playTone(1320, 880, 0.12, 'sine', 0.10, 0.03);
-      }
+      if (counter) playTone(740, 1180, 0.10, 'triangle', 0.16);
     },
-    blocked() {
-      playTone(160, 90, 0.07, 'square', 0.12);
-      playNoise(0.05, 0.12, 700);
-    },
-    playerHit(critical = false) {
-      playTone(critical ? 120 : 150, 32, critical ? 0.32 : 0.20, 'sawtooth', critical ? 0.38 : 0.26);
-      playNoise(0.18, critical ? 0.35 : 0.22, 600);
-    },
-    ultraKO() {
-      playTone(160, 28, 0.55, 'sine', 0.45);
-      playNoise(0.35, 0.40, 950);
-      playTone(523.25, 1046.5, 0.25, 'triangle', 0.22, 0.06);
-      playTone(783.99, 1567.98, 0.35, 'sine', 0.18, 0.12);
-    },
+    guard() { playTone(220, 110, 0.09, 'square', 0.14); playNoise(0.06, 0.15, 700); },
+    guardBreak() { playTone(420, 960, 0.18, 'sawtooth', 0.20); playNoise(0.16, 0.28, 1800); },
+    hurt(crit = false) { playTone(crit ? 115 : 150, 30, crit ? 0.34 : 0.20, 'sawtooth', crit ? 0.40 : 0.26); playNoise(0.18, crit ? 0.35 : 0.22, 550); },
+    ultraKO() { playTone(165, 28, 0.58, 'sine', 0.46); playNoise(0.36, 0.40, 950); playTone(523, 1046, 0.26, 'triangle', 0.22, 0.05); },
   };
 
   // =========================================================================
@@ -433,7 +999,7 @@
   // =========================================================================
   const state = {
     screen: 'title', // 'title' | 'select' | 'fight' | 'victory' | 'defeat'
-    diffId: 'easy',
+    diffId: 'normal',
     stageIdx: 0,
     elapsed: 0,
     fightTime: 0,
@@ -444,115 +1010,46 @@
     flashAlpha: 0,
     flashColor: '#ffffff',
     speedLines: 0,
-    speedLineColor: '#38bdf8',
+    speedLineColor: '#00e5ff',
     vignetteRed: 0,
-    banner: { text: '', sub: '', color: '#fde047', timer: 0, dur: 0.9, scale: 1 },
+    banner: { text: '', sub: '', color: '#fde047', timer: 0, scale: 1 },
+    swipeCue: { dir: '', timer: 0 },
+    popups: [],
+    uiButtons: [],
 
-    // Camera (First-Person 3D POV)
-    camX: 0,
-    camY: 0,
-    camZ: 0,
-    camRoll: 0,
-    camFovBoost: 0,
+    camOffX: 0, camOffY: 0, camOffZ: 0, camRoll: 0,
 
-    // Player
     player: {
-      hp: 100,
-      maxHp: 100,
-      koGauge: 0,
-      combo: 0,
-      maxCombo: 0,
-      justCount: 0,
-      dodgeDir: 'none', // 'left' | 'right' | 'duck' | 'none'
-      dodgeTimer: 0,
-      dodgeDur: 0.30,
-      dodgeCooldown: 0,
-      dodgeQuality: 'none', // 'just' | 'good' | 'early' | 'none'
-      dodgeInvuln: 0,
-      punchSide: 'none', // 'left' | 'right' | 'upper' | 'ultra'
-      punchTimer: 0,
-      punchDur: 0.18,
-      punchHitDone: false,
+      hp: 100, maxHp: 100, koGauge: 0, combo: 0, maxCombo: 0, justCount: 0, guardBreaks: 0,
+      dodgeDir: 'none', dodgeTimer: 0, dodgeDur: 0.31, dodgeQuality: 'none', dodgeInvuln: 0,
+      punchSide: 'none', punchTimer: 0, punchDur: 0.18, punchHitDone: false,
       hurtTimer: 0,
-      guarding: false,
     },
 
-    // Opponent
     enemy: {
-      cfg: ROSTER.easy[0],
-      hp: 150,
-      maxHp: 150,
+      cfg: ROSTER.normal[0],
+      hp: 230, maxHp: 230,
       state: 'intro', // 'intro' | 'idle' | 'feint' | 'windup' | 'strike' | 'whiff' | 'stunned' | 'ko'
-      stateTimer: 0.85,
-      attackType: 'left_hook', // 'left_hook' | 'right_hook' | 'straight' | 'duck_upper'
-      windupDur: 0.65,
+      stateTimer: 0.9,
+      attackType: 'left_hook', // 'left_hook' | 'right_hook' | 'straight' | 'duck_upper' | 'high_sweep'
+      windupDur: 0.6,
       comboLeft: 0,
       counterWindow: 0,
       counterBonus: 1.0,
-      guardHigh: false,
-      hitRecoilX: 0,
-      hitRecoilY: 0,
-      hitRecoilZ: 0,
-      hitFlash: 0,
-      bobPhase: 0,
-      koProgress: 0,
-      attackResolved: false,
-      feintDir: 'left_hook',
+      guarding: false,
+      guardHp: 2,
+      guardPunishCount: 0,
+      hitRecoilX: 0, hitRecoilY: 0, hitRecoilZ: 0, hitFlash: 0,
+      bobPhase: 0, koProgress: 0, attackResolved: false, feintDir: 'left_hook',
     },
-
-    // Swipe Hint Ghost (in Shorts & Early Tutorial)
-    swipeCue: { dir: '', timer: 0 },
-
-    // VFX Particles & Popups & Camera Flashes
-    particles: [],
-    rings: [],
-    popups: [],
-    crowdFlashes: [],
-    uiButtons: [],
   };
 
   function getDiff() { return DIFFICULTIES[state.diffId]; }
-
   function setBanner(text, sub = '', color = '#fde047', dur = 0.85) {
-    state.banner = { text, sub, color, timer: dur, dur, scale: 1.35 };
+    state.banner = { text, sub, color, timer: dur, scale: 1.22 };
   }
-
   function addPopup(text, x, y, color = '#ffffff', size = 28, dur = 0.72) {
     state.popups.push({ text, x, y, color, size, timer: dur, dur, vy: -95 });
-  }
-
-  function spawnParticles(x, y, count, colors, speedMin = 120, speedMax = 460, sizeMin = 3, sizeMax = 9) {
-    for (let i = 0; i < count; i++) {
-      const ang = randRange(0, Math.PI * 2);
-      const spd = randRange(speedMin, speedMax);
-      state.particles.push({
-        x, y,
-        vx: Math.cos(ang) * spd,
-        vy: Math.sin(ang) * spd - randRange(40, 140),
-        size: randRange(sizeMin, sizeMax),
-        color: colors[randInt(0, colors.length - 1)],
-        life: randRange(0.24, 0.56),
-        maxLife: 0.56,
-        grav: randRange(420, 880),
-        kind: rand() < 0.35 ? 'spark' : 'dot',
-      });
-    }
-  }
-
-  function spawnRing(x, y, color, maxR = 220, dur = 0.32, lineW = 10) {
-    state.rings.push({ x, y, color, maxR, timer: dur, dur, lineW });
-  }
-
-  function triggerCrowdFlashes(n = 8) {
-    for (let i = 0; i < n; i++) {
-      state.crowdFlashes.push({
-        x: randRange(25, W - 25),
-        y: randRange(130, 390),
-        r: randRange(12, 34),
-        timer: randRange(0.14, 0.34),
-        dur: 0.34,
-      });
-    }
   }
 
   // =========================================================================
@@ -562,6 +1059,7 @@
     state.diffId = diffId;
     state.stageIdx = clamp(stageIdx, 0, 4);
     const cfg = ROSTER[diffId][state.stageIdx];
+    buildOpponentRig(cfg);
 
     state.screen = 'fight';
     state.fightTime = 0;
@@ -572,72 +1070,52 @@
     state.flashAlpha = 0;
     state.speedLines = 0;
     state.vignetteRed = 0;
-    state.camX = 0; state.camY = 0; state.camZ = 0; state.camRoll = 0; state.camFovBoost = 0;
+    state.camOffX = 0; state.camOffY = 0; state.camOffZ = 0; state.camRoll = 0;
 
     state.player = {
-      hp: 100,
-      maxHp: 100,
-      koGauge: 0,
-      combo: 0,
-      maxCombo: 0,
-      justCount: 0,
-      dodgeDir: 'none',
-      dodgeTimer: 0,
-      dodgeDur: 0.30,
-      dodgeCooldown: 0,
-      dodgeQuality: 'none',
-      dodgeInvuln: 0,
-      punchSide: 'none',
-      punchTimer: 0,
-      punchDur: 0.18,
-      punchHitDone: false,
+      hp: 100, maxHp: 100, koGauge: 0, combo: 0, maxCombo: 0, justCount: 0, guardBreaks: 0,
+      dodgeDir: 'none', dodgeTimer: 0, dodgeDur: 0.31, dodgeQuality: 'none', dodgeInvuln: 0,
+      punchSide: 'none', punchTimer: 0, punchDur: 0.18, punchHitDone: false,
       hurtTimer: 0,
-      guarding: false,
     };
 
     state.enemy = {
       cfg,
-      hp: cfg.hp,
-      maxHp: cfg.hp,
+      hp: cfg.hp, maxHp: cfg.hp,
       state: skipIntro ? 'idle' : 'intro',
-      stateTimer: skipIntro ? 0.3 : 0.95,
+      stateTimer: skipIntro ? 0.3 : 0.92,
       attackType: 'left_hook',
       windupDur: cfg.windup,
       comboLeft: 0,
       counterWindow: 0,
       counterBonus: 1.0,
-      guardHigh: false,
-      hitRecoilX: 0,
-      hitRecoilY: 0,
-      hitRecoilZ: 0,
-      hitFlash: 0,
-      bobPhase: 0,
-      koProgress: 0,
-      attackResolved: false,
-      feintDir: 'left_hook',
+      guarding: cfg.guardRate > 0.35,
+      guardHp: 2,
+      guardPunishCount: 0,
+      hitRecoilX: 0, hitRecoilY: 0, hitRecoilZ: 0, hitFlash: 0,
+      bobPhase: 0, koProgress: 0, attackResolved: false, feintDir: 'left_hook',
     };
 
-    state.particles = [];
-    state.rings = [];
     state.popups = [];
     state.swipeCue = { dir: '', timer: 0 };
+    state.banner.timer = 0;
 
     if (!skipIntro) {
-      setBanner(`STAGE ${cfg.stage} / 5`, `${cfg.jpName}  - ${cfg.title}`, DIFFICULTIES[diffId].color, 0.95);
+      setBanner(`MATCH ${cfg.stage} / 5`, `${cfg.jpName}  - ${cfg.title}`, DIFFICULTIES[diffId].color, 0.95);
       SFX.bell();
       emitEvent('bell', { stage: cfg.stage, diff: diffId });
-      triggerCrowdFlashes(12);
     }
   }
 
   // =========================================================================
-  // COMBAT LOGIC: 0-FRAME DODGE, STRICT TIMING, DUCK-HUNTING UPPERCUT, COUNTER
+  // COMBAT MECHANICS (0-FRAME SWIPE, STRICT TIMING, GUARD BREAK, DUCK HUNT, HIGH SWEEP)
   // =========================================================================
-  function isCorrectDodgeDirection(attackType, dir) {
+  function isCorrectDodge(attackType, dir) {
     if (attackType === 'left_hook') return dir === 'right' || dir === 'duck';
     if (attackType === 'right_hook') return dir === 'left' || dir === 'duck';
     if (attackType === 'straight') return dir === 'left' || dir === 'right';
     if (attackType === 'duck_upper') return dir === 'left' || dir === 'right'; // DUCK = TRAP!
+    if (attackType === 'high_sweep') return dir === 'duck'; // SIDE = CLIPPED! MUST DUCK!
     return false;
   }
 
@@ -649,7 +1127,7 @@
     if (p.hurtTimer > 0.14) return;
     if (p.dodgeTimer > 0.08 && p.dodgeDir === dir) return;
 
-    // 0-Frame dodge cancel! Immediately cancels punch recovery
+    // 0-Frame Dodge Cancel
     p.punchSide = 'none';
     p.punchTimer = 0;
     p.dodgeDir = dir;
@@ -661,72 +1139,65 @@
     SFX.whoosh();
     emitEvent('dodge', { dir });
 
-    // Evaluate STRICT TIMING against incoming attack!
     if (e.state === 'windup' && !e.attackResolved) {
       const rem = e.stateTimer;
       const diff = getDiff();
 
-      // Special trap: DUCKING into a Duck-Hunting Uppercut!
       if (e.attackType === 'duck_upper' && dir === 'duck') {
         p.dodgeQuality = 'duck_trap';
-        addPopup('⚠ ダック狩りだ!!', W / 2, 460, '#fb7185', 26, 0.55);
+        addPopup('⚠ ダック狩りだ!!', W / 2, 460, '#f43f5e', 26, 0.52);
+        return;
+      }
+      if (e.attackType === 'high_sweep' && (dir === 'left' || dir === 'right')) {
+        p.dodgeQuality = 'wrong';
+        addPopup('⚠ 横は刈られる!! 下ダック!', W / 2, 460, '#4ade80', 24, 0.55);
         return;
       }
 
-      if (isCorrectDodgeDirection(e.attackType, dir)) {
+      if (isCorrectDodge(e.attackType, dir)) {
         if (rem <= diff.justWin) {
-          // PERFECT STRICT TIMING JUST SLIP!!
           p.dodgeQuality = 'just';
           p.dodgeInvuln = rem + 0.18;
           p.justCount++;
           p.koGauge = clamp(p.koGauge + 26, 0, 100);
           e.attackResolved = true;
 
-          // Immediate crisp visual/time feedback!
           state.slowMoTimer = 0.24;
-          state.slowMoScale = 0.26;
-          state.speedLines = 0.34;
-          state.speedLineColor = '#38bdf8';
-          state.flashAlpha = 0.26;
-          state.flashColor = '#38bdf8';
+          state.slowMoScale = 0.25;
+          state.speedLines = 0.38;
+          state.speedLineColor = '#00e5ff';
+          state.flashAlpha = 0.24;
+          state.flashColor = '#00e5ff';
 
-          const msTxt = `${Math.max(0.02, rem).toFixed(2)}s`;
-          addPopup(`JUST SLIP!! ${msTxt}`, W / 2, 345, '#38bdf8', 34, 0.78);
-          spawnRing(W / 2, H * 0.45, '#38bdf8', 250, 0.28, 8);
+          addPopup(`JUST SLIP!! ${Math.max(0.02, rem).toFixed(2)}s`, W / 2, 340, '#00e5ff', 34, 0.78);
           SFX.justSlip();
           emitEvent('just_slip', { dir, rem: +rem.toFixed(3), attack: e.attackType });
-          triggerCrowdFlashes(6);
 
-          // Advance enemy directly into whiff/next-combo immediately after slip!
           e.state = 'strike';
           e.stateTimer = 0.11;
         } else if (rem <= diff.goodWin) {
-          // Good slip (safe dodge, modest counter bonus)
           p.dodgeQuality = 'good';
           p.dodgeInvuln = rem + 0.14;
           p.koGauge = clamp(p.koGauge + 10, 0, 100);
           e.attackResolved = true;
-          addPopup('NICE SLIP!', W / 2, 365, '#a3e635', 26, 0.58);
+          addPopup('NICE SLIP!', W / 2, 360, '#4ade80', 26, 0.56);
           emitEvent('good_slip', { dir });
           e.state = 'strike';
           e.stateTimer = 0.12;
         } else {
-          // TOO EARLY! Strict timing discipline!
           p.dodgeQuality = 'early';
           p.dodgeInvuln = 0;
-          addPopup('早すぎ!! EARLY', W / 2, 390, '#fbbf24', 26, 0.55);
+          addPopup('早すぎ!! EARLY', W / 2, 395, '#fbbf24', 26, 0.55);
           emitEvent('early_dodge', { dir });
         }
       } else {
-        // Wrong direction!
         p.dodgeQuality = 'wrong';
         p.dodgeInvuln = 0;
-        addPopup('逆方向!!', W / 2, 390, '#fb7185', 25, 0.50);
+        addPopup('逆方向!!', W / 2, 395, '#fb7185', 25, 0.50);
       }
     } else if (e.state === 'feint') {
-      // Baited by feint!
       p.dodgeQuality = 'early';
-      addPopup('フェイントに釣られた!', W / 2, 390, '#fbbf24', 23, 0.55);
+      addPopup('フェイントに釣られた!', W / 2, 395, '#fbbf24', 23, 0.52);
     }
   }
 
@@ -735,14 +1206,11 @@
     const p = state.player;
     const e = state.enemy;
     if (e.state === 'ko' || e.state === 'intro') return;
-    if (p.hurtTimer > 0.12) return;
-    if (p.punchTimer > 0.06) return;
-
+    if (p.hurtTimer > 0.12 || p.punchTimer > 0.06) return;
     p.punchSide = side;
     p.punchDur = 0.17;
     p.punchTimer = p.punchDur;
     p.punchHitDone = false;
-    // Slight lean back to center when countering
     if (p.dodgeTimer > 0.10) p.dodgeTimer = 0.10;
   }
 
@@ -751,8 +1219,7 @@
     const p = state.player;
     const e = state.enemy;
     if (e.state === 'ko' || e.state === 'intro') return;
-    if (p.hurtTimer > 0.12) return;
-    if (p.punchTimer > 0.07) return;
+    if (p.hurtTimer > 0.12 || p.punchTimer > 0.07) return;
 
     const isUltra = p.koGauge >= 100;
     p.punchSide = isUltra ? 'ultra' : 'upper';
@@ -761,11 +1228,11 @@
     p.punchHitDone = false;
     if (isUltra) {
       p.koGauge = 0;
-      state.slowMoTimer = 0.28;
+      state.slowMoTimer = 0.26;
       state.slowMoScale = 0.35;
-      state.speedLines = 0.52;
+      state.speedLines = 0.55;
       state.speedLineColor = '#fde047';
-      setBanner('ULTRA COUNTER!!', '一撃必殺アッパーカット!!', '#fde047', 0.80);
+      setBanner('ULTRA COUNTER!!', '一撃必殺ネオンアッパー!!', '#fde047', 0.80);
       emitEvent('ultra_launch');
     }
   }
@@ -778,106 +1245,111 @@
     const inCounter = e.counterWindow > 0 || e.state === 'whiff' || e.state === 'stunned';
     const counterHit = inCounter || isUltra;
 
-    // Guard check if enemy is idle and guarded (and not ultra/counter)
-    if (!counterHit && e.state === 'idle' && e.guardHigh) {
-      const chip = isUpper ? 8 : 4;
-      e.hp = Math.max(1, e.hp - chip);
-      e.hitRecoilZ = 0.14;
-      e.hitFlash = 0.08;
-      state.screenShake = Math.max(state.screenShake, 5);
-      addPopup('GUARDED', W / 2, 330, '#cbd5e1', 22, 0.45);
-      spawnParticles(W / 2, 355, 8, ['#cbd5e1', '#94a3b8'], 80, 220, 2, 5);
-      SFX.blocked();
-      emitEvent('blocked');
-      return;
+    // ACTIVE 3D GUARD SYSTEM!
+    if (!counterHit && e.state === 'idle' && e.guarding) {
+      if (isUpper) {
+        // Uppercut CRACKS GUARD OPEN (Guard Break!)
+        e.guarding = false;
+        e.state = 'stunned';
+        e.stateTimer = 0.72;
+        e.counterWindow = 0.72;
+        e.counterBonus = 1.85;
+        p.guardBreaks++;
+        e.hp = Math.max(1, e.hp - 18);
+        e.hitRecoilY = -0.5;
+        e.hitRecoilZ = 0.4;
+        state.hitstop = 0.065;
+        state.screenShake = 14;
+        spawn3DImpact(new THREE.Vector3(0, 1.56, 0.12), 0x00e5ff, 22, true);
+        addPopup('GUARD BREAK!!', W / 2, 330, '#00e5ff', 32, 0.72);
+        SFX.guardBreak();
+        emitEvent('guard_break');
+        return;
+      } else {
+        // Blocked by enemy's raised 3D gloves!
+        e.hp = Math.max(1, e.hp - 3);
+        e.hitRecoilZ = 0.14;
+        e.guardPunishCount++;
+        state.screenShake = 6;
+        spawn3DImpact(new THREE.Vector3(p.punchSide === 'left' ? -0.18 : 0.18, 1.56, 0.18), 0x38bdf8, 10, false);
+        addPopup('GUARDED! ▲アッパーで崩せ', W / 2, 345, '#93c5fd', 22, 0.52);
+        SFX.guard();
+        emitEvent('blocked');
+        // Mashing into guard triggers fast counter-swing!
+        if (!SHORTS_MODE && e.guardPunishCount >= 2) {
+          e.guardPunishCount = 0;
+          startEnemyAttack(pickNextAttack(), 0);
+        }
+        return;
+      }
     }
 
-    // Calculate juicy damage!
-    let baseDmg = isUltra ? 135 : (isUpper ? 32 : 18);
+    e.guardPunishCount = 0;
+    let baseDmg = isUltra ? 145 : (isUpper ? 34 : 19);
     if (counterHit && !isUltra) {
-      baseDmg = Math.round(baseDmg * (e.counterBonus || 2.1));
+      baseDmg = Math.round(baseDmg * (e.counterBonus || 2.2));
     }
     p.combo++;
     if (p.combo > p.maxCombo) p.maxCombo = p.combo;
-    const comboMult = 1 + Math.min(p.combo - 1, 6) * 0.08;
-    const finalDmg = Math.round(baseDmg * comboMult);
+    const finalDmg = Math.round(baseDmg * (1 + Math.min(p.combo - 1, 6) * 0.08));
 
     e.hp = Math.max(0, e.hp - finalDmg);
-    if (!isUltra) {
-      p.koGauge = clamp(p.koGauge + (counterHit ? 14 : 6), 0, 100);
-    }
+    if (!isUltra) p.koGauge = clamp(p.koGauge + (counterHit ? 14 : 6), 0, 100);
 
-    // Recoil & jaw snap!
     e.hitFlash = isUltra ? 0.28 : (counterHit ? 0.18 : 0.11);
-    e.hitRecoilZ = isUltra ? 0.90 : (isUpper ? 0.55 : 0.36);
-    e.hitRecoilX = p.punchSide === 'left' ? 0.52 : (p.punchSide === 'right' ? -0.52 : (rand() - 0.5) * 0.25);
-    e.hitRecoilY = (isUpper || isUltra) ? -0.85 : -0.18;
+    e.hitRecoilZ = isUltra ? 1.0 : (isUpper ? 0.58 : 0.36);
+    e.hitRecoilX = p.punchSide === 'left' ? 0.65 : (p.punchSide === 'right' ? -0.65 : (rand() - 0.5) * 0.25);
+    e.hitRecoilY = (isUpper || isUltra) ? -0.95 : -0.22;
 
-    // Interrupt windup if ULTRA hits
     if (isUltra && e.hp > 0) {
       e.state = 'stunned';
       e.stateTimer = 0.95;
       e.counterWindow = 0.95;
       e.counterBonus = 2.4;
+      e.guarding = false;
     } else if (counterHit && e.state === 'whiff') {
       e.state = 'stunned';
       e.stateTimer = Math.max(e.stateTimer, 0.48);
     }
 
-    // Hitstop, shake, sparks, sweat!
-    const impactX = W / 2 + (p.punchSide === 'left' ? -24 : p.punchSide === 'right' ? 24 : 0);
-    const impactY = (isUpper || isUltra) ? 315 : 335;
+    const hitPos = new THREE.Vector3(
+      p.punchSide === 'left' ? -0.14 : (p.punchSide === 'right' ? 0.14 : 0),
+      (isUpper || isUltra) ? 1.54 : 1.62,
+      0.06
+    );
 
     if (isUltra || e.hp <= 0) {
       state.hitstop = isUltra ? 0.16 : 0.14;
       state.screenShake = 26;
-      state.flashAlpha = 0.62;
+      state.flashAlpha = 0.58;
       state.flashColor = isUltra ? '#fde047' : '#ffffff';
-      state.speedLines = 0.65;
+      state.speedLines = 0.68;
       state.speedLineColor = '#fde047';
-      spawnParticles(impactX, impactY, 42, ['#fde047', '#ffffff', '#fb7185', '#38bdf8'], 180, 680, 4, 12);
-      spawnRing(impactX, impactY, '#fde047', 340, 0.40, 14);
-      spawnRing(impactX, impactY, '#ffffff', 220, 0.28, 8);
-      triggerCrowdFlashes(16);
+      spawn3DImpact(hitPos, 0xfde047, 36, true);
       SFX.ultraKO();
       emitEvent(e.hp <= 0 ? 'ko_hit' : 'ultra_hit', { dmg: finalDmg, combo: p.combo });
     } else if (counterHit) {
-      state.hitstop = isUpper ? 0.085 : 0.055;
+      state.hitstop = isUpper ? 0.08 : 0.055;
       state.screenShake = isUpper ? 17 : 12;
-      state.flashAlpha = 0.24;
+      state.flashAlpha = 0.22;
       state.flashColor = '#fde047';
-      state.speedLines = 0.25;
+      state.speedLines = 0.28;
       state.speedLineColor = '#fde047';
-      spawnParticles(impactX, impactY, 22, ['#fde047', '#ffffff', '#38bdf8', '#fb923c'], 150, 500, 3, 9);
-      spawnRing(impactX, impactY, '#fde047', 210, 0.26, 9);
-      triggerCrowdFlashes(6);
-      SFX.punchHit(isUpper, true);
+      spawn3DImpact(hitPos, 0xfde047, 20, isUpper);
+      SFX.hit(isUpper, true);
       emitEvent('counter_hit', { side: p.punchSide, dmg: finalDmg, combo: p.combo });
     } else {
       state.hitstop = 0.025;
       state.screenShake = 6;
-      spawnParticles(impactX, impactY, 10, ['#ffffff', '#e2e8f0', '#fde047'], 100, 320, 2, 6);
-      spawnRing(impactX, impactY, '#ffffff', 110, 0.18, 5);
-      SFX.punchHit(isUpper, false);
+      spawn3DImpact(hitPos, 0x00e5ff, 10, false);
+      SFX.hit(isUpper, false);
       emitEvent('punch_hit', { side: p.punchSide, dmg: finalDmg });
     }
 
-    // Popups
-    const label = isUltra ? `ULTRA KO!! -${finalDmg}`
-      : (counterHit ? `COUNTER!! -${finalDmg}` : `-${finalDmg}`);
-    addPopup(
-      label,
-      impactX + randRange(-24, 24),
-      impactY - 26,
-      isUltra ? '#fde047' : (counterHit ? '#fde047' : '#ffffff'),
-      isUltra ? 38 : (counterHit ? 30 : 23),
-      0.72
-    );
+    const lbl = isUltra ? `ULTRA KO!! -${finalDmg}` : (counterHit ? `COUNTER!! -${finalDmg}` : `-${finalDmg}`);
+    addPopup(lbl, W / 2 + randRange(-26, 26), 310, (isUltra || counterHit) ? '#fde047' : '#ffffff', isUltra ? 36 : (counterHit ? 30 : 23), 0.72);
 
-    // Check KO!
-    if (e.hp <= 0) {
-      triggerEnemyKO();
-    }
+    if (e.hp <= 0) triggerEnemyKO();
   }
 
   function triggerEnemyKO() {
@@ -903,11 +1375,11 @@
   }
 
   function pickNextAttack() {
-    const e = state.enemy;
-    const cfg = e.cfg;
+    const cfg = state.enemy.cfg;
     const r = rand();
     if (r < cfg.upperRate) return 'duck_upper';
-    if (r < cfg.upperRate + 0.24) return 'straight';
+    if (r < cfg.upperRate + cfg.sweepRate) return 'high_sweep';
+    if (r < cfg.upperRate + cfg.sweepRate + 0.22) return 'straight';
     return rand() < 0.5 ? 'left_hook' : 'right_hook';
   }
 
@@ -917,17 +1389,14 @@
     e.attackType = attackType;
     e.comboLeft = comboRemaining;
     e.attackResolved = false;
-    // Slight variance in windup keeps players honest
-    const speedFactor = attackType === 'duck_upper' ? 1.08 : (attackType === 'straight' ? 0.94 : 1.0);
-    e.windupDur = cfg.windup * speedFactor;
+    e.guarding = false;
+    const mult = attackType === 'duck_upper' ? 1.08 : (attackType === 'high_sweep' ? 1.12 : (attackType === 'straight' ? 0.94 : 1.0));
+    e.windupDur = cfg.windup * mult;
     e.state = 'windup';
     e.stateTimer = e.windupDur;
-    e.guardHigh = false;
 
-    if (attackType === 'duck_upper') {
-      SFX.upperWarn();
-      emitEvent('upper_warn');
-    }
+    if (attackType === 'duck_upper') { SFX.upperWarn(); emitEvent('upper_warn'); }
+    else if (attackType === 'high_sweep') { SFX.sweepWarn(); emitEvent('sweep_warn'); }
   }
 
   function resolveEnemyStrike() {
@@ -935,57 +1404,46 @@
     const p = state.player;
     const diff = getDiff();
 
-    // Did player already cleanly slip this attack?
     if (e.attackResolved && p.dodgeInvuln > 0) {
-      // Enemy whiffs!
       if (e.comboLeft > 0) {
-        // Chain next hit in combo!
-        const nextAtk = pickNextAttack();
-        startEnemyAttack(nextAtk, e.comboLeft - 1);
-        // Slightly faster follow-up
+        startEnemyAttack(pickNextAttack(), e.comboLeft - 1);
         e.windupDur *= 0.88;
         e.stateTimer = e.windupDur;
       } else {
-        // Final hit whiffed -> COUNTER OPPORTUNITY!
         e.state = 'whiff';
         e.stateTimer = diff.counterWindow;
         e.counterWindow = diff.counterWindow;
-        e.counterBonus = p.dodgeQuality === 'just' ? 2.35 : 1.65;
-        if (e.attackType === 'duck_upper' && p.dodgeQuality === 'just') {
-          e.counterBonus = 2.75; // Extra reward for dodging Duck-Hunting Uppercut!
+        e.counterBonus = p.dodgeQuality === 'just' ? 2.4 : 1.65;
+        if ((e.attackType === 'duck_upper' || e.attackType === 'high_sweep') && p.dodgeQuality === 'just') {
+          e.counterBonus = 2.8;
         }
         addPopup('COUNTER CHANCE!!', W / 2, 275, '#fde047', 27, 0.70);
       }
       return;
     }
 
-    // Player gets HIT!
     const isDuckCaught = e.attackType === 'duck_upper' && p.dodgeDir === 'duck' && p.dodgeTimer > 0;
     let dmg = Math.round(e.cfg.dmg * diff.dmgMult);
-    if (isDuckCaught) {
-      dmg = Math.round(dmg * 1.85);
-    } else if (p.dodgeQuality === 'early') {
-      dmg = Math.round(dmg * (1.0 + 0.15 * diff.earlyPunish));
-    }
+    if (isDuckCaught) dmg = Math.round(dmg * 1.9);
+    else if (p.dodgeQuality === 'early') dmg = Math.round(dmg * diff.earlyMult);
 
     p.hp = Math.max(0, p.hp - dmg);
     p.combo = 0;
     p.hurtTimer = isDuckCaught ? 0.42 : 0.28;
     state.screenShake = isDuckCaught ? 28 : 18;
     state.vignetteRed = isDuckCaught ? 0.95 : 0.65;
-    state.flashAlpha = isDuckCaught ? 0.55 : 0.30;
+    state.flashAlpha = isDuckCaught ? 0.52 : 0.28;
     state.flashColor = '#ef4444';
     state.hitstop = isDuckCaught ? 0.10 : 0.05;
 
     if (isDuckCaught) {
       setBanner('DUCK CAUGHT!!', 'アッパーで顎をカチ上げられた!!', '#f43f5e', 0.85);
-      addPopup(`CRITICAL!! -${dmg}`, W / 2, 460, '#f43f5e', 36, 0.85);
-      spawnParticles(W / 2, 540, 28, ['#f43f5e', '#fde047', '#ffffff'], 160, 520, 4, 10);
-      SFX.playerHit(true);
+      addPopup(`CRITICAL!! -${dmg}`, W / 2, 465, '#f43f5e', 36, 0.85);
+      SFX.hurt(true);
       emitEvent('duck_caught', { dmg });
     } else {
       addPopup(`HIT! -${dmg}`, W / 2, 480, '#fb7185', 30, 0.68);
-      SFX.playerHit(false);
+      SFX.hurt(false);
       emitEvent('player_hit', { dmg });
     }
 
@@ -996,263 +1454,393 @@
       return;
     }
 
-    // After hitting player, enemy resets to idle
     e.state = 'idle';
     e.stateTimer = e.cfg.cooldown * 0.9;
+    e.guarding = rand() < e.cfg.guardRate;
     e.comboLeft = 0;
   }
 
   // =========================================================================
-  // SHORTS CHOREOGRAPHY (14.5s VIRAL SCRIPT — 100% REAL ENGINE RENDERED!)
+  // SHORTS CHOREOGRAPHY (14.5s — REAL THREE.JS 3D FOOTAGE!)
   // =========================================================================
-  let shortsActionsDone = new Set();
+  let shortsDone = new Set();
   function runShortsChoreography(t) {
-    const once = (key, fn) => {
-      if (!shortsActionsDone.has(key)) {
-        shortsActionsDone.add(key);
-        fn();
-      }
-    };
+    const once = (k, fn) => { if (!shortsDone.has(k)) { shortsDone.add(k); fn(); } };
 
-    // ACT 1 (0.00s - 1.15s): NUCLEAR 1-SECOND COLD OPEN — ZEUS OMEGA COUNTER KO SLAM!
-    if (t >= 0.0) {
-      once('act1_setup', () => {
-        startFight('vhard', 4, true); // ZEUS OMEGA!
-        state.player.koGauge = 100;
-        state.enemy.hp = 120;
-        state.enemy.maxHp = 580;
-        state.enemy.attackType = 'duck_upper';
-        state.enemy.windupDur = 0.42;
-        state.enemy.state = 'windup';
-        state.enemy.stateTimer = 0.24; // Immediate threat on frame 0!
-        state.swipeCue = { dir: 'right', timer: 0.24 };
-        emitEvent('cold_open_start');
-      });
-    }
-    if (t >= 0.14) {
-      once('act1_slip', () => {
-        state.enemy.stateTimer = 0.05;
-        triggerDodge('right');
-      });
-    }
-    if (t >= 0.30) {
-      once('act1_ultra', () => {
-        state.enemy.counterWindow = 1.0;
-        state.enemy.state = 'whiff';
-        state.player.koGauge = 100;
-        triggerUppercut();
-        // Fast snap into impact right at ~0.43s (under 0.5s!) for nuclear 1-sec hook!
-        state.slowMoTimer = 0;
-        state.slowMoScale = 1.0;
-      });
-    }
+    // ACT 1 (0.00 - 1.15s): NUCLEAR 1-SECOND COLD OPEN — ZEUS OMEGA 3D COUNTER KO!
+    if (t >= 0.0) once('a1_s', () => {
+      startFight('vhard', 4, true);
+      state.player.koGauge = 100;
+      state.enemy.hp = 120;
+      state.enemy.guarding = false;
+      state.enemy.attackType = 'duck_upper';
+      state.enemy.windupDur = 0.42;
+      state.enemy.state = 'windup';
+      state.enemy.stateTimer = 0.24;
+      state.swipeCue = { dir: 'right', timer: 0.22 };
+      emitEvent('cold_open_start');
+    });
+    if (t >= 0.14) once('a1_sl', () => { state.enemy.stateTimer = 0.05; triggerDodge('right'); });
+    if (t >= 0.30) once('a1_ko', () => {
+      state.enemy.counterWindow = 1.0; state.enemy.state = 'whiff';
+      state.player.koGauge = 100; triggerUppercut();
+      state.slowMoTimer = 0; state.slowMoScale = 1.0;
+    });
 
-    // ACT 2 (1.15s - 4.10s): 0-FRAME SWIPE ACTION — MARCO CRUZ (EASY BOSS)
-    if (t >= 1.15) {
-      once('act2_setup', () => {
-        startFight('easy', 4, true);
-        state.flashAlpha = 0.45;
-        state.flashColor = '#ffffff';
-        state.enemy.state = 'windup';
-        state.enemy.attackType = 'left_hook';
-        state.enemy.windupDur = 0.62;
-        state.enemy.stateTimer = 0.52;
-        state.swipeCue = { dir: 'right', timer: 0.55 };
-        emitEvent('cut_act2');
-      });
-    }
-    if (t >= 1.60) {
-      once('act2_slip1', () => {
-        state.enemy.stateTimer = 0.07;
-        triggerDodge('right');
-      });
-    }
-    if (t >= 1.92) once('act2_p1', () => { state.slowMoTimer = 0; state.slowMoScale = 1; triggerPunch('left'); });
-    if (t >= 2.14) once('act2_p2', () => triggerPunch('right'));
-    if (t >= 2.38) once('act2_p3', () => triggerUppercut());
+    // ACT 2 (1.15 - 4.10s): GUARD BREAK & 0-FRAME SWIPE COMBAT — VIPER NEON (NORMAL BOSS)
+    if (t >= 1.15) once('a2_s', () => {
+      startFight('normal', 4, true);
+      state.enemy.state = 'idle';
+      state.enemy.guarding = true;
+      state.enemy.stateTimer = 4.0;
+      state.flashAlpha = 0.42; state.flashColor = '#00e5ff';
+      emitEvent('cut_act2');
+    });
+    if (t >= 1.48) once('a2_blk', () => triggerPunch('left')); // Blocked by 3D Guard!
+    if (t >= 1.88) once('a2_brk', () => { state.swipeCue = { dir: 'up', timer: 0.35 }; triggerUppercut(); }); // GUARD BREAK!!
+    if (t >= 2.30) once('a2_c1', () => triggerPunch('right'));
+    if (t >= 2.54) once('a2_c2', () => triggerPunch('left'));
+    if (t >= 2.86) once('a2_atk', () => {
+      state.enemy.state = 'windup'; state.enemy.attackType = 'high_sweep';
+      state.enemy.windupDur = 0.56; state.enemy.stateTimer = 0.48; state.enemy.attackResolved = false;
+      state.swipeCue = { dir: 'duck', timer: 0.48 };
+      emitEvent('sweep_warn');
+    });
+    if (t >= 3.28) once('a2_dck', () => { state.enemy.stateTimer = 0.06; triggerDodge('duck'); });
+    if (t >= 3.58) once('a2_c3', () => { state.slowMoTimer = 0; state.slowMoScale = 1; triggerPunch('right'); });
+    if (t >= 3.80) once('a2_c4', () => triggerPunch('left'));
 
-    if (t >= 2.75) {
-      once('act2_atk2', () => {
-        state.enemy.state = 'windup';
-        state.enemy.attackType = 'right_hook';
-        state.enemy.windupDur = 0.52;
-        state.enemy.stateTimer = 0.46;
-        state.enemy.attackResolved = false;
-        state.swipeCue = { dir: 'left', timer: 0.48 };
-      });
-    }
-    if (t >= 3.15) {
-      once('act2_slip2', () => {
-        state.enemy.stateTimer = 0.06;
-        triggerDodge('left');
-      });
-    }
-    if (t >= 3.45) once('act2_p4', () => { state.slowMoTimer = 0; state.slowMoScale = 1; triggerPunch('right'); });
-    if (t >= 3.68) once('act2_p5', () => triggerPunch('left'));
+    // ACT 3 (4.10 - 7.40s): DUCK-HUNTING UPPERCUT TRAP! — VIKTOR KRANE (HARD 4)
+    if (t >= 4.10) once('a3_s', () => {
+      startFight('hard', 3, true);
+      state.flashAlpha = 0.40; state.flashColor = '#f43f5e';
+      state.enemy.state = 'windup'; state.enemy.attackType = 'left_hook';
+      state.enemy.windupDur = 0.50; state.enemy.stateTimer = 0.42;
+      state.swipeCue = { dir: 'duck', timer: 0.42 };
+      emitEvent('cut_act3');
+    });
+    if (t >= 4.46) once('a3_d1', () => { state.enemy.stateTimer = 0.07; triggerDodge('duck'); });
+    if (t >= 4.74) once('a3_p1', () => { state.slowMoTimer = 0; state.slowMoScale = 1; triggerPunch('left'); });
+    if (t >= 5.10) once('a3_up', () => {
+      state.enemy.state = 'windup'; state.enemy.attackType = 'duck_upper';
+      state.enemy.windupDur = 0.62; state.enemy.stateTimer = 0.56; state.enemy.attackResolved = false;
+      state.swipeCue = { dir: 'right', timer: 0.56 };
+      emitEvent('upper_warn');
+    });
+    if (t >= 5.60) once('a3_sl', () => { state.enemy.stateTimer = 0.05; triggerDodge('right'); });
+    if (t >= 5.92) once('a3_c1', () => { state.slowMoTimer = 0; state.slowMoScale = 1; triggerPunch('left'); });
+    if (t >= 6.14) once('a3_c2', () => triggerPunch('right'));
+    if (t >= 6.36) once('a3_c3', () => triggerPunch('left'));
+    if (t >= 6.60) once('a3_c4', () => triggerUppercut());
 
-    // ACT 3 (4.10s - 7.40s): DUCK-HUNTING UPPERCUT TRAP! — VIKTOR KRANE (HARD STAGE 4)
-    if (t >= 4.10) {
-      once('act3_setup', () => {
-        startFight('hard', 3, true); // Viktor Krane
-        state.flashAlpha = 0.40;
-        state.flashColor = '#f43f5e';
-        state.enemy.state = 'windup';
-        state.enemy.attackType = 'left_hook';
-        state.enemy.windupDur = 0.50;
-        state.enemy.stateTimer = 0.42;
-        state.swipeCue = { dir: 'duck', timer: 0.45 };
-        emitEvent('cut_act3');
-      });
-    }
-    if (t >= 4.46) {
-      once('act3_duck', () => {
-        state.enemy.stateTimer = 0.08;
-        triggerDodge('duck');
-      });
-    }
-    if (t >= 4.74) once('act3_p0', () => { state.slowMoTimer = 0; state.slowMoScale = 1; triggerPunch('left'); });
+    // ACT 4 (7.40 - 9.45s): 4 DIFFICULTIES x 5 MATCHES MONTAGE (TITAN REX & AZRAEL)
+    if (t >= 7.40) once('a4_t', () => {
+      startFight('hard', 4, true); // TITAN REX (Gold Crown!)
+      state.flashAlpha = 0.45; state.flashColor = '#fde047';
+      state.enemy.state = 'windup'; state.enemy.attackType = 'straight';
+      state.enemy.windupDur = 0.44; state.enemy.stateTimer = 0.34;
+      state.swipeCue = { dir: 'left', timer: 0.34 };
+      emitEvent('cut_montage', { fighter: 'TITAN REX' });
+    });
+    if (t >= 7.68) once('a4_ts', () => { state.enemy.stateTimer = 0.06; triggerDodge('left'); });
+    if (t >= 7.95) once('a4_th', () => { state.slowMoTimer = 0; state.slowMoScale = 1; triggerUppercut(); });
 
-    // Now Viktor launches DUCK-HUNTING UPPERCUT!
-    if (t >= 5.10) {
-      once('act3_upper_warn', () => {
-        state.enemy.state = 'windup';
-        state.enemy.attackType = 'duck_upper';
-        state.enemy.windupDur = 0.62;
-        state.enemy.stateTimer = 0.56;
-        state.enemy.attackResolved = false;
-        state.swipeCue = { dir: 'right', timer: 0.58 };
-        emitEvent('upper_warn');
-      });
-    }
-    if (t >= 5.60) {
-      once('act3_upper_slip', () => {
-        state.enemy.stateTimer = 0.05;
-        triggerDodge('right');
-      });
-    }
-    if (t >= 5.92) once('act3_c1', () => { state.slowMoTimer = 0; state.slowMoScale = 1; triggerPunch('left'); });
-    if (t >= 6.14) once('act3_c2', () => triggerPunch('right'));
-    if (t >= 6.36) once('act3_c3', () => triggerPunch('left'));
-    if (t >= 6.60) once('act3_c4', () => triggerUppercut());
+    if (t >= 8.40) once('a4_a', () => {
+      startFight('vhard', 3, true); // AZRAEL MOON
+      state.flashAlpha = 0.45; state.flashColor = '#f43f5e';
+      state.enemy.state = 'windup'; state.enemy.attackType = 'right_hook';
+      state.enemy.windupDur = 0.42; state.enemy.stateTimer = 0.32;
+      state.swipeCue = { dir: 'left', timer: 0.32 };
+      emitEvent('cut_montage', { fighter: 'AZRAEL' });
+    });
+    if (t >= 8.66) once('a4_as', () => { state.enemy.stateTimer = 0.05; triggerDodge('left'); });
+    if (t >= 8.94) once('a4_ah1', () => { state.slowMoTimer = 0; state.slowMoScale = 1; triggerPunch('right'); });
+    if (t >= 9.12) once('a4_ah2', () => triggerPunch('left'));
 
-    // ACT 4 (7.40s - 10.30s): 15 RIVALS RAPID BEAT-SYNCED MONTAGE!
-    if (t >= 7.40) {
-      once('act4_titan', () => {
-        startFight('hard', 4, true); // TITAN GOLD FANG REX
-        state.flashAlpha = 0.45;
-        state.flashColor = '#fde047';
-        state.enemy.state = 'windup';
-        state.enemy.attackType = 'straight';
-        state.enemy.windupDur = 0.44;
-        state.enemy.stateTimer = 0.34;
-        state.swipeCue = { dir: 'left', timer: 0.35 };
-        emitEvent('cut_montage', { fighter: 'TITAN REX' });
-      });
-    }
-    if (t >= 7.68) once('act4_titan_slip', () => { state.enemy.stateTimer = 0.06; triggerDodge('left'); });
-    if (t >= 7.95) once('act4_titan_hit', () => { state.slowMoTimer = 0; state.slowMoScale = 1; triggerUppercut(); });
-
-    if (t >= 8.40) {
-      once('act4_azrael', () => {
-        startFight('vhard', 3, true); // AZRAEL BLOOD MOON
-        state.flashAlpha = 0.45;
-        state.flashColor = '#f43f5e';
-        state.enemy.state = 'windup';
-        state.enemy.attackType = 'right_hook';
-        state.enemy.windupDur = 0.42;
-        state.enemy.stateTimer = 0.32;
-        state.swipeCue = { dir: 'left', timer: 0.32 };
-        emitEvent('cut_montage', { fighter: 'AZRAEL' });
-      });
-    }
-    if (t >= 8.66) once('act4_az_slip', () => { state.enemy.stateTimer = 0.05; triggerDodge('left'); });
-    if (t >= 8.94) once('act4_az_hit1', () => { state.slowMoTimer = 0; state.slowMoScale = 1; triggerPunch('right'); });
-    if (t >= 9.12) once('act4_az_hit2', () => triggerPunch('left'));
-
-    // ACT 5 (9.45s - 14.50s): FINAL BOSS ZEUS OMEGA 3-HIT COMBO -> ULTRA KO FINALE!
-    if (t >= 9.45) {
-      once('act5_zeus', () => {
-        startFight('vhard', 4, true); // ZEUS OMEGA
-        state.enemy.hp = 160;
-        state.player.koGauge = 60;
-        state.flashAlpha = 0.50;
-        state.flashColor = '#38bdf8';
-        state.enemy.state = 'windup';
-        state.enemy.attackType = 'left_hook';
-        state.enemy.comboLeft = 0;
-        state.enemy.windupDur = 0.44;
-        state.enemy.stateTimer = 0.42;
-        state.swipeCue = { dir: 'right', timer: 0.42 };
-        emitEvent('cut_finale');
-      });
-    }
-    if (t >= 9.81) {
-      once('act5_slip1', () => {
-        state.enemy.stateTimer = 0.05;
-        triggerDodge('right');
-      });
-    }
-    if (t >= 10.15) {
-      once('act5_chain2', () => {
-        state.slowMoTimer = 0; state.slowMoScale = 1;
-        state.enemy.state = 'windup';
-        state.enemy.attackType = 'right_hook';
-        state.enemy.comboLeft = 0;
-        state.enemy.windupDur = 0.42;
-        state.enemy.stateTimer = 0.38;
-        state.enemy.attackResolved = false;
-        state.swipeCue = { dir: 'left', timer: 0.38 };
-      });
-    }
-    if (t >= 10.48) {
-      once('act5_slip2', () => {
-        state.enemy.stateTimer = 0.05;
-        triggerDodge('left');
-      });
-    }
-    if (t >= 10.82) {
-      once('act5_chain3', () => {
-        state.slowMoTimer = 0; state.slowMoScale = 1;
-        state.enemy.state = 'windup';
-        state.enemy.attackType = 'duck_upper';
-        state.enemy.comboLeft = 0;
-        state.enemy.windupDur = 0.52;
-        state.enemy.stateTimer = 0.48;
-        state.enemy.attackResolved = false;
-        state.swipeCue = { dir: 'right', timer: 0.48 };
-        emitEvent('upper_warn');
-      });
-    }
-    if (t >= 11.24) {
-      once('act5_slip3', () => {
-        state.enemy.stateTimer = 0.04;
-        triggerDodge('right');
-      });
-    }
-    if (t >= 11.62) {
-      once('act5_ultra_ko', () => {
-        state.slowMoTimer = 0; state.slowMoScale = 1;
-        state.player.koGauge = 100;
-        state.enemy.hp = 110;
-        state.enemy.state = 'whiff';
-        state.enemy.counterWindow = 1.0;
-        triggerUppercut();
-      });
-    }
+    // ACT 5 (9.45 - 14.50s): ZEUS OMEGA 3-DIRECTION DODGE (RIGHT -> DUCK -> LEFT) -> ULTRA KO!
+    if (t >= 9.45) once('a5_s', () => {
+      startFight('vhard', 4, true);
+      state.enemy.hp = 160; state.player.koGauge = 60;
+      state.flashAlpha = 0.50; state.flashColor = '#00e5ff';
+      state.enemy.state = 'windup'; state.enemy.attackType = 'left_hook'; state.enemy.comboLeft = 0;
+      state.enemy.windupDur = 0.44; state.enemy.stateTimer = 0.42;
+      state.swipeCue = { dir: 'right', timer: 0.42 };
+      emitEvent('cut_finale');
+    });
+    if (t >= 9.81) once('a5_s1', () => { state.enemy.stateTimer = 0.05; triggerDodge('right'); });
+    if (t >= 10.15) once('a5_a2', () => {
+      state.slowMoTimer = 0; state.slowMoScale = 1;
+      state.enemy.state = 'windup'; state.enemy.attackType = 'high_sweep'; state.enemy.comboLeft = 0;
+      state.enemy.windupDur = 0.42; state.enemy.stateTimer = 0.38; state.enemy.attackResolved = false;
+      state.swipeCue = { dir: 'duck', timer: 0.38 };
+      emitEvent('sweep_warn');
+    });
+    if (t >= 10.48) once('a5_s2', () => { state.enemy.stateTimer = 0.05; triggerDodge('duck'); });
+    if (t >= 10.82) once('a5_a3', () => {
+      state.slowMoTimer = 0; state.slowMoScale = 1;
+      state.enemy.state = 'windup'; state.enemy.attackType = 'duck_upper'; state.enemy.comboLeft = 0;
+      state.enemy.windupDur = 0.52; state.enemy.stateTimer = 0.48; state.enemy.attackResolved = false;
+      state.swipeCue = { dir: 'left', timer: 0.48 };
+      emitEvent('upper_warn');
+    });
+    if (t >= 11.24) once('a5_s3', () => { state.enemy.stateTimer = 0.04; triggerDodge('left'); });
+    if (t >= 11.62) once('a5_ko', () => {
+      state.slowMoTimer = 0; state.slowMoScale = 1;
+      state.player.koGauge = 100; state.enemy.hp = 120;
+      state.enemy.state = 'whiff'; state.enemy.counterWindow = 1.0;
+      triggerUppercut();
+    });
   }
 
   // =========================================================================
-  // UPDATE LOOP
+  // 3D ANIMATION POSE UPDATER
+  // =========================================================================
+  function update3DScene(dtClamped) {
+    if (!oppRig) return;
+    const e = state.enemy;
+    const p = state.player;
+    const diff = getDiff();
+
+    // Update 3D VFX sparks & shockwaves
+    impactLight.intensity = lerp(impactLight.intensity, 0, Math.min(1, dtClamped * 14));
+    for (let i = vfx3d.length - 1; i >= 0; i--) {
+      const fx = vfx3d[i];
+      fx.life -= dtClamped;
+      if (fx.life <= 0) {
+        scene.remove(fx.mesh);
+        fx.mat.dispose();
+        vfx3d.splice(i, 1);
+        continue;
+      }
+      const prog = 1 - fx.life / fx.maxLife;
+      if (fx.type === 'ring') {
+        const sc = 0.5 + easeOutCubic(prog) * fx.maxScale;
+        fx.mesh.scale.setScalar(sc);
+        fx.mat.opacity = (1 - prog) * 0.95;
+      } else {
+        fx.vy -= 11.5 * dtClamped;
+        fx.mesh.position.x += fx.vx * dtClamped;
+        fx.mesh.position.y += fx.vy * dtClamped;
+        fx.mesh.position.z += fx.vz * dtClamped;
+        fx.mesh.rotation.x += 12 * dtClamped;
+        fx.mat.opacity = 1 - prog;
+      }
+    }
+
+    // Opponent 3D Skeleton Animation!
+    const bobX = Math.sin(e.bobPhase) * 0.08;
+    const bobY = Math.abs(Math.cos(e.bobPhase)) * 0.055;
+
+    let rootX = bobX;
+    let rootY = bobY;
+    let rootZ = -0.35 - e.hitRecoilZ * 0.35;
+    let rootRotX = 0;
+    let torsoRotY = Math.sin(e.bobPhase * 0.5) * 0.10;
+    let torsoRotX = 0.06;
+    let torsoRotZ = e.hitRecoilX * 0.25;
+
+    // Default orthodox boxing guard stance (gloves held up cleanly in front of chin!)
+    let lShX = -0.35, lShY = 0.22, lShZ = -0.14, lElX = -0.72;
+    let rShX = -0.35, rShY = -0.22, rShZ = 0.14, rElX = -0.72;
+
+    if (e.guarding && e.state === 'idle') {
+      // TIGHT 3D HIGH GUARD! Gloves tucked tightly in front of face/temples!
+      lShX = -0.58; lShY = 0.48; lShZ = 0.12; lElX = -1.05;
+      rShX = -0.58; rShY = -0.48; rShZ = -0.12; rElX = -1.05;
+      oppRig.guardShieldMat.opacity = 0.28 + 0.14 * Math.sin(state.elapsed * 8);
+      oppRig.guardShield.rotation.z = state.elapsed * 1.8;
+    } else {
+      oppRig.guardShieldMat.opacity = lerp(oppRig.guardShieldMat.opacity, 0, Math.min(1, dtClamped * 14));
+    }
+
+    // Attack Telegraph 3D Pose
+    oppRig.telegraphMat.opacity = 0;
+    oppRig.sweepArcMat.opacity = 0;
+    oppRig.leftArm.glove.userData.leatherMat.emissiveIntensity = 0.12;
+    oppRig.rightArm.glove.userData.leatherMat.emissiveIntensity = 0.12;
+
+    if (e.state === 'feint') {
+      const f = Math.sin((e.stateTimer / 0.22) * Math.PI);
+      torsoRotY += (e.feintDir === 'left_hook' ? -0.45 : 0.45) * f;
+    } else if (e.state === 'windup') {
+      const w = easeOutCubic(clamp(1 - e.stateTimer / e.windupDur, 0, 1));
+      const isJust = e.stateTimer <= diff.justWin;
+      const gTarget = new THREE.Vector3();
+
+      if (e.attackType === 'left_hook') {
+        torsoRotY = -0.68 * w;
+        lShX = lerp(-0.35, -0.55, w);
+        lShZ = lerp(-0.14, -1.08, w);
+        lElX = -0.42;
+        oppRig.leftArm.glove.userData.leatherMat.emissiveIntensity = isJust ? 1.8 : 0.9;
+        oppRig.leftArm.glove.getWorldPosition(gTarget);
+        oppRig.telegraphMat.color.setHex(isJust ? 0xfde047 : 0xf97316);
+      } else if (e.attackType === 'right_hook') {
+        torsoRotY = 0.68 * w;
+        rShX = lerp(-0.35, -0.55, w);
+        rShZ = lerp(0.14, 1.08, w);
+        rElX = -0.42;
+        oppRig.rightArm.glove.userData.leatherMat.emissiveIntensity = isJust ? 1.8 : 0.9;
+        oppRig.rightArm.glove.getWorldPosition(gTarget);
+        oppRig.telegraphMat.color.setHex(isJust ? 0xfde047 : 0xf97316);
+      } else if (e.attackType === 'straight') {
+        torsoRotY = 0.45 * w;
+        rootZ -= 0.14 * w;
+        rShX = -0.25; rShY = -0.10; rElX = -0.85;
+        oppRig.rightArm.glove.userData.leatherMat.emissiveIntensity = isJust ? 1.8 : 0.9;
+        oppRig.rightArm.glove.getWorldPosition(gTarget);
+        oppRig.telegraphMat.color.setHex(isJust ? 0xfde047 : 0x00e5ff);
+      } else if (e.attackType === 'duck_upper') {
+        // MENACING DEEP 3D CROUCH + BLAZING CRIMSON LOWER GLOVE!
+        rootY -= 0.30 * w;
+        torsoRotX = 0.30 * w;
+        torsoRotY = 0.52 * w;
+        rShX = lerp(-0.35, 0.38, w);
+        rShZ = 0.25 * w;
+        rElX = -0.25;
+        oppRig.rightArm.glove.userData.leatherMat.emissive.setHex(0xf43f5e);
+        oppRig.rightArm.glove.userData.leatherMat.emissiveIntensity = isJust ? 2.4 : 1.5;
+        oppRig.rightArm.glove.getWorldPosition(gTarget);
+        oppRig.telegraphMat.color.setHex(isJust ? 0xfde047 : 0xf43f5e);
+      } else if (e.attackType === 'high_sweep') {
+        torsoRotY = -0.72 * w;
+        lShX = -0.85; lShZ = -1.18 * w; lElX = -0.25;
+        oppRig.leftArm.glove.getWorldPosition(gTarget);
+        oppRig.telegraphMat.color.setHex(isJust ? 0xfde047 : 0x4ade80);
+        oppRig.sweepArcMat.color.setHex(isJust ? 0xfde047 : 0x4ade80);
+        oppRig.sweepArcMat.opacity = 0.38 + w * 0.55;
+        oppRig.sweepArc.rotation.z = -w * 0.7;
+      }
+
+      if (!e.attackResolved) {
+        oppRig.telegraphRing.position.copy(gTarget);
+        oppRig.telegraphRing.lookAt(camera.position);
+        const shrink = 0.65 + (e.stateTimer / e.windupDur) * 1.45;
+        oppRig.telegraphRing.scale.setScalar(shrink);
+        oppRig.telegraphMat.opacity = isJust ? 1.0 : 0.80;
+      }
+    } else if (e.state === 'strike') {
+      rootZ += 0.65;
+      if (e.attackType === 'left_hook' || e.attackType === 'high_sweep') {
+        torsoRotY = 0.72; lShX = -0.95; lShY = 0.65; lElX = -0.15;
+        if (e.attackType === 'high_sweep') { oppRig.sweepArcMat.opacity = 0.9; oppRig.sweepArc.rotation.z = 0.6; }
+      } else if (e.attackType === 'right_hook') {
+        torsoRotY = -0.72; rShX = -0.95; rShY = -0.65; rElX = -0.15;
+      } else if (e.attackType === 'straight') {
+        torsoRotY = -0.35; rShX = -1.25; rShY = 0.12; rElX = 0.0;
+      } else if (e.attackType === 'duck_upper') {
+        rootY += 0.14; torsoRotX = -0.20; rShX = -1.45; rElX = -0.85;
+      }
+    } else if (e.state === 'whiff' || e.state === 'stunned') {
+      // Arms flung wide open -> JAW EXPOSED!
+      lShX = 0.10; lShZ = -0.88; lElX = -0.25;
+      rShX = 0.10; rShZ = 0.88; rElX = -0.25;
+      torsoRotX = -0.12;
+      if (e.state === 'stunned') torsoRotZ += Math.sin(state.elapsed * 22) * 0.18;
+    } else if (e.state === 'ko') {
+      const k = easeOutCubic(e.koProgress);
+      rootRotX = -k * 1.52;
+      rootZ -= k * 1.35;
+      rootY -= k * 0.38;
+      lShX = -0.2; lShZ = -1.2; rShX = -0.2; rShZ = 1.2;
+    }
+
+    oppRig.root.position.set(rootX, rootY, rootZ);
+    oppRig.root.rotation.x = rootRotX;
+    oppRig.torsoPivot.rotation.set(torsoRotX + e.hitRecoilY * 0.35, torsoRotY, torsoRotZ);
+    oppRig.headPivot.rotation.set(e.hitRecoilY * 0.65, e.hitRecoilX * 0.72, e.hitRecoilX * 0.32);
+
+    const armLerp = Math.min(1, dtClamped * 24);
+    oppRig.leftArm.shoulder.rotation.x = lerp(oppRig.leftArm.shoulder.rotation.x, lShX, armLerp);
+    oppRig.leftArm.shoulder.rotation.y = lerp(oppRig.leftArm.shoulder.rotation.y, lShY, armLerp);
+    oppRig.leftArm.shoulder.rotation.z = lerp(oppRig.leftArm.shoulder.rotation.z, lShZ, armLerp);
+    oppRig.leftArm.elbow.rotation.x = lerp(oppRig.leftArm.elbow.rotation.x, lElX, armLerp);
+
+    oppRig.rightArm.shoulder.rotation.x = lerp(oppRig.rightArm.shoulder.rotation.x, rShX, armLerp);
+    oppRig.rightArm.shoulder.rotation.y = lerp(oppRig.rightArm.shoulder.rotation.y, rShY, armLerp);
+    oppRig.rightArm.shoulder.rotation.z = lerp(oppRig.rightArm.shoulder.rotation.z, rShZ, armLerp);
+    oppRig.rightArm.elbow.rotation.x = lerp(oppRig.rightArm.elbow.rotation.x, rElX, armLerp);
+
+    oppRig.skinMat.emissive.setHex(e.hitFlash > 0.02 ? 0xffffff : 0x000000);
+    oppRig.skinMat.emissiveIntensity = e.hitFlash > 0.02 ? 0.55 : 0;
+    oppRig.eyeMat.color.setHex(e.attackType === 'duck_upper' && e.state === 'windup' ? 0xf43f5e : oppRig.baseNeonHex);
+
+    // FIRST-PERSON 3D CAMERA & PLAYER GLOVES!
+    let tCamX = Math.sin(state.elapsed * 2.2) * 0.03;
+    let tCamY = Math.cos(state.elapsed * 4.4) * 0.02;
+    let tCamZ = 0;
+    let tRoll = 0;
+
+    if (p.dodgeTimer > 0) {
+      const env = Math.sin((p.dodgeTimer / p.dodgeDur) * Math.PI);
+      if (p.dodgeDir === 'left') { tCamX = -0.58 * env; tCamY = -0.10 * env; tRoll = 0.16 * env; }
+      else if (p.dodgeDir === 'right') { tCamX = 0.58 * env; tCamY = -0.10 * env; tRoll = -0.16 * env; }
+      else if (p.dodgeDir === 'duck') { tCamY = -0.48 * env; tCamZ = 0.08 * env; }
+    }
+    if (p.hurtTimer > 0) {
+      tCamY += 0.14 * (p.hurtTimer / 0.35);
+      tRoll += Math.sin(state.elapsed * 48) * 0.14;
+    }
+
+    const ce = Math.min(1, dtClamped * 20);
+    state.camOffX = lerp(state.camOffX, tCamX, ce);
+    state.camOffY = lerp(state.camOffY, tCamY, ce);
+    state.camOffZ = lerp(state.camOffZ, tCamZ, ce);
+    state.camRoll = lerp(state.camRoll, tRoll, ce);
+
+    const sx = (rand() - 0.5) * 0.011 * state.screenShake;
+    const sy = (rand() - 0.5) * 0.011 * state.screenShake;
+    camera.position.set(state.camOffX + sx, 1.60 + state.camOffY + sy, 2.88 + state.camOffZ);
+    camera.lookAt(state.camOffX * 0.25, 1.38 + state.camOffY * 0.35, -0.35);
+    camera.rotation.z += state.camRoll;
+
+    // Foreground 3D Player Gloves Pose & Punch Lunges!
+    const gBob = Math.sin(state.elapsed * 3.8) * 0.022;
+    let lx = -0.30, ly = -0.34 + gBob, lz = -0.88;
+    let rx = 0.30, ry = -0.34 - gBob, rz = -0.88;
+    const ultraReady = p.koGauge >= 100;
+
+    pLeftGlove.userData.leatherMat.color.setHex(ultraReady ? 0xf59e0b : 0x0284c7);
+    pRightGlove.userData.leatherMat.color.setHex(ultraReady ? 0xf59e0b : 0x0284c7);
+    pLeftGlove.userData.leatherMat.emissive.setHex(ultraReady ? 0xfde047 : 0x00e5ff);
+    pRightGlove.userData.leatherMat.emissive.setHex(ultraReady ? 0xfde047 : 0x00e5ff);
+    pLeftGlove.userData.leatherMat.emissiveIntensity = ultraReady ? 0.52 : (e.counterWindow > 0 ? 0.32 : 0.14);
+    pRightGlove.userData.leatherMat.emissiveIntensity = ultraReady ? 0.52 : (e.counterWindow > 0 ? 0.32 : 0.14);
+
+    if (p.punchTimer > 0) {
+      const prog = 1 - p.punchTimer / p.punchDur;
+      const thrust = Math.sin(prog * Math.PI);
+      if (p.punchSide === 'left') {
+        lx = lerp(-0.30, -0.05, thrust);
+        ly = lerp(-0.34, 0.04, thrust);
+        lz = lerp(-0.88, -2.45, thrust);
+      } else if (p.punchSide === 'right') {
+        rx = lerp(0.30, 0.05, thrust);
+        ry = lerp(-0.34, 0.04, thrust);
+        rz = lerp(-0.88, -2.45, thrust);
+      } else if (p.punchSide === 'upper' || p.punchSide === 'ultra') {
+        const up = easeOutCubic(thrust);
+        rx = lerp(0.24, 0.0, up);
+        ry = lerp(-0.56, 0.14, up);
+        rz = lerp(-0.88, p.punchSide === 'ultra' ? -2.60 : -2.38, up);
+      }
+    }
+
+    pLeftGlove.position.set(lx, ly, lz);
+    pRightGlove.position.set(rx, ry, rz);
+  }
+
+  // =========================================================================
+  // MAIN SIMULATION STEP
   // =========================================================================
   function update(rawDt) {
-    const dtClamped = Math.min(rawDt, 0.05);
+    const dtClamped = Math.max(0, Math.min(Number.isFinite(rawDt) ? rawDt : 1 / 60, 0.05));
     state.elapsed += dtClamped;
     if (SHORTS_MODE) {
       shortsElapsed += dtClamped;
       runShortsChoreography(shortsElapsed);
     }
 
-    // Decay visual overlays even during hitstop
     if (state.flashAlpha > 0) state.flashAlpha = Math.max(0, state.flashAlpha - dtClamped * 2.6);
     if (state.screenShake > 0) state.screenShake = Math.max(0, state.screenShake - dtClamped * 58);
     if (state.speedLines > 0) state.speedLines = Math.max(0, state.speedLines - dtClamped * 1.4);
@@ -1263,34 +1851,6 @@
     }
     if (state.swipeCue.timer > 0) state.swipeCue.timer = Math.max(0, state.swipeCue.timer - dtClamped);
 
-    // Hitstop freeze for juicy punch impact!
-    if (state.hitstop > 0) {
-      state.hitstop = Math.max(0, state.hitstop - dtClamped);
-      return;
-    }
-
-    // Slow-motion scaling
-    let timeScale = 1.0;
-    if (state.slowMoTimer > 0) {
-      state.slowMoTimer = Math.max(0, state.slowMoTimer - dtClamped);
-      timeScale = state.slowMoScale;
-    }
-    const dt = dtClamped * timeScale;
-
-    // Update particles & rings & popups & crowd flashes
-    for (let i = state.particles.length - 1; i >= 0; i--) {
-      const pt = state.particles[i];
-      pt.life -= dtClamped;
-      if (pt.life <= 0) { state.particles.splice(i, 1); continue; }
-      pt.vy += pt.grav * dtClamped;
-      pt.x += pt.vx * dtClamped;
-      pt.y += pt.vy * dtClamped;
-    }
-    for (let i = state.rings.length - 1; i >= 0; i--) {
-      const rg = state.rings[i];
-      rg.timer -= dtClamped;
-      if (rg.timer <= 0) state.rings.splice(i, 1);
-    }
     for (let i = state.popups.length - 1; i >= 0; i--) {
       const pp = state.popups[i];
       pp.timer -= dtClamped;
@@ -1298,19 +1858,35 @@
       pp.vy *= 0.92;
       if (pp.timer <= 0) state.popups.splice(i, 1);
     }
-    for (let i = state.crowdFlashes.length - 1; i >= 0; i--) {
-      const cf = state.crowdFlashes[i];
-      cf.timer -= dtClamped;
-      if (cf.timer <= 0) state.crowdFlashes.splice(i, 1);
+
+    if (state.screen === 'title' || state.screen === 'select') {
+      state.enemy.bobPhase += dtClamped * 2.5;
+      update3DScene(dtClamped);
+      return;
     }
 
-    if (state.screen !== 'fight') return;
+    if (state.hitstop > 0) {
+      state.hitstop = Math.max(0, state.hitstop - dtClamped);
+      update3DScene(dtClamped * 0.08);
+      return;
+    }
+
+    let timeScale = 1.0;
+    if (state.slowMoTimer > 0) {
+      state.slowMoTimer = Math.max(0, state.slowMoTimer - dtClamped);
+      timeScale = state.slowMoScale;
+    }
+    const dt = dtClamped * timeScale;
+
+    if (state.screen !== 'fight') {
+      update3DScene(dtClamped);
+      return;
+    }
 
     state.fightTime += dt;
     const p = state.player;
     const e = state.enemy;
 
-    // Player timers
     if (p.dodgeTimer > 0) {
       p.dodgeTimer = Math.max(0, p.dodgeTimer - dt);
       if (p.dodgeTimer === 0) p.dodgeDir = 'none';
@@ -1328,90 +1904,42 @@
       if (p.punchTimer === 0) p.punchSide = 'none';
     }
 
-    // First-person 3D Camera Motion
-    let targetCamX = Math.sin(state.elapsed * 2.2) * 5;
-    let targetCamY = Math.cos(state.elapsed * 4.4) * 3;
-    let targetRoll = 0;
-    let targetFov = 0;
-
-    if (p.dodgeTimer > 0) {
-      const env = Math.sin((p.dodgeTimer / p.dodgeDur) * Math.PI);
-      if (p.dodgeDir === 'left') {
-        targetCamX = -92 * env;
-        targetCamY = 18 * env;
-        targetRoll = -0.14 * env;
-      } else if (p.dodgeDir === 'right') {
-        targetCamX = 92 * env;
-        targetCamY = 18 * env;
-        targetRoll = 0.14 * env;
-      } else if (p.dodgeDir === 'duck') {
-        targetCamY = 105 * env;
-        targetFov = -0.05 * env;
-      }
-    }
-    if (p.punchTimer > 0) {
-      const pEnv = Math.sin((p.punchTimer / p.punchDur) * Math.PI);
-      targetFov += (p.punchSide === 'ultra' ? 0.16 : 0.06) * pEnv;
-      if (p.punchSide === 'left') targetRoll += 0.04 * pEnv;
-      if (p.punchSide === 'right') targetRoll -= 0.04 * pEnv;
-    }
-    if (p.hurtTimer > 0) {
-      targetCamY -= 38 * (p.hurtTimer / 0.35);
-      targetRoll += Math.sin(state.elapsed * 45) * 0.12;
-    }
-
-    const camEase = Math.min(1, dtClamped * 20);
-    state.camX = lerp(state.camX, targetCamX, camEase);
-    state.camY = lerp(state.camY, targetCamY, camEase);
-    state.camRoll = lerp(state.camRoll, targetRoll, camEase);
-    state.camFovBoost = lerp(state.camFovBoost, targetFov, camEase);
-
-    // Enemy recoil decay
-    e.hitRecoilX = lerp(e.hitRecoilX, 0, Math.min(1, dtClamped * 12));
-    e.hitRecoilY = lerp(e.hitRecoilY, 0, Math.min(1, dtClamped * 12));
+    e.hitRecoilX = lerp(e.hitRecoilX, 0, Math.min(1, dtClamped * 11));
+    e.hitRecoilY = lerp(e.hitRecoilY, 0, Math.min(1, dtClamped * 11));
     e.hitRecoilZ = lerp(e.hitRecoilZ, 0, Math.min(1, dtClamped * 10));
     if (e.hitFlash > 0) e.hitFlash = Math.max(0, e.hitFlash - dtClamped);
     if (e.counterWindow > 0) e.counterWindow = Math.max(0, e.counterWindow - dt);
     e.bobPhase += dt * (e.state === 'stunned' ? 9.5 : 3.8);
 
-    // Enemy State Machine
     if (e.state === 'ko') {
       e.koProgress = Math.min(1, e.koProgress + dt * 1.15);
       e.stateTimer -= dtClamped;
-      if (e.stateTimer <= 0 && !SHORTS_MODE) {
-        state.screen = 'victory';
-      }
+      if (e.stateTimer <= 0 && !SHORTS_MODE) state.screen = 'victory';
+      update3DScene(dtClamped);
       return;
     }
 
     e.stateTimer -= dt;
 
     if (e.state === 'intro') {
-      if (e.stateTimer <= 0) {
-        e.state = 'idle';
-        e.stateTimer = 0.45;
-      }
+      if (e.stateTimer <= 0) { e.state = 'idle'; e.stateTimer = 0.45; }
     } else if (e.state === 'idle') {
-      // Toggle guard organically
-      e.guardHigh = Math.sin(state.elapsed * 2.5 + state.stageIdx) > -0.15;
       if (e.stateTimer <= 0 && !SHORTS_MODE) {
-        // Decide feint or direct attack
         const nextAtk = pickNextAttack();
-        const comboCnt = rand() < 0.45 ? randInt(0, e.cfg.comboMax - 1) : 0;
+        const comboCnt = rand() < 0.48 ? randInt(0, e.cfg.comboMax - 1) : 0;
         if (rand() < e.cfg.feintRate) {
           e.state = 'feint';
           e.feintDir = nextAtk === 'left_hook' ? 'right_hook' : 'left_hook';
           e.attackType = nextAtk;
           e.comboLeft = comboCnt;
+          e.guarding = false;
           e.stateTimer = 0.22;
         } else {
           startEnemyAttack(nextAtk, comboCnt);
         }
       }
     } else if (e.state === 'feint') {
-      if (e.stateTimer <= 0 && !SHORTS_MODE) {
-        startEnemyAttack(e.attackType, e.comboLeft);
-      }
+      if (e.stateTimer <= 0 && !SHORTS_MODE) startEnemyAttack(e.attackType, e.comboLeft);
     } else if (e.state === 'windup') {
       if (e.stateTimer <= 0) {
         e.state = 'strike';
@@ -1420,843 +1948,133 @@
       }
     } else if (e.state === 'strike') {
       if (e.stateTimer <= 0) {
-        if (e.attackResolved) {
-          resolveEnemyStrike();
-        } else {
-          e.state = 'idle';
-          e.stateTimer = e.cfg.cooldown;
-        }
+        if (e.attackResolved) resolveEnemyStrike();
+        else { e.state = 'idle'; e.stateTimer = e.cfg.cooldown; e.guarding = rand() < e.cfg.guardRate; }
       }
     } else if (e.state === 'whiff' || e.state === 'stunned') {
       if (e.stateTimer <= 0 && !SHORTS_MODE) {
         e.state = 'idle';
         e.stateTimer = e.cfg.cooldown * 0.72;
+        e.guarding = rand() < e.cfg.guardRate;
         e.counterWindow = 0;
       }
     }
+
+    update3DScene(dtClamped);
   }
 
   // =========================================================================
-  // 3D PERSPECTIVE RENDERER (ARENA + ARTICULATED BOXER + 1ST-PERSON GLOVES)
+  // HUD & UI OVERLAY RENDERER
   // =========================================================================
-  function drawArena(cx, cy) {
-    const cfg = state.enemy.cfg;
-    const tint = cfg.arenaTint || '#1d4ed8';
-
-    // Deep arena ceiling & crowd bowl
-    const skyG = ctx.createLinearGradient(0, 0, 0, H);
-    skyG.addColorStop(0, '#04050b');
-    skyG.addColorStop(0.32, '#0b0e1c');
-    skyG.addColorStop(0.56, '#14182a');
-    skyG.addColorStop(0.68, '#1e2438');
-    skyG.addColorStop(1, '#0b0e18');
-    ctx.fillStyle = skyG;
-    ctx.fillRect(0, 0, W, H);
-
-    // Arena colored dramatic glow behind boxer
-    const auraG = ctx.createRadialGradient(cx, cy - 110, 20, cx, cy - 100, 390);
-    auraG.addColorStop(0, tint + '88');
-    auraG.addColorStop(0.5, tint + '28');
-    auraG.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = auraG;
-    ctx.fillRect(0, 0, W, H);
-
-    // Overhead volumetric arena spotlights (sweeping slightly)
-    ctx.save();
-    for (let i = -1; i <= 1; i++) {
-      const sway = Math.sin(state.elapsed * 0.9 + i * 2.1) * 32;
-      const sx = cx + i * 170;
-      const sg = ctx.createLinearGradient(sx, 0, sx + sway, 620);
-      sg.addColorStop(0, 'rgba(255,255,255,0.20)');
-      sg.addColorStop(0.55, 'rgba(200,230,255,0.06)');
-      sg.addColorStop(1, 'rgba(200,230,255,0)');
-      ctx.fillStyle = sg;
-      ctx.beginPath();
-      ctx.moveTo(sx - 24, -10);
-      ctx.lineTo(sx + 24, -10);
-      ctx.lineTo(sx + 135 + sway, 640);
-      ctx.lineTo(sx - 135 + sway, 640);
-      ctx.closePath();
-      ctx.fill();
-    }
-    ctx.restore();
-
-    // Distant arena stadium tiers & bokeh lights
-    ctx.save();
-    for (let i = 0; i < 28; i++) {
-      const lx = ((i * 73 + 29) % (W + 120)) - 60 + (cx - W / 2) * 0.18;
-      const ly = 135 + ((i * 37) % 210);
-      const pulse = 0.22 + 0.18 * Math.sin(state.elapsed * 3 + i);
-      ctx.fillStyle = i % 3 === 0 ? `rgba(56,189,248,${pulse})` : (i % 3 === 1 ? `rgba(253,224,71,${pulse * 0.85})` : `rgba(255,255,255,${pulse * 0.7})`);
-      ctx.beginPath();
-      ctx.arc(lx, ly, 2.5 + (i % 3) * 1.4, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    // Camera flashes in crowd!
-    for (const cf of state.crowdFlashes) {
-      const a = (cf.timer / cf.dur);
-      const fg = ctx.createRadialGradient(cf.x, cf.y, 1, cf.x, cf.y, cf.r);
-      fg.addColorStop(0, `rgba(255,255,255,${a * 0.95})`);
-      fg.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.fillStyle = fg;
-      ctx.beginPath();
-      ctx.arc(cf.x, cf.y, cf.r, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.restore();
-
-    // Ring Horizon & 3D Canvas Mat
-    const horizonY = cy + 125;
-    const matG = ctx.createLinearGradient(0, horizonY, 0, H);
-    matG.addColorStop(0, '#1e293b');
-    matG.addColorStop(0.45, '#334155');
-    matG.addColorStop(1, '#0f172a');
-    ctx.fillStyle = matG;
-    ctx.beginPath();
-    ctx.moveTo(-80, H + 40);
-    ctx.lineTo(W + 80, H + 40);
-    ctx.lineTo(cx + 380, horizonY);
-    ctx.lineTo(cx - 380, horizonY);
-    ctx.closePath();
-    ctx.fill();
-
-    // Perspective mat grid lines & center ring emblem
-    ctx.save();
-    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-    ctx.lineWidth = 2;
-    for (let i = -4; i <= 4; i++) {
-      ctx.beginPath();
-      ctx.moveTo(cx + i * 68, horizonY);
-      ctx.lineTo(cx + i * 195, H + 20);
-      ctx.stroke();
-    }
-    // Center ring circle in perspective
-    ctx.strokeStyle = tint + '55';
-    ctx.lineWidth = 5;
-    ctx.beginPath();
-    ctx.ellipse(cx, horizonY + 125, 220, 42, 0, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Corner Posts (left & right background)
-    const postL = cx - 255;
-    const postR = cx + 255;
-    for (const [px, col] of [[postL, '#dc2626'], [postR, '#2563eb']]) {
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(px - 16, horizonY - 220, 32, 232);
-      ctx.fillStyle = col;
-      ctx.fillRect(px - 12, horizonY - 208, 24, 210);
-      ctx.fillStyle = 'rgba(255,255,255,0.28)';
-      ctx.fillRect(px - 8, horizonY - 208, 6, 210);
-    }
-
-    // 3-Tier Taut Boxing Ropes (back wall + perspective sides)
-    const ropeYs = [horizonY - 178, horizonY - 118, horizonY - 58];
-    const ropeCols = ['#ef4444', '#f8fafc', '#3b82f6'];
-    for (let r = 0; r < 3; r++) {
-      const ry = ropeYs[r];
-      ctx.strokeStyle = ropeCols[r];
-      ctx.lineWidth = 7;
-      ctx.beginPath();
-      ctx.moveTo(postL, ry);
-      ctx.lineTo(postR, ry);
-      ctx.stroke();
-      // Side perspective ropes going toward viewer
-      ctx.lineWidth = 9;
-      ctx.beginPath();
-      ctx.moveTo(postL, ry);
-      ctx.lineTo(-90, ry + 135 + r * 35);
-      ctx.moveTo(postR, ry);
-      ctx.lineTo(W + 90, ry + 135 + r * 35);
-      ctx.stroke();
-      // Highlight glint
-      ctx.strokeStyle = 'rgba(255,255,255,0.35)';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(postL, ry - 2);
-      ctx.lineTo(postR, ry - 2);
-      ctx.stroke();
-    }
-    ctx.restore();
+  function registerBtn(x, y, w, h, onClick) {
+    state.uiButtons.push({ x, y, w, h, onClick });
+  }
+  function drawSmallBtn(x, y, w, h, label, onClick) {
+    ctx.fillStyle = 'rgba(8,12,24,0.86)';
+    ctx.beginPath(); ctx.roundRect(x, y, w, h, 999); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,229,255,0.45)'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.font = '800 12px "Noto Sans JP", sans-serif';
+    ctx.textAlign = 'center'; ctx.fillStyle = '#f8fafc';
+    ctx.fillText(label, x + w / 2, y + 19);
+    registerBtn(x, y, w, h, onClick);
   }
 
-  function drawGlove3D(x, y, radius, mainCol, trimCol, glowCol = null, glowAlpha = 0) {
-    ctx.save();
-    if (glowCol && glowAlpha > 0.02) {
-      ctx.shadowColor = glowCol;
-      ctx.shadowBlur = 32 * glowAlpha;
-    }
-    // Main leather body
-    const g = ctx.createRadialGradient(x - radius * 0.28, y - radius * 0.32, radius * 0.12, x, y, radius * 1.05);
-    g.addColorStop(0, '#ffffff');
-    g.addColorStop(0.22, mainCol);
-    g.addColorStop(0.82, mainCol);
-    g.addColorStop(1, '#09090b');
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.ellipse(x, y, radius * 1.04, radius * 0.94, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Thumb cushion
-    ctx.fillStyle = mainCol;
-    ctx.beginPath();
-    ctx.ellipse(x - radius * 0.72, y + radius * 0.16, radius * 0.34, radius * 0.44, -0.3, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Specular leather highlight
-    ctx.fillStyle = 'rgba(255,255,255,0.32)';
-    ctx.beginPath();
-    ctx.ellipse(x - radius * 0.25, y - radius * 0.35, radius * 0.36, radius * 0.18, -0.4, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Wrist cuff tape
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = trimCol;
-    ctx.beginPath();
-    ctx.roundRect(x - radius * 0.56, y + radius * 0.68, radius * 1.12, radius * 0.42, 8);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  function drawOpponent3D(cx, cy) {
+  function drawFightHUD() {
     const e = state.enemy;
+    const p = state.player;
     const cfg = e.cfg;
-    const bobX = Math.sin(e.bobPhase) * 12;
-    const bobY = Math.abs(Math.cos(e.bobPhase)) * 10;
-
-    // 3D depth scale (recoil pushes enemy back, windup/strike lunges forward!)
-    let zScale = cfg.scale * (1 - e.hitRecoilZ * 0.20);
-    let offsetX = bobX + e.hitRecoilX * 62;
-    let offsetY = bobY + e.hitRecoilY * 36;
-    let bodyTilt = e.hitRecoilX * 0.22;
-
-    // Attack windup & lunge kinematics
-    let windupProg = 0;
-    let attackPhase = 'none';
-    if (e.state === 'windup') {
-      windupProg = clamp(1 - e.stateTimer / e.windupDur, 0, 1);
-      attackPhase = 'windup';
-      if (e.attackType === 'duck_upper') {
-        // Crouches deep to launch Duck-Hunting Uppercut!
-        offsetY += easeOutCubic(windupProg) * 58;
-        zScale *= 1 + windupProg * 0.08;
-      } else if (e.attackType === 'left_hook') {
-        offsetX -= easeOutCubic(windupProg) * 46;
-        bodyTilt -= easeOutCubic(windupProg) * 0.16;
-      } else if (e.attackType === 'right_hook') {
-        offsetX += easeOutCubic(windupProg) * 46;
-        bodyTilt += easeOutCubic(windupProg) * 0.16;
-      } else {
-        zScale *= 1 - windupProg * 0.06;
-      }
-    } else if (e.state === 'strike') {
-      attackPhase = 'strike';
-      zScale *= 1.18;
-      offsetY -= 12;
-    } else if (e.state === 'whiff') {
-      bodyTilt += (e.attackType === 'left_hook' ? 0.24 : -0.24);
-      offsetY += 16;
-    } else if (e.state === 'stunned') {
-      offsetX += Math.sin(state.elapsed * 28) * 14;
-      bodyTilt += Math.sin(state.elapsed * 16) * 0.14;
-    } else if (e.state === 'feint') {
-      offsetX += (e.feintDir === 'left_hook' ? -28 : 28) * Math.sin((e.stateTimer / 0.22) * Math.PI);
-    } else if (e.state === 'ko') {
-      const k = easeOutCubic(e.koProgress);
-      offsetY += k * 255;
-      zScale *= Math.max(0.42, 1 - k * 0.48);
-      bodyTilt += k * 0.55;
-    }
-
-    const bx = cx + offsetX;
-    const by = cy + 68 + offsetY;
-
-    ctx.save();
-    ctx.translate(bx, by);
-    ctx.rotate(bodyTilt);
-    ctx.scale(zScale, zScale);
-
-    // Boss / God Energy Aura
-    if (cfg.aura && e.state !== 'ko') {
-      const auraR = 175 + Math.sin(state.elapsed * 8) * 12;
-      const ag = ctx.createRadialGradient(0, -110, 30, 0, -110, auraR);
-      ag.addColorStop(0, cfg.aura + '55');
-      ag.addColorStop(0.6, cfg.aura + '1a');
-      ag.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = ag;
-      ctx.beginPath();
-      ctx.arc(0, -110, auraR, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // Ground Contact Shadow
-    ctx.fillStyle = 'rgba(0,0,0,0.48)';
-    ctx.beginPath();
-    ctx.ellipse(0, 175, 110 * cfg.bulk, 24, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Trunks & Belt
-    const waistW = 74 * cfg.bulk;
-    ctx.fillStyle = cfg.trunks;
-    ctx.beginPath();
-    ctx.roundRect(-waistW, 56, waistW * 2, 108, 16);
-    ctx.fill();
-    // Side stripe on trunks
-    ctx.fillStyle = cfg.trunksTrim;
-    ctx.fillRect(-waistW + 6, 66, 12, 88);
-    ctx.fillRect(waistW - 18, 66, 12, 88);
-    // Waistband / Championship Belt
-    ctx.fillStyle = cfg.belt ? cfg.belt : cfg.trunksTrim;
-    ctx.fillRect(-waistW - 2, 48, waistW * 2 + 4, 22);
-    if (cfg.belt) {
-      ctx.fillStyle = '#fef9c3';
-      ctx.beginPath();
-      ctx.ellipse(0, 59, 26, 15, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = '#92400e';
-      ctx.lineWidth = 3;
-      ctx.stroke();
-    }
-
-    // Muscular Sculpted Torso (3D gradient shading)
-    const shW = 104 * cfg.bulk;
-    const torsoG = ctx.createLinearGradient(-shW, -120, shW, 60);
-    torsoG.addColorStop(0, cfg.skinShade);
-    torsoG.addColorStop(0.32, cfg.skin);
-    torsoG.addColorStop(0.68, cfg.skin);
-    torsoG.addColorStop(1, cfg.skinShade);
-    ctx.fillStyle = e.hitFlash > 0.04 ? '#ffffff' : torsoG;
-    ctx.beginPath();
-    ctx.moveTo(-shW, -108);
-    ctx.quadraticCurveTo(0, -132, shW, -108);
-    ctx.lineTo(waistW, 56);
-    ctx.lineTo(-waistW, 56);
-    ctx.closePath();
-    ctx.fill();
-
-    // Pecs & Abs definition
-    if (e.hitFlash <= 0.04) {
-      ctx.strokeStyle = cfg.skinShade;
-      ctx.lineWidth = 3.5;
-      ctx.beginPath();
-      // Pecs
-      ctx.moveTo(-shW * 0.68, -42);
-      ctx.quadraticCurveTo(-shW * 0.30, -26, -6, -42);
-      ctx.moveTo(shW * 0.68, -42);
-      ctx.quadraticCurveTo(shW * 0.30, -26, 6, -42);
-      // Abs centerline
-      ctx.moveTo(0, -40);
-      ctx.lineTo(0, 34);
-      ctx.stroke();
-    }
-
-    // Shoulders (Deltoids)
-    for (const sx of [-shW + 6, shW - 6]) {
-      const dg = ctx.createRadialGradient(sx - 10, -106, 6, sx, -92, 46 * cfg.bulk);
-      dg.addColorStop(0, cfg.skin);
-      dg.addColorStop(1, cfg.skinShade);
-      ctx.fillStyle = e.hitFlash > 0.04 ? '#ffffff' : dg;
-      ctx.beginPath();
-      ctx.arc(sx, -92, 40 * cfg.bulk, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // Neck
-    ctx.fillStyle = cfg.skinShade;
-    ctx.fillRect(-24, -158, 48, 46);
-
-    // HEAD (snaps dynamically on hit!)
-    const headSnapX = e.hitRecoilX * 26;
-    const headSnapY = e.hitRecoilY * 22;
-    ctx.save();
-    ctx.translate(headSnapX, -196 + headSnapY);
-    ctx.rotate(e.hitRecoilX * 0.32);
-
-    // Ears
-    ctx.fillStyle = cfg.skinShade;
-    ctx.beginPath();
-    ctx.ellipse(-52, 4, 10, 18, 0, 0, Math.PI * 2);
-    ctx.ellipse(52, 4, 10, 18, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Head cranium & jaw
-    const headG = ctx.createRadialGradient(-16, -24, 10, 0, 0, 68);
-    headG.addColorStop(0, cfg.skin);
-    headG.addColorStop(0.75, cfg.skin);
-    headG.addColorStop(1, cfg.skinShade);
-    ctx.fillStyle = e.hitFlash > 0.04 ? '#fff7ed' : headG;
-    ctx.beginPath();
-    ctx.moveTo(-50, -18);
-    ctx.quadraticCurveTo(-52, -66, 0, -68);
-    ctx.quadraticCurveTo(52, -66, 50, -18);
-    ctx.lineTo(42, 34);
-    ctx.quadraticCurveTo(0, 66, -42, 34);
-    ctx.closePath();
-    ctx.fill();
-
-    // Hair Styles
-    ctx.fillStyle = cfg.hair;
-    if (cfg.hairStyle === 'short') {
-      ctx.beginPath();
-      ctx.arc(0, -24, 52, Math.PI * 1.04, Math.PI * 1.96);
-      ctx.fill();
-    } else if (cfg.hairStyle === 'spiky') {
-      ctx.beginPath();
-      ctx.moveTo(-52, -24);
-      ctx.lineTo(-42, -74); ctx.lineTo(-22, -58);
-      ctx.lineTo(0, -86); ctx.lineTo(22, -58);
-      ctx.lineTo(42, -74); ctx.lineTo(52, -24);
-      ctx.closePath();
-      ctx.fill();
-    } else if (cfg.hairStyle === 'mohawk') {
-      ctx.beginPath();
-      ctx.moveTo(-16, -34);
-      ctx.lineTo(-14, -96);
-      ctx.lineTo(0, -104);
-      ctx.lineTo(14, -96);
-      ctx.lineTo(16, -34);
-      ctx.closePath();
-      ctx.fill();
-    } else if (cfg.hairStyle === 'slick') {
-      ctx.beginPath();
-      ctx.moveTo(-52, -22);
-      ctx.quadraticCurveTo(-20, -84, 48, -56);
-      ctx.lineTo(52, -22);
-      ctx.closePath();
-      ctx.fill();
-    }
-
-    // Accessories (Headband / Crown / Visor / Scar / Beard)
-    if (cfg.accessory === 'headband') {
-      ctx.fillStyle = cfg.accessoryCol || '#ef4444';
-      ctx.fillRect(-52, -38, 104, 15);
-    } else if (cfg.accessory === 'crown') {
-      ctx.fillStyle = '#fde047';
-      ctx.beginPath();
-      ctx.moveTo(-40, -56);
-      ctx.lineTo(-44, -92); ctx.lineTo(-18, -72);
-      ctx.lineTo(0, -102); ctx.lineTo(18, -72);
-      ctx.lineTo(44, -92); ctx.lineTo(40, -56);
-      ctx.closePath();
-      ctx.fill();
-      ctx.strokeStyle = '#b45309';
-      ctx.lineWidth = 3;
-      ctx.stroke();
-    } else if (cfg.accessory === 'scar') {
-      ctx.strokeStyle = '#991b1b';
-      ctx.lineWidth = 3.5;
-      ctx.beginPath();
-      ctx.moveTo(14, -22);
-      ctx.lineTo(30, 18);
-      ctx.stroke();
-    } else if (cfg.accessory === 'beard') {
-      ctx.fillStyle = cfg.hair;
-      ctx.beginPath();
-      ctx.moveTo(-42, 16);
-      ctx.quadraticCurveTo(0, 68, 42, 16);
-      ctx.lineTo(34, 42);
-      ctx.quadraticCurveTo(0, 66, -34, 42);
-      ctx.closePath();
-      ctx.fill();
-    }
-
-    // Eyes & Fierce Brows
-    if (cfg.accessory === 'visor') {
-      ctx.fillStyle = '#d946ef';
-      ctx.fillRect(-44, -16, 88, 20);
-      ctx.fillStyle = 'rgba(255,255,255,0.45)';
-      ctx.fillRect(-38, -13, 30, 6);
-    } else {
-      const hurtFace = e.hitFlash > 0.02 || e.state === 'ko' || e.state === 'stunned';
-      if (hurtFace) {
-        // X-eyes or squinted pain!
-        ctx.strokeStyle = '#0f172a';
-        ctx.lineWidth = 4;
-        for (const ex of [-20, 20]) {
-          ctx.beginPath();
-          ctx.moveTo(ex - 9, -12); ctx.lineTo(ex + 9, 2);
-          ctx.moveTo(ex + 9, -12); ctx.lineTo(ex - 9, 2);
-          ctx.stroke();
-        }
-      } else {
-        // Intense glowing/focused eyes
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.ellipse(-20, -6, 11, 7, 0, 0, Math.PI * 2);
-        ctx.ellipse(20, -6, 11, 7, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = e.attackType === 'duck_upper' && e.state === 'windup' ? '#ef4444' : '#0f172a';
-        ctx.beginPath();
-        ctx.arc(-19, -6, 4.5, 0, Math.PI * 2);
-        ctx.arc(19, -6, 4.5, 0, Math.PI * 2);
-        ctx.fill();
-        // Furrowed angry brows
-        ctx.strokeStyle = cfg.hair === '#f8fafc' ? '#cbd5e1' : '#18181b';
-        ctx.lineWidth = 5.5;
-        ctx.beginPath();
-        ctx.moveTo(-34, -20); ctx.lineTo(-8, -12);
-        ctx.moveTo(34, -20); ctx.lineTo(8, -12);
-        ctx.stroke();
-      }
-    }
-
-    // Nose & Mouthguard
-    ctx.strokeStyle = cfg.skinShade;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(0, -6); ctx.lineTo(-5, 12); ctx.lineTo(5, 12);
-    ctx.stroke();
-
-    ctx.fillStyle = (e.hitFlash > 0.02 || e.state === 'windup') ? '#f8fafc' : '#7f1d1d';
-    ctx.beginPath();
-    ctx.roundRect(-18, 22, 36, e.hitFlash > 0.02 ? 15 : 9, 4);
-    ctx.fill();
-
-    // Stunned orbiting stars
-    if (e.state === 'stunned' || e.counterWindow > 0) {
-      for (let s = 0; s < 3; s++) {
-        const ang = state.elapsed * 7 + (s * Math.PI * 2) / 3;
-        const sx = Math.cos(ang) * 64;
-        const sy = -78 + Math.sin(ang) * 14;
-        ctx.fillStyle = '#fde047';
-        ctx.beginPath();
-        ctx.arc(sx, sy, 6, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-    ctx.restore(); // end head
-
-    // ENEMY ARMS & GLOVES (3D Articulated)
-    let lgX = -96, lgY = -88, lgR = 46; // screen-left glove (enemy right hand)
-    let rgX = 96, rgY = -88, rgR = 46;  // screen-right glove (enemy left hand)
-    let lgGlow = null, rgGlow = null, glowA = 0;
-
-    if (e.guardHigh && e.state === 'idle') {
-      lgX = -48; lgY = -148;
-      rgX = 48; rgY = -148;
-    } else if (e.state === 'whiff' || e.state === 'stunned') {
-      lgX = -135; lgY = -15;
-      rgX = 135; rgY = -15;
-    } else if (e.state === 'feint') {
-      if (e.feintDir === 'left_hook') { lgX = -150; lgY = -95; }
-      else { rgX = 150; rgY = -95; }
-    } else if (e.state === 'windup') {
-      const w = easeOutCubic(windupProg);
-      const isJustNow = e.stateTimer <= getDiff().justWin;
-      glowA = 0.45 + w * 0.55;
-      if (e.attackType === 'left_hook') {
-        lgX = lerp(-105, -205, w);
-        lgY = lerp(-85, -108, w);
-        lgR = 46 + w * 20;
-        lgGlow = isJustNow ? '#fde047' : '#f97316';
-      } else if (e.attackType === 'right_hook') {
-        rgX = lerp(105, 205, w);
-        rgY = lerp(-85, -108, w);
-        rgR = 46 + w * 20;
-        rgGlow = isJustNow ? '#fde047' : '#f97316';
-      } else if (e.attackType === 'straight') {
-        rgX = lerp(90, 8, w);
-        rgY = lerp(-85, -118, w);
-        rgR = 48 + w * 30;
-        rgGlow = isJustNow ? '#fde047' : '#38bdf8';
-      } else if (e.attackType === 'duck_upper') {
-        // DUCK-HUNTING UPPERCUT: drops VERY LOW with crimson-magenta lightning!
-        rgX = lerp(95, 22, w);
-        rgY = lerp(-60, 72, w);
-        rgR = 50 + w * 30;
-        rgGlow = isJustNow ? '#fde047' : '#f43f5e';
-      }
-    } else if (e.state === 'strike') {
-      if (e.attackType === 'left_hook') { lgX = 30; lgY = -115; lgR = 108; lgGlow = '#fde047'; glowA = 1; }
-      else if (e.attackType === 'right_hook') { rgX = -30; rgY = -115; rgR = 108; rgGlow = '#fde047'; glowA = 1; }
-      else if (e.attackType === 'straight') { rgX = 0; rgY = -115; rgR = 116; rgGlow = '#38bdf8'; glowA = 1; }
-      else if (e.attackType === 'duck_upper') { rgX = 0; rgY = -170; rgR = 122; rgGlow = '#f43f5e'; glowA = 1; }
-    } else if (e.state === 'ko') {
-      lgX = -155; lgY = -30;
-      rgX = 155; rgY = -30;
-    }
-
-    // Draw muscular forearms connecting shoulders to gloves
-    ctx.strokeStyle = cfg.skin;
-    ctx.lineCap = 'round';
-    ctx.lineWidth = 34 * cfg.bulk;
-    ctx.beginPath();
-    ctx.moveTo(-shW + 6, -86);
-    ctx.quadraticCurveTo(-shW - 22, -20, lgX, lgY + 18);
-    ctx.moveTo(shW - 6, -86);
-    ctx.quadraticCurveTo(shW + 22, -20, rgX, rgY + 18);
-    ctx.stroke();
-
-    // Draw Gloves
-    drawGlove3D(lgX, lgY, lgR, cfg.glove, cfg.gloveTrim, lgGlow, glowA);
-    drawGlove3D(rgX, rgY, rgR, cfg.glove, cfg.gloveTrim, rgGlow, glowA);
-
-    // STRICT TIMING RING & DUCK-HUNTING UPPERCUT TELEGRAPH OVERLAY!
-    if (e.state === 'windup' && !e.attackResolved) {
-      const diff = getDiff();
-      const frac = clamp(e.stateTimer / e.windupDur, 0, 1);
-      const isJustZone = e.stateTimer <= diff.justWin;
-      const tx = e.attackType === 'left_hook' ? lgX : rgX;
-      const ty = e.attackType === 'left_hook' ? lgY : rgY;
-
-      // Shrinking strict-timing ring around incoming glove
-      const baseR = 62;
-      const shrinkR = baseR + frac * 78;
-      ctx.save();
-      ctx.strokeStyle = isJustZone ? '#fde047' : (e.attackType === 'duck_upper' ? '#f43f5e' : 'rgba(255,255,255,0.65)');
-      ctx.lineWidth = isJustZone ? 8 : 4;
-      ctx.beginPath();
-      ctx.arc(tx, ty, shrinkR, 0, Math.PI * 2);
-      ctx.stroke();
-
-      // Target inner just-circle
-      ctx.strokeStyle = isJustZone ? '#38bdf8' : 'rgba(253,224,71,0.45)';
-      ctx.lineWidth = 3;
-      ctx.setLineDash([8, 6]);
-      ctx.beginPath();
-      ctx.arc(tx, ty, baseR, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.setLineDash([]);
-
-      // Rising crimson lightning for DUCK-HUNTING UPPERCUT!
-      if (e.attackType === 'duck_upper') {
-        ctx.strokeStyle = isJustZone ? '#fde047' : '#f43f5e';
-        ctx.lineWidth = 6;
-        for (let a = -1; a <= 1; a++) {
-          ctx.beginPath();
-          ctx.moveTo(tx + a * 34, ty + 95);
-          ctx.lineTo(tx + a * 20 + Math.sin(state.elapsed * 40 + a) * 10, ty + 20);
-          ctx.lineTo(tx + a * 26, ty - 75);
-          ctx.stroke();
-        }
-        // Upward danger chevron
-        ctx.fillStyle = isJustZone ? '#fde047' : '#f43f5e';
-        ctx.beginPath();
-        ctx.moveTo(tx, ty - 115);
-        ctx.lineTo(tx - 24, ty - 78);
-        ctx.lineTo(tx + 24, ty - 78);
-        ctx.closePath();
-        ctx.fill();
-      }
-      ctx.restore();
-    }
-
-    ctx.restore(); // end opponent transform
-  }
-
-  function drawPlayerGloves1stPerson() {
-    const p = state.player;
-    const bob = Math.sin(state.elapsed * 3.6) * 8;
-    const isUltraReady = p.koGauge >= 100;
-
-    // Base resting first-person glove coordinates
-    let lx = 108, ly = H - 115 + bob, lr = 86;
-    let rx = W - 108, ry = H - 115 - bob, rr = 86;
-
-    // Dodge shift
-    if (p.dodgeTimer > 0) {
-      const env = Math.sin((p.dodgeTimer / p.dodgeDur) * Math.PI);
-      if (p.dodgeDir === 'left') { lx -= 46 * env; rx -= 58 * env; ly += 14 * env; }
-      else if (p.dodgeDir === 'right') { lx += 58 * env; rx += 46 * env; ry += 14 * env; }
-      else if (p.dodgeDir === 'duck') { ly += 78 * env; ry += 78 * env; }
-    }
-
-    // Punch lunge animation in 3D perspective (scales down slightly as fist rockets toward opponent's chin!)
-    if (p.punchTimer > 0) {
-      const prog = 1 - p.punchTimer / p.punchDur;
-      const thrust = Math.sin(prog * Math.PI);
-      if (p.punchSide === 'left') {
-        lx = lerp(lx, W / 2 - 22, thrust);
-        ly = lerp(ly, 355, thrust);
-        lr = lerp(86, 60, thrust);
-        // Motion trail
-        ctx.save();
-        ctx.strokeStyle = 'rgba(56,189,248,0.45)';
-        ctx.lineWidth = 44 * thrust;
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.moveTo(100, H - 90);
-        ctx.lineTo(lx, ly);
-        ctx.stroke();
-        ctx.restore();
-      } else if (p.punchSide === 'right') {
-        rx = lerp(rx, W / 2 + 22, thrust);
-        ry = lerp(ry, 355, thrust);
-        rr = lerp(86, 60, thrust);
-        ctx.save();
-        ctx.strokeStyle = 'rgba(56,189,248,0.45)';
-        ctx.lineWidth = 44 * thrust;
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.moveTo(W - 100, H - 90);
-        ctx.lineTo(rx, ry);
-        ctx.stroke();
-        ctx.restore();
-      } else if (p.punchSide === 'upper' || p.punchSide === 'ultra') {
-        const isUltra = p.punchSide === 'ultra';
-        rx = lerp(W / 2 + 55, W / 2, thrust);
-        ry = lerp(H + 30, 310, easeOutCubic(thrust));
-        rr = lerp(104, isUltra ? 76 : 64, thrust);
-        // Rising fiery uppercut arc!
-        ctx.save();
-        const ug = ctx.createLinearGradient(rx, H, rx, ry);
-        ug.addColorStop(0, isUltra ? 'rgba(244,63,94,0)' : 'rgba(56,189,248,0)');
-        ug.addColorStop(0.5, isUltra ? 'rgba(253,224,71,0.85)' : 'rgba(56,189,248,0.65)');
-        ug.addColorStop(1, '#ffffff');
-        ctx.strokeStyle = ug;
-        ctx.lineWidth = isUltra ? 68 * thrust : 42 * thrust;
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.moveTo(W / 2 + 40, H + 10);
-        ctx.quadraticCurveTo(W / 2 + 12, H * 0.65, rx, ry);
-        ctx.stroke();
-        ctx.restore();
-      }
-    }
-
-    const gCol = isUltraReady ? '#f59e0b' : '#0284c7';
-    const gTrim = isUltraReady ? '#fef08a' : '#e0f2fe';
-    const glow = isUltraReady ? '#fde047' : (state.enemy.counterWindow > 0 ? '#38bdf8' : null);
-    const glowA = isUltraReady ? 0.85 : (state.enemy.counterWindow > 0 ? 0.65 : 0);
-
-    drawGlove3D(lx, ly, lr, gCol, gTrim, glow, glowA);
-    drawGlove3D(rx, ry, rr, gCol, gTrim, glow, glowA);
-  }
-
-  // =========================================================================
-  // TELEGRAPH WARNINGS, SPEED LINES & HUD
-  // =========================================================================
-  function drawActionOverlays() {
-    const e = state.enemy;
-    const p = state.player;
     const diff = getDiff();
 
-    // Manga-style Radial Speed Lines on JUST SLIP & ULTRA KO!
+    // Radial Speed Lines
     if (state.speedLines > 0.02) {
       ctx.save();
       ctx.globalAlpha = Math.min(0.65, state.speedLines);
       ctx.strokeStyle = state.speedLineColor;
-      const num = 28;
-      for (let i = 0; i < num; i++) {
-        const ang = (i / num) * Math.PI * 2 + state.elapsed * 2;
-        const r1 = 230 + (i % 3) * 35;
-        const r2 = 620;
-        ctx.lineWidth = (i % 2 === 0) ? 5 : 2.5;
+      for (let i = 0; i < 28; i++) {
+        const ang = (i / 28) * Math.PI * 2 + state.elapsed * 2;
+        ctx.lineWidth = i % 2 === 0 ? 5 : 2.5;
         ctx.beginPath();
-        ctx.moveTo(W / 2 + Math.cos(ang) * r1, H * 0.44 + Math.sin(ang) * r1);
-        ctx.lineTo(W / 2 + Math.cos(ang) * r2, H * 0.44 + Math.sin(ang) * r2);
+        ctx.moveTo(W / 2 + Math.cos(ang) * 235, H * 0.44 + Math.sin(ang) * 235);
+        ctx.lineTo(W / 2 + Math.cos(ang) * 620, H * 0.44 + Math.sin(ang) * 620);
         ctx.stroke();
       }
       ctx.restore();
     }
 
-    // Impact Rings
-    for (const rg of state.rings) {
-      const prog = 1 - rg.timer / rg.dur;
-      const r = rg.maxR * easeOutCubic(prog);
+    // Attack Direction Warnings (Duck-Hunting Uppercut & Wide Sweep & Guard!)
+    if (e.state === 'idle' && e.guarding) {
       ctx.save();
-      ctx.globalAlpha = (1 - prog) * 0.9;
-      ctx.strokeStyle = rg.color;
-      ctx.lineWidth = rg.lineW * (1 - prog * 0.7);
-      ctx.beginPath();
-      ctx.arc(rg.x, rg.y, r, 0, Math.PI * 2);
-      ctx.stroke();
+      ctx.font = '900 18px "Noto Sans JP", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.lineWidth = 5; ctx.strokeStyle = '#020308';
+      const gTxt = '🛡 相手ガード中！見切りカウンター or ▲上スワイプで崩せ';
+      ctx.strokeText(gTxt, W / 2, 650);
+      ctx.fillStyle = '#38bdf8';
+      ctx.fillText(gTxt, W / 2, 650);
       ctx.restore();
-    }
-
-    // Particles (sparks & sweat)
-    for (const pt of state.particles) {
-      const a = clamp(pt.life / pt.maxLife, 0, 1);
-      ctx.save();
-      ctx.globalAlpha = a;
-      ctx.fillStyle = pt.color;
-      if (pt.kind === 'spark') {
-        ctx.strokeStyle = pt.color;
-        ctx.lineWidth = pt.size * 0.65;
-        ctx.beginPath();
-        ctx.moveTo(pt.x, pt.y);
-        ctx.lineTo(pt.x - pt.vx * 0.035, pt.y - pt.vy * 0.035);
-        ctx.stroke();
-      } else {
-        ctx.beginPath();
-        ctx.arc(pt.x, pt.y, pt.size * a, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.restore();
-    }
-
-    // Side Danger Flash & Duck-Hunting Uppercut Warning Callout
-    if (e.state === 'windup' && !e.attackResolved) {
+    } else if (e.state === 'windup' && !e.attackResolved) {
       const isJust = e.stateTimer <= diff.justWin;
+      ctx.save();
+      ctx.textAlign = 'center';
       if (e.attackType === 'duck_upper') {
-        // Blazing bottom crimson warning band!
-        const g = ctx.createLinearGradient(0, H - 240, 0, H);
+        const g = ctx.createLinearGradient(0, H - 220, 0, H);
         g.addColorStop(0, 'rgba(244,63,94,0)');
-        g.addColorStop(1, isJust ? 'rgba(253,224,71,0.55)' : 'rgba(244,63,94,0.52)');
+        g.addColorStop(1, isJust ? 'rgba(253,224,71,0.52)' : 'rgba(244,63,94,0.48)');
         ctx.fillStyle = g;
-        ctx.fillRect(0, H - 240, W, 240);
-
-        ctx.save();
-        ctx.font = '900 28px "Noto Sans JP", sans-serif';
-        ctx.textAlign = 'center';
+        ctx.fillRect(0, H - 220, W, 220);
+        ctx.font = '900 26px "Noto Sans JP", sans-serif';
+        ctx.lineWidth = 7; ctx.strokeStyle = '#020308';
         const txt = isJust ? '⚡ 今だ!! 横スワイプ!!' : '⚠ ダック狩りアッパー!! しゃがみ厳禁!';
-        ctx.lineWidth = 7;
-        ctx.strokeStyle = '#09090b';
-        ctx.strokeText(txt, W / 2, 650);
+        ctx.strokeText(txt, W / 2, 652);
         ctx.fillStyle = isJust ? '#fde047' : '#fb7185';
-        ctx.fillText(txt, W / 2, 650);
-        ctx.restore();
-      } else if (diff.showHintArrows) {
-        const hintTxt = e.attackType === 'left_hook' ? '→ 右スワイプ / ↓ ダック'
+        ctx.fillText(txt, W / 2, 652);
+      } else if (e.attackType === 'high_sweep') {
+        ctx.font = '900 26px "Noto Sans JP", sans-serif';
+        ctx.lineWidth = 7; ctx.strokeStyle = '#020308';
+        const txt = isJust ? '⚡ 今だ!! 下ダック!!' : '⚡ ワイド薙ぎ払い!! ↓下スワイプで潜れ!';
+        ctx.strokeText(txt, W / 2, 652);
+        ctx.fillStyle = isJust ? '#fde047' : '#4ade80';
+        ctx.fillText(txt, W / 2, 652);
+      } else if (diff.showHints) {
+        ctx.font = '900 21px "Noto Sans JP", sans-serif';
+        ctx.lineWidth = 6; ctx.strokeStyle = '#020308';
+        const hTxt = e.attackType === 'left_hook' ? '→ 右スワイプ / ↓ ダック'
           : (e.attackType === 'right_hook' ? '← 左スワイプ / ↓ ダック' : '←→ 横スワイプ!');
-        ctx.save();
-        ctx.font = '900 22px "Noto Sans JP", sans-serif';
-        ctx.textAlign = 'center';
-        ctx.lineWidth = 6;
-        ctx.strokeStyle = '#09090b';
-        ctx.strokeText(hintTxt, W / 2, 650);
+        ctx.strokeText(hTxt, W / 2, 652);
         ctx.fillStyle = isJust ? '#fde047' : '#e2e8f0';
-        ctx.fillText(hintTxt, W / 2, 650);
-        ctx.restore();
+        ctx.fillText(hTxt, W / 2, 652);
       }
+      ctx.restore();
     }
 
-    // Animated Swipe Cue Arrow (for Shorts & Stage 1 onboarding)
+    // Swipe Ghost Cue
     if (state.swipeCue.timer > 0) {
       const d = state.swipeCue.dir;
-      const pulse = 0.7 + 0.3 * Math.sin(state.elapsed * 26);
+      const pulse = 0.72 + 0.28 * Math.sin(state.elapsed * 26);
       ctx.save();
       ctx.globalAlpha = pulse;
       ctx.font = '900 32px "Chakra Petch", "Noto Sans JP", sans-serif';
       ctx.textAlign = 'center';
-      const label = d === 'right' ? 'SWIPE ━━▶' : (d === 'left' ? '◀━━ SWIPE' : '▼ DUCK ▼');
-      const col = d === 'duck' ? '#a3e635' : '#38bdf8';
-      ctx.lineWidth = 8;
-      ctx.strokeStyle = '#09090b';
+      const label = d === 'right' ? 'SWIPE ━━▶' : (d === 'left' ? '◀━━ SWIPE' : (d === 'up' ? '▲ UPPER BREAK ▲' : '▼ DUCK ▼'));
+      const col = d === 'duck' ? '#4ade80' : (d === 'up' ? '#fde047' : '#00e5ff');
+      ctx.lineWidth = 8; ctx.strokeStyle = '#020308';
       ctx.strokeText(label, W / 2, 730);
       ctx.fillStyle = col;
       ctx.fillText(label, W / 2, 730);
       ctx.restore();
     }
 
-    // ULTRA READY Prompt
+    // ULTRA READY Pill
     if (p.koGauge >= 100 && e.state !== 'ko') {
-      const pulse = 0.8 + 0.2 * Math.sin(state.elapsed * 14);
+      const pulse = 0.86 + 0.14 * Math.sin(state.elapsed * 14);
       ctx.save();
-      ctx.translate(W / 2, H - 195);
+      ctx.translate(W / 2, H - 188);
       ctx.scale(pulse, pulse);
       ctx.fillStyle = 'rgba(245,158,11,0.92)';
-      ctx.beginPath();
-      ctx.roundRect(-165, -24, 330, 48, 999);
-      ctx.fill();
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 3;
-      ctx.stroke();
-      ctx.font = '900 22px "Noto Sans JP", sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#09090b';
+      ctx.beginPath(); ctx.roundRect(-165, -24, 330, 48, 999); ctx.fill();
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3; ctx.stroke();
+      ctx.font = '900 21px "Noto Sans JP", sans-serif';
+      ctx.textAlign = 'center'; ctx.fillStyle = '#09090b';
       ctx.fillText('▲ 上スワイプで必殺 ULTRA KO!!', 0, 8);
       ctx.restore();
     }
@@ -2268,467 +2086,332 @@
       ctx.globalAlpha = a;
       ctx.font = `900 ${pp.size}px "Chakra Petch", "Noto Sans JP", sans-serif`;
       ctx.textAlign = 'center';
-      ctx.lineWidth = 7;
-      ctx.strokeStyle = '#09090b';
+      ctx.lineWidth = 7; ctx.strokeStyle = '#020308';
       ctx.strokeText(pp.text, pp.x, pp.y);
       ctx.fillStyle = pp.color;
       ctx.fillText(pp.text, pp.x, pp.y);
       ctx.restore();
     }
 
-    // Red Damage Vignette
+    // Red Damage Vignette & Impact Flash
     if (state.vignetteRed > 0.01) {
       const vg = ctx.createRadialGradient(W / 2, H / 2, 180, W / 2, H / 2, 560);
       vg.addColorStop(0, 'rgba(239,68,68,0)');
       vg.addColorStop(1, `rgba(220,38,38,${state.vignetteRed * 0.72})`);
-      ctx.fillStyle = vg;
-      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
     }
-
-    // Fullscreen Impact Flash
     if (state.flashAlpha > 0.01) {
-      ctx.save();
-      ctx.globalAlpha = state.flashAlpha;
-      ctx.fillStyle = state.flashColor;
-      ctx.fillRect(0, 0, W, H);
-      ctx.restore();
+      ctx.save(); ctx.globalAlpha = state.flashAlpha;
+      ctx.fillStyle = state.flashColor; ctx.fillRect(0, 0, W, H); ctx.restore();
     }
 
-    // Big Slam Banner (STAGE INTRO / ULTRA / K.O.!)
+    // Slam Banner (cleanly positioned below opponent's 3D head!)
     if (state.banner.timer > 0) {
       const b = state.banner;
       const a = clamp(b.timer / 0.22, 0, 1);
       ctx.save();
       ctx.globalAlpha = a;
-      ctx.translate(W / 2, H * 0.56);
-      ctx.scale(Math.min(1.14, b.scale), Math.min(1.14, b.scale));
-
-      // Slanted PPV dark ribbon
-      ctx.fillStyle = 'rgba(9,11,20,0.88)';
+      ctx.translate(W / 2, H * 0.57);
+      ctx.scale(Math.min(1.12, b.scale), Math.min(1.12, b.scale));
+      ctx.fillStyle = 'rgba(4,6,14,0.88)';
       ctx.beginPath();
-      ctx.moveTo(-290, -48);
-      ctx.lineTo(290, -58);
-      ctx.lineTo(290, 48);
-      ctx.lineTo(-290, 58);
-      ctx.closePath();
-      ctx.fill();
-      ctx.strokeStyle = b.color;
-      ctx.lineWidth = 4;
-      ctx.stroke();
+      ctx.moveTo(-290, -46); ctx.lineTo(290, -56); ctx.lineTo(290, 46); ctx.lineTo(-290, 56);
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = b.color; ctx.lineWidth = 4; ctx.stroke();
 
       ctx.font = 'italic 900 44px "Chakra Petch", "Noto Sans JP", sans-serif';
-      ctx.textAlign = 'center';
-      ctx.lineWidth = 9;
-      ctx.strokeStyle = '#09090b';
-      ctx.strokeText(b.text, 0, 6, 476);
+      ctx.textAlign = 'center'; ctx.lineWidth = 9; ctx.strokeStyle = '#020308';
+      ctx.strokeText(b.text, 0, 6, 474);
       ctx.fillStyle = b.color;
-      ctx.fillText(b.text, 0, 6, 476);
-
+      ctx.fillText(b.text, 0, 6, 474);
       if (b.sub) {
         ctx.font = '900 18px "Noto Sans JP", sans-serif';
         ctx.fillStyle = '#f8fafc';
-        ctx.fillText(b.sub, 0, 36, 476);
+        ctx.fillText(b.sub, 0, 34, 474);
       }
       ctx.restore();
     }
-  }
 
-  function drawFightHUD() {
-    const e = state.enemy;
-    const p = state.player;
-    const cfg = e.cfg;
-    const diff = getDiff();
-
-    // Top Enemy Info Bar (clean & readable, leaves room for Shorts caption zone below if needed)
-    const topY = SHORTS_MODE ? 22 : 44;
+    // Top Enemy Info HUD
+    const topY = SHORTS_MODE ? 20 : 44;
     ctx.save();
-    // Difficulty + Stage pill
-    ctx.fillStyle = 'rgba(9,11,20,0.82)';
-    ctx.beginPath();
-    ctx.roundRect(18, topY, W - 36, 92, 16);
-    ctx.fill();
-    ctx.strokeStyle = diff.color + '88';
-    ctx.lineWidth = 2;
-    ctx.stroke();
+    ctx.fillStyle = 'rgba(4,7,15,0.82)';
+    ctx.beginPath(); ctx.roundRect(18, topY, W - 36, 90, 14); ctx.fill();
+    ctx.strokeStyle = diff.color + '99'; ctx.lineWidth = 2; ctx.stroke();
 
-    // Diff Badge
     ctx.fillStyle = diff.color;
-    ctx.beginPath();
-    ctx.roundRect(28, topY + 10, 126, 24, 6);
-    ctx.fill();
+    ctx.beginPath(); ctx.roundRect(28, topY + 10, 132, 24, 6); ctx.fill();
     ctx.font = '900 13px "Chakra Petch", "Noto Sans JP", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#09090b';
-    ctx.fillText(`${diff.label}  ${cfg.stage}/5`, 28 + 63, topY + 27);
+    ctx.textAlign = 'center'; ctx.fillStyle = '#020308';
+    ctx.fillText(`${diff.label}  ${cfg.stage}/5`, 28 + 66, topY + 27);
 
-    // Enemy Name
     ctx.textAlign = 'left';
     ctx.font = '900 18px "Noto Sans JP", sans-serif';
     ctx.fillStyle = '#ffffff';
-    ctx.fillText(cfg.jpName, 164, topY + 28);
+    ctx.fillText(cfg.jpName, 170, topY + 28);
 
-    // Boss tag or title
     ctx.textAlign = 'right';
     ctx.font = '700 12px "Noto Sans JP", sans-serif';
     ctx.fillStyle = cfg.boss ? '#fde047' : '#94a3b8';
     ctx.fillText(cfg.boss ? '★ BOSS' : cfg.title, W - 30, topY + 27);
 
     // Enemy HP Bar
-    const barX = 28, barY = topY + 46, barW = W - 56, barH = 22;
-    ctx.fillStyle = '#1e293b';
-    ctx.beginPath();
-    ctx.roundRect(barX, barY, barW, barH, 8);
-    ctx.fill();
-
-    const hpFrac = clamp(e.hp / e.maxHp, 0, 1);
-    const hpG = ctx.createLinearGradient(barX, 0, barX + barW, 0);
-    hpG.addColorStop(0, '#dc2626');
-    hpG.addColorStop(0.5, '#f97316');
-    hpG.addColorStop(1, '#facc15');
+    const bx = 28, by = topY + 45, bw = W - 56, bh = 22;
+    ctx.fillStyle = '#141a2a';
+    ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 7); ctx.fill();
+    const hpG = ctx.createLinearGradient(bx, 0, bx + bw, 0);
+    hpG.addColorStop(0, '#f43f5e'); hpG.addColorStop(0.55, '#f97316'); hpG.addColorStop(1, '#fde047');
     ctx.fillStyle = hpG;
-    ctx.beginPath();
-    ctx.roundRect(barX, barY, barW * hpFrac, barH, 8);
-    ctx.fill();
+    ctx.beginPath(); ctx.roundRect(bx, by, bw * clamp(e.hp / e.maxHp, 0, 1), bh, 7); ctx.fill();
 
     ctx.font = '900 13px "Chakra Petch", sans-serif';
-    ctx.textAlign = 'right';
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText(`HP ${e.hp} / ${e.maxHp}`, barX + barW - 8, barY + 16);
+    ctx.textAlign = 'right'; ctx.fillStyle = '#ffffff';
+    ctx.fillText(`HP ${e.hp} / ${e.maxHp}`, bx + bw - 8, by + 16);
 
-    // Combo badge
     if (p.combo >= 2) {
       ctx.font = 'italic 900 30px "Chakra Petch", sans-serif';
-      ctx.textAlign = 'left';
-      ctx.lineWidth = 6;
-      ctx.strokeStyle = '#09090b';
-      const cTxt = `${p.combo} HIT!`;
-      ctx.strokeText(cTxt, 24, topY + 132);
-      ctx.fillStyle = '#fde047';
-      ctx.fillText(cTxt, 24, topY + 132);
+      ctx.textAlign = 'left'; ctx.lineWidth = 6; ctx.strokeStyle = '#020308';
+      ctx.strokeText(`${p.combo} HIT!`, 24, topY + 130);
+      ctx.fillStyle = '#fde047'; ctx.fillText(`${p.combo} HIT!`, 24, topY + 130);
     }
 
-    // Bottom Player HP & KO Gauge (tucked cleanly above bottom edge)
-    const botY = H - 72;
-    ctx.fillStyle = 'rgba(9,11,20,0.84)';
-    ctx.beginPath();
-    ctx.roundRect(18, botY, W - 36, 56, 14);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.16)';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
+    // Bottom Player HP & KO Gauge
+    const botY = H - 70;
+    ctx.fillStyle = 'rgba(4,7,15,0.84)';
+    ctx.beginPath(); ctx.roundRect(18, botY, W - 36, 54, 14); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,229,255,0.28)'; ctx.lineWidth = 1.5; ctx.stroke();
 
-    // Player HP
     ctx.font = '900 12px "Chakra Petch", sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillStyle = '#38bdf8';
-    ctx.fillText('YOU HP', 30, botY + 19);
-    ctx.fillStyle = '#1e293b';
-    ctx.beginPath();
-    ctx.roundRect(30, botY + 25, 226, 18, 6);
-    ctx.fill();
-    ctx.fillStyle = p.hp > 30 ? '#22c55e' : '#ef4444';
-    ctx.beginPath();
-    ctx.roundRect(30, botY + 25, 226 * clamp(p.hp / p.maxHp, 0, 1), 18, 6);
-    ctx.fill();
+    ctx.textAlign = 'left'; ctx.fillStyle = '#00e5ff';
+    ctx.fillText('YOU HP', 30, botY + 18);
+    ctx.fillStyle = '#141a2a';
+    ctx.beginPath(); ctx.roundRect(30, botY + 24, 224, 18, 6); ctx.fill();
+    ctx.fillStyle = p.hp > 30 ? '#22c55e' : '#f43f5e';
+    ctx.beginPath(); ctx.roundRect(30, botY + 24, 224 * clamp(p.hp / p.maxHp, 0, 1), 18, 6); ctx.fill();
 
-    // KO Gauge
     const koReady = p.koGauge >= 100;
     ctx.fillStyle = koReady ? '#fde047' : '#f59e0b';
-    ctx.fillText(koReady ? 'KO MAX!! ▲上スワイプ' : 'KO GAUGE', 274, botY + 19);
-    ctx.fillStyle = '#1e293b';
-    ctx.beginPath();
-    ctx.roundRect(274, botY + 25, 236, 18, 6);
-    ctx.fill();
+    ctx.fillText(koReady ? 'KO MAX!! ▲上スワイプ' : 'KO GAUGE', 274, botY + 18);
+    ctx.fillStyle = '#141a2a';
+    ctx.beginPath(); ctx.roundRect(274, botY + 24, 236, 18, 6); ctx.fill();
     const koG = ctx.createLinearGradient(274, 0, 510, 0);
-    koG.addColorStop(0, '#f59e0b');
-    koG.addColorStop(1, '#fde047');
+    koG.addColorStop(0, '#f59e0b'); koG.addColorStop(1, '#fde047');
     ctx.fillStyle = koG;
-    ctx.beginPath();
-    ctx.roundRect(274, botY + 25, 236 * clamp(p.koGauge / 100, 0, 1), 18, 6);
-    ctx.fill();
+    ctx.beginPath(); ctx.roundRect(274, botY + 24, 236 * clamp(p.koGauge / 100, 0, 1), 18, 6); ctx.fill();
 
-    // Subtle Sound & Back-to-select buttons (non-shorts only)
     if (!SHORTS_MODE) {
-      drawSmallBtn(W - 106, 8, 94, 28, save.muted ? '🔇 OFF' : '🔊 ON', () => {
-        save.muted = !save.muted;
-        persistSave();
-      });
-      drawSmallBtn(W - 208, 8, 94, 28, '一覧', () => {
-        state.screen = 'select';
-      });
+      drawSmallBtn(W - 106, 8, 94, 28, save.muted ? '🔇 OFF' : '🔊 ON', () => { save.muted = !save.muted; persistSave(); });
+      drawSmallBtn(W - 208, 8, 94, 28, '5試合一覧', () => { state.screen = 'select'; });
     }
     ctx.restore();
-  }
-
-  // =========================================================================
-  // INTERACTIVE UI SCREENS (TITLE / 15-FIGHTER SELECT / VICTORY / DEFEAT)
-  // =========================================================================
-  function registerBtn(x, y, w, h, onClick) {
-    state.uiButtons.push({ x, y, w, h, onClick });
-  }
-
-  function drawSmallBtn(x, y, w, h, label, onClick) {
-    ctx.fillStyle = 'rgba(15,23,42,0.82)';
-    ctx.beginPath();
-    ctx.roundRect(x, y, w, h, 999);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.28)';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-    ctx.font = '800 12px "Noto Sans JP", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#f8fafc';
-    ctx.fillText(label, x + w / 2, y + 19);
-    registerBtn(x, y, w, h, onClick);
   }
 
   function drawTitleScreen() {
-    // Live animated 3D arena + ZEUS silhouette in background!
-    state.enemy.cfg = ROSTER.vhard[4];
-    state.enemy.state = 'idle';
-    state.enemy.guardHigh = false;
-    state.enemy.bobPhase = state.elapsed * 2.5;
-    drawArena(W / 2, H * 0.44);
-    ctx.save();
-    ctx.globalAlpha = 0.55;
-    drawOpponent3D(W / 2, H * 0.46);
-    ctx.restore();
-
-    // Dark dramatic overlay gradient
+    // Semi-transparent dark gradient over LIVE Three.js 3D Zeus Omega!
     const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, 'rgba(6,8,16,0.78)');
-    g.addColorStop(0.45, 'rgba(6,8,16,0.42)');
-    g.addColorStop(1, 'rgba(6,8,16,0.94)');
+    g.addColorStop(0, 'rgba(2,3,8,0.82)');
+    g.addColorStop(0.36, 'rgba(2,3,8,0.34)');
+    g.addColorStop(0.65, 'rgba(2,3,8,0.72)');
+    g.addColorStop(1, 'rgba(2,3,8,0.96)');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H);
 
-    // Top Badge
     ctx.save();
-    ctx.fillStyle = 'rgba(244,63,94,0.22)';
-    ctx.strokeStyle = '#f43f5e';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.roundRect(W / 2 - 155, 76, 310, 34, 999);
-    ctx.fill();
-    ctx.stroke();
-    ctx.font = '900 14px "Chakra Petch", "Noto Sans JP", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#fda4af';
-    ctx.fillText('DAY 06 // FIRST-PERSON 3D BOXING', W / 2, 98);
+    ctx.fillStyle = 'rgba(0,229,255,0.14)';
+    ctx.strokeStyle = '#00e5ff'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(W / 2 - 165, 62, 330, 32, 999); ctx.fill(); ctx.stroke();
+    ctx.font = '900 13px "Chakra Petch", "Noto Sans JP", sans-serif';
+    ctx.textAlign = 'center'; ctx.fillStyle = '#7dd3fc';
+    ctx.fillText('THREE.JS REAL 3D // NEON BOXING', W / 2, 83);
 
-    // Main Logo
-    ctx.font = 'italic 900 68px "Chakra Petch", sans-serif';
-    ctx.lineWidth = 12;
-    ctx.strokeStyle = '#09090b';
-    ctx.strokeText('COUNTER', W / 2, 186);
-    const lg = ctx.createLinearGradient(0, 120, 0, 200);
-    lg.addColorStop(0, '#ffffff');
-    lg.addColorStop(1, '#38bdf8');
-    ctx.fillStyle = lg;
-    ctx.fillText('COUNTER', W / 2, 186);
+    ctx.font = 'italic 900 66px "Chakra Petch", sans-serif';
+    ctx.lineWidth = 11; ctx.strokeStyle = '#020308';
+    ctx.strokeText('COUNTER', W / 2, 162);
+    const lg = ctx.createLinearGradient(0, 100, 0, 174);
+    lg.addColorStop(0, '#ffffff'); lg.addColorStop(1, '#00e5ff');
+    ctx.fillStyle = lg; ctx.fillText('COUNTER', W / 2, 162);
 
-    ctx.font = 'italic 900 84px "Chakra Petch", sans-serif';
-    ctx.strokeText('KO 3D', W / 2, 266);
-    const kg = ctx.createLinearGradient(0, 200, 0, 275);
-    kg.addColorStop(0, '#fef08a');
-    kg.addColorStop(0.5, '#f59e0b');
-    kg.addColorStop(1, '#ef4444');
-    ctx.fillStyle = kg;
-    ctx.fillText('KO 3D', W / 2, 266);
+    ctx.font = 'italic 900 80px "Chakra Petch", sans-serif';
+    ctx.strokeText('KO 3D', W / 2, 236);
+    const kg = ctx.createLinearGradient(0, 175, 0, 248);
+    kg.addColorStop(0, '#fef08a'); kg.addColorStop(0.5, '#f59e0b'); kg.addColorStop(1, '#f43f5e');
+    ctx.fillStyle = kg; ctx.fillText('KO 3D', W / 2, 236);
 
-    ctx.font = '900 18px "Noto Sans JP", sans-serif';
+    ctx.font = '900 16px "Noto Sans JP", sans-serif';
     ctx.fillStyle = '#e2e8f0';
-    ctx.fillText('0.1秒見切り × ダック狩りアッパー × 全15強敵', W / 2, 304);
-
-    // Progress pill
-    const cleared = countTotalCleared();
-    ctx.font = '800 14px "Noto Sans JP", sans-serif';
+    ctx.fillText('上下左右の極限見切り × ガード崩し × 5連戦制覇', W / 2, 272);
+    ctx.font = '800 13px "Noto Sans JP", sans-serif';
     ctx.fillStyle = '#fde047';
-    ctx.fillText(`制覇記録：${cleared} / 15 強敵 KO   ｜   MAX COMBO ${save.bestCombo}`, W / 2, 336);
+    ctx.fillText(`制覇記録：${countTotalCleared()} / 20 強敵 KO   ｜   MAX COMBO ${save.bestCombo}`, W / 2, 300);
 
-    // 3 Difficulty Cards
-    const diffs = ['easy', 'hard', 'vhard'];
-    let cy = 376;
+    // 4 DIFFICULTIES SELECTABLE RIGHT FROM TITLE (EASY / NORMAL / HARD / VERY HARD)!
+    const diffs = ['easy', 'normal', 'hard', 'vhard'];
+    let cy = 326;
     for (const id of diffs) {
       const d = DIFFICULTIES[id];
       const clr = save.cleared[id].length;
-      const selected = state.diffId === id;
+      const sel = state.diffId === id;
 
-      ctx.fillStyle = selected ? 'rgba(24,30,48,0.95)' : 'rgba(14,18,30,0.86)';
-      ctx.beginPath();
-      ctx.roundRect(32, cy, W - 64, 92, 16);
-      ctx.fill();
-      ctx.strokeStyle = selected ? d.color : 'rgba(255,255,255,0.16)';
-      ctx.lineWidth = selected ? 3.5 : 1.5;
-      ctx.stroke();
+      ctx.fillStyle = sel ? 'rgba(18,24,44,0.92)' : 'rgba(8,12,24,0.82)';
+      ctx.beginPath(); ctx.roundRect(28, cy, W - 56, 80, 14); ctx.fill();
+      ctx.strokeStyle = sel ? d.color : 'rgba(255,255,255,0.16)';
+      ctx.lineWidth = sel ? 3 : 1.5; ctx.stroke();
 
       ctx.fillStyle = d.color;
-      ctx.fillRect(32, cy + 14, 7, 64);
+      ctx.fillRect(28, cy + 12, 6, 56);
 
       ctx.textAlign = 'left';
-      ctx.font = 'italic 900 25px "Chakra Petch", sans-serif';
+      ctx.font = 'italic 900 23px "Chakra Petch", sans-serif';
       ctx.fillStyle = d.color;
-      ctx.fillText(d.label, 54, cy + 36);
-      const lblW = ctx.measureText(d.label).width;
+      ctx.fillText(d.label, 48, cy + 32);
+      const lw = ctx.measureText(d.label).width;
 
-      ctx.font = '800 15px "Noto Sans JP", sans-serif';
+      ctx.font = '800 14px "Noto Sans JP", sans-serif';
       ctx.fillStyle = '#ffffff';
-      ctx.fillText(`${d.jp}（全5ステージ）`, 54 + lblW + 14, cy + 34);
+      ctx.fillText(`${d.jp}（全5試合）`, 48 + lw + 12, cy + 31);
 
-      ctx.font = '700 13px "Noto Sans JP", sans-serif';
+      ctx.font = '700 12px "Noto Sans JP", sans-serif';
       ctx.fillStyle = '#94a3b8';
-      const desc = id === 'easy'
-        ? 'ジャスト窓0.25s｜回避＆カウンター入門'
-        : (id === 'hard' ? 'ジャスト窓0.17s｜フェイント＆ダック狩り頻発'
-          : 'ジャスト窓0.13s｜神速4連＆裏世界王者ゼウス');
-      ctx.fillText(desc, 54, cy + 64);
+      const desc = id === 'easy' ? 'ジャスト窓0.25s｜回避＆カウンター入門'
+        : (id === 'normal' ? 'ジャスト窓0.20s｜ガード＆ダック狩り本格導入'
+          : (id === 'hard' ? 'ジャスト窓0.16s｜鉄壁ガード＋上下左右の完全択一'
+            : 'ジャスト窓0.12s｜神速4連＆裏世界王者ゼウス'));
+      ctx.fillText(desc, 48, cy + 58);
 
       ctx.textAlign = 'right';
-      ctx.font = '900 16px "Chakra Petch", sans-serif';
+      ctx.font = '900 15px "Chakra Petch", sans-serif';
       ctx.fillStyle = clr === 5 ? '#fde047' : '#cbd5e1';
-      ctx.fillText(`${clr}/5 KO`, W - 48, cy + 52);
+      ctx.fillText(`${clr}/5 KO`, W - 44, cy + 46);
 
-      registerBtn(32, cy, W - 64, 92, () => {
+      registerBtn(28, cy, W - 56, 80, () => {
         state.diffId = id;
+        buildOpponentRig(ROSTER[id][4]); // Preview difficulty's Boss in live 3D!
         state.screen = 'select';
       });
-      cy += 106;
+      cy += 90;
     }
 
-    // Primary Quick Fight Button
-    const btnY = 716;
-    const bg = ctx.createLinearGradient(0, btnY, 0, btnY + 68);
-    bg.addColorStop(0, '#fde047');
-    bg.addColorStop(1, '#f59e0b');
+    // Quick Start Button
+    const btnY = 702;
+    const bg = ctx.createLinearGradient(0, btnY, 0, btnY + 66);
+    bg.addColorStop(0, '#fde047'); bg.addColorStop(1, '#f59e0b');
     ctx.fillStyle = bg;
-    ctx.beginPath();
-    ctx.roundRect(38, btnY, W - 76, 68, 16);
-    ctx.fill();
-    ctx.font = '900 24px "Noto Sans JP", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#09090b';
-    ctx.fillText('🥊 今すぐリングに上がる！', W / 2, btnY + 43);
-    registerBtn(38, btnY, W - 76, 68, () => {
-      const nextStg = Math.min(4, save.cleared[state.diffId].length);
-      startFight(state.diffId, nextStg);
+    ctx.beginPath(); ctx.roundRect(34, btnY, W - 68, 66, 15); ctx.fill();
+    ctx.font = '900 23px "Noto Sans JP", sans-serif';
+    ctx.textAlign = 'center'; ctx.fillStyle = '#020308';
+    ctx.fillText(`🥊 ${DIFFICULTIES[state.diffId].jp} で今すぐ対戦！`, W / 2, btnY + 42);
+    registerBtn(34, btnY, W - 68, 66, () => {
+      startFight(state.diffId, Math.min(4, save.cleared[state.diffId].length));
     });
 
-    // Controls Cheat-sheet Box
-    ctx.fillStyle = 'rgba(15,23,42,0.85)';
-    ctx.beginPath();
-    ctx.roundRect(32, 804, W - 64, 128, 14);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.14)';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
+    // Controls Guide
+    ctx.fillStyle = 'rgba(8,12,24,0.88)';
+    ctx.beginPath(); ctx.roundRect(28, 784, W - 56, 148, 14); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,229,255,0.25)'; ctx.lineWidth = 1.5; ctx.stroke();
 
     ctx.textAlign = 'center';
     ctx.font = '900 14px "Noto Sans JP", sans-serif';
-    ctx.fillStyle = '#38bdf8';
-    ctx.fillText('⚡ 0フレーム遅延スワイプ操作', W / 2, 830);
-    ctx.font = '700 13px "Noto Sans JP", sans-serif';
+    ctx.fillStyle = '#00e5ff';
+    ctx.fillText('⚡ 0フレーム遅延スワイプ × 上下左右の読み合い', W / 2, 810);
+    ctx.font = '700 12.5px "Noto Sans JP", sans-serif';
     ctx.fillStyle = '#e2e8f0';
-    ctx.fillText('← → 左右スワイプ：サイド見切り   ／   ↓ 下スワイプ：ダック', W / 2, 858);
-    ctx.fillText('左右タップ：カウンター連打   ／   ↑ 上スワイプ：アッパー・必殺KO', W / 2, 884);
+    ctx.fillText('← → 左右スワイプ：サイド回避   ／   ↓ 下スワイプ：ダック', W / 2, 838);
+    ctx.fillText('左右タップ：パンチ連打   ／   ↑ 上スワイプ：ガード崩し・必殺KO', W / 2, 864);
     ctx.fillStyle = '#fda4af';
-    ctx.fillText('⚠ 赤いアッパーに下ダックすると顎を狩られる！横へ避けろ！', W / 2, 912);
+    ctx.fillText('⚠ 赤アッパーに下ダックすると即狩られる！横へ避けろ！', W / 2, 892);
+    ctx.fillStyle = '#86efac';
+    ctx.fillText('⚡ 緑の薙ぎ払いは横逃げ不可！下ダックで潜れ！', W / 2, 916);
     ctx.restore();
   }
 
   function drawStageSelectScreen() {
     const diff = getDiff();
     const list = ROSTER[state.diffId];
+    const cleared = save.cleared[state.diffId];
+    const maxUnlocked = Math.min(4, cleared.length);
 
-    const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, '#070912');
-    g.addColorStop(1, '#121629');
-    ctx.fillStyle = g;
+    ctx.fillStyle = 'rgba(2,3,8,0.82)';
     ctx.fillRect(0, 0, W, H);
 
     ctx.save();
-    // Header
     ctx.textAlign = 'center';
-    ctx.font = 'italic 900 34px "Chakra Petch", sans-serif';
+    ctx.font = 'italic 900 32px "Chakra Petch", sans-serif';
     ctx.fillStyle = diff.color;
-    ctx.fillText(`${diff.label} CIRCUIT`, W / 2, 86);
-    ctx.font = '800 14px "Noto Sans JP", sans-serif';
+    ctx.fillText(`${diff.label} — 5 MATCHES`, W / 2, 76);
+    ctx.font = '800 13px "Noto Sans JP", sans-serif';
     ctx.fillStyle = '#cbd5e1';
-    ctx.fillText(`${diff.jp}｜全5人の強敵を選択して挑戦！`, W / 2, 114);
+    ctx.fillText('勝つたびに強敵が解放！全5試合を勝ち抜け！', W / 2, 102);
 
-    // Difficulty Switch Tabs
-    const ids = ['easy', 'hard', 'vhard'];
-    for (let i = 0; i < 3; i++) {
+    // 4 Difficulty Tabs
+    const ids = ['easy', 'normal', 'hard', 'vhard'];
+    for (let i = 0; i < 4; i++) {
       const id = ids[i];
       const d = DIFFICULTIES[id];
-      const tx = 24 + i * 168;
+      const tx = 18 + i * 128;
       const active = state.diffId === id;
-      ctx.fillStyle = active ? d.color : 'rgba(30,41,59,0.85)';
-      ctx.beginPath();
-      ctx.roundRect(tx, 134, 156, 38, 10);
-      ctx.fill();
-      ctx.font = '900 14px "Chakra Petch", sans-serif';
-      ctx.fillStyle = active ? '#09090b' : '#cbd5e1';
-      ctx.fillText(d.label, tx + 78, 158);
-      registerBtn(tx, 134, 156, 38, () => { state.diffId = id; });
+      ctx.fillStyle = active ? d.color : 'rgba(20,28,46,0.9)';
+      ctx.beginPath(); ctx.roundRect(tx, 120, 120, 36, 9); ctx.fill();
+      ctx.font = '900 12px "Chakra Petch", sans-serif';
+      ctx.fillStyle = active ? '#020308' : '#cbd5e1';
+      ctx.fillText(d.label, tx + 60, 143);
+      registerBtn(tx, 120, 120, 36, () => {
+        state.diffId = id;
+        buildOpponentRig(ROSTER[id][Math.min(4, save.cleared[id].length)]);
+      });
     }
 
-    // 5 Fighter Cards
-    let y = 192;
-    for (let i = 0; i < list.length; i++) {
+    // 5 Escalating Match Cards
+    let y = 176;
+    for (let i = 0; i < 5; i++) {
       const f = list[i];
-      const isCleared = save.cleared[state.diffId].includes(i);
+      const isClr = cleared.includes(i);
+      const isNext = i === maxUnlocked && !isClr;
+      const locked = i > maxUnlocked;
 
-      ctx.fillStyle = f.boss ? 'rgba(40,20,30,0.92)' : 'rgba(18,24,38,0.90)';
-      ctx.beginPath();
-      ctx.roundRect(24, y, W - 48, 116, 16);
-      ctx.fill();
-      ctx.strokeStyle = isCleared ? '#22c55e' : (f.boss ? '#fde047' : 'rgba(255,255,255,0.16)');
-      ctx.lineWidth = f.boss || isCleared ? 2.5 : 1.5;
-      ctx.stroke();
+      ctx.fillStyle = f.boss ? 'rgba(36,14,26,0.90)' : 'rgba(12,18,32,0.88)';
+      ctx.beginPath(); ctx.roundRect(22, y, W - 44, 120, 15); ctx.fill();
+      ctx.strokeStyle = isClr ? '#22c55e' : (isNext ? diff.color : (locked ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.22)'));
+      ctx.lineWidth = (isNext || f.boss) ? 2.5 : 1.5; ctx.stroke();
 
-      // Glove color emblem circle
-      ctx.fillStyle = f.glove;
-      ctx.beginPath();
-      ctx.arc(68, y + 58, 26, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = f.gloveTrim;
-      ctx.lineWidth = 3;
-      ctx.stroke();
-      ctx.font = 'italic 900 20px "Chakra Petch", sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#ffffff';
-      ctx.fillText(`0${f.stage}`, 68, y + 65);
+      ctx.globalAlpha = locked ? 0.45 : 1.0;
 
-      // Fighter Text
+      // Match badge circle
+      ctx.fillStyle = '#' + f.glove.toString(16).padStart(6, '0');
+      ctx.beginPath(); ctx.arc(64, y + 60, 26, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#' + f.neon.toString(16).padStart(6, '0'); ctx.lineWidth = 3; ctx.stroke();
+      ctx.font = 'italic 900 19px "Chakra Petch", sans-serif';
+      ctx.textAlign = 'center'; ctx.fillStyle = '#ffffff';
+      ctx.fillText(`M${f.stage}`, 64, y + 67);
+
       ctx.textAlign = 'left';
-      ctx.font = '900 20px "Noto Sans JP", sans-serif';
+      ctx.font = '900 19px "Noto Sans JP", sans-serif';
       ctx.fillStyle = f.boss ? '#fde047' : '#ffffff';
-      ctx.fillText(f.jpName + (f.boss ? ' ★BOSS' : ''), 110, y + 40);
+      ctx.fillText(f.jpName + (f.boss ? ' ★BOSS' : ''), 104, y + 38);
 
-      ctx.font = '700 13px "Noto Sans JP", sans-serif';
+      ctx.font = '700 12.5px "Noto Sans JP", sans-serif';
       ctx.fillStyle = '#94a3b8';
-      ctx.fillText(`${f.title}  ｜  HP ${f.hp}  ｜  MAX ${f.comboMax}連撃`, 110, y + 66);
+      ctx.fillText(`${f.title} ｜ HP ${f.hp} ｜ 最大${f.comboMax}連撃`, 104, y + 64);
 
-      ctx.font = '700 12px "Noto Sans JP", sans-serif';
-      ctx.fillStyle = '#fda4af';
-      ctx.fillText(`ダック狩り警戒度: ${Math.round(f.upperRate * 100)}%   フェイント: ${Math.round(f.feintRate * 100)}%`, 110, y + 92);
+      ctx.font = '700 11.5px "Noto Sans JP", sans-serif';
+      ctx.fillStyle = '#7dd3fc';
+      ctx.fillText(`ガード率 ${Math.round(f.guardRate * 100)}%   ダック狩り ${Math.round(f.upperRate * 100)}%   薙ぎ払い ${Math.round(f.sweepRate * 100)}%`, 104, y + 92);
 
-      // Fight / Cleared pill
-      ctx.fillStyle = isCleared ? '#16a34a' : diff.color;
-      ctx.beginPath();
-      ctx.roundRect(W - 118, y + 36, 82, 42, 10);
-      ctx.fill();
+      // Action Pill
+      ctx.fillStyle = locked ? '#334155' : (isClr ? '#16a34a' : diff.color);
+      ctx.beginPath(); ctx.roundRect(W - 116, y + 38, 82, 42, 10); ctx.fill();
       ctx.textAlign = 'center';
-      ctx.font = '900 14px "Noto Sans JP", sans-serif';
-      ctx.fillStyle = isCleared ? '#ffffff' : '#09090b';
-      ctx.fillText(isCleared ? '済・再戦' : '対戦!', W - 77, y + 62);
+      ctx.font = '900 13px "Noto Sans JP", sans-serif';
+      ctx.fillStyle = locked ? '#94a3b8' : (isClr ? '#ffffff' : '#020308');
+      ctx.fillText(locked ? '🔒未開放' : (isClr ? '済・再戦' : '対戦!'), W - 75, y + 64);
 
-      registerBtn(24, y, W - 48, 116, () => startFight(state.diffId, i));
-      y += 130;
+      ctx.globalAlpha = 1.0;
+      if (!locked) {
+        registerBtn(22, y, W - 44, 120, () => startFight(state.diffId, i));
+      }
+      y += 132;
     }
 
-    // Back to Title
-    drawSmallBtn(W / 2 - 90, 868, 180, 44, '← タイトルへ戻る', () => { state.screen = 'title'; });
+    drawSmallBtn(W / 2 - 95, 862, 190, 44, '← 難易度選択へ戻る', () => { state.screen = 'title'; });
     ctx.restore();
   }
 
@@ -2738,142 +2421,90 @@
     const diff = getDiff();
 
     ctx.save();
-    ctx.fillStyle = 'rgba(6,8,16,0.78)';
+    ctx.fillStyle = 'rgba(2,3,8,0.74)';
     ctx.fillRect(0, 0, W, H);
 
-    ctx.fillStyle = 'rgba(15,20,34,0.96)';
-    ctx.beginPath();
-    ctx.roundRect(34, 210, W - 68, 520, 22);
-    ctx.fill();
-    ctx.strokeStyle = won ? '#fde047' : '#f43f5e';
-    ctx.lineWidth = 3;
-    ctx.stroke();
+    ctx.fillStyle = 'rgba(10,14,26,0.96)';
+    ctx.beginPath(); ctx.roundRect(32, 195, W - 64, 545, 22); ctx.fill();
+    ctx.strokeStyle = won ? '#fde047' : '#f43f5e'; ctx.lineWidth = 3; ctx.stroke();
 
     ctx.textAlign = 'center';
-    ctx.font = 'italic 900 60px "Chakra Petch", sans-serif';
+    ctx.font = 'italic 900 58px "Chakra Petch", sans-serif';
     ctx.fillStyle = won ? '#fde047' : '#f43f5e';
-    ctx.fillText(won ? 'K.O. WIN!!' : 'KNOCKED OUT', W / 2, 294);
+    ctx.fillText(won ? 'K.O. WIN!!' : 'KNOCKED OUT', W / 2, 276);
 
-    ctx.font = '900 20px "Noto Sans JP", sans-serif';
+    ctx.font = '900 19px "Noto Sans JP", sans-serif';
     ctx.fillStyle = '#ffffff';
-    ctx.fillText(`${diff.label} STAGE ${e.cfg.stage}：${e.cfg.jpName}`, W / 2, 336);
+    ctx.fillText(`${diff.label} MATCH ${e.cfg.stage}/5：${e.cfg.jpName}`, W / 2, 318);
 
-    // Stats Box
-    ctx.fillStyle = 'rgba(30,41,59,0.75)';
-    ctx.beginPath();
-    ctx.roundRect(62, 362, W - 124, 152, 14);
-    ctx.fill();
+    ctx.fillStyle = 'rgba(20,28,48,0.85)';
+    ctx.beginPath(); ctx.roundRect(58, 344, W - 116, 178, 14); ctx.fill();
 
     const rows = [
-      ['クリアタイム', `${state.fightTime.toFixed(1)} 秒`],
+      ['撃破タイム', `${state.fightTime.toFixed(1)} 秒`],
       ['JUST 見切り回数', `${p.justCount} 回`],
+      ['ガードブレイク', `${p.guardBreaks} 回`],
       ['最大カウンター連撃', `${p.maxCombo} HIT`],
-      ['全15強敵 制覇数', `${countTotalCleared()} / 15`],
+      ['全20強敵 制覇数', `${countTotalCleared()} / 20`],
     ];
     for (let i = 0; i < rows.length; i++) {
-      const ry = 398 + i * 32;
-      ctx.textAlign = 'left';
-      ctx.font = '700 15px "Noto Sans JP", sans-serif';
-      ctx.fillStyle = '#94a3b8';
-      ctx.fillText(rows[i][0], 84, ry);
-      ctx.textAlign = 'right';
-      ctx.font = '900 16px "Chakra Petch", "Noto Sans JP", sans-serif';
-      ctx.fillStyle = '#fde047';
-      ctx.fillText(rows[i][1], W - 84, ry);
+      const ry = 376 + i * 32;
+      ctx.textAlign = 'left'; ctx.font = '700 14.5px "Noto Sans JP", sans-serif'; ctx.fillStyle = '#94a3b8';
+      ctx.fillText(rows[i][0], 80, ry);
+      ctx.textAlign = 'right'; ctx.font = '900 15.5px "Chakra Petch", "Noto Sans JP", sans-serif'; ctx.fillStyle = '#fde047';
+      ctx.fillText(rows[i][1], W - 80, ry);
     }
 
-    // Action Buttons
     const hasNext = won && state.stageIdx < 4;
-    const primaryLabel = hasNext ? `次の強敵へ（STAGE ${state.stageIdx + 2}） ▶`
-      : (won ? '次の難度 / 15強敵一覧へ ▶' : '🔥 もう一回リベンジ！');
+    const primaryLbl = hasNext
+      ? `🔥 次の強敵へ（MATCH ${state.stageIdx + 2}/5） ▶`
+      : (won ? '🏆 次の難易度へ挑戦する ▶' : '🔥 もう一回リベンジ！');
 
     ctx.fillStyle = won ? '#fde047' : '#f43f5e';
-    ctx.beginPath();
-    ctx.roundRect(62, 542, W - 124, 64, 14);
-    ctx.fill();
-    ctx.textAlign = 'center';
-    ctx.font = '900 20px "Noto Sans JP", sans-serif';
-    ctx.fillStyle = won ? '#09090b' : '#ffffff';
-    ctx.fillText(primaryLabel, W / 2, 581);
-    registerBtn(62, 542, W - 124, 64, () => {
+    ctx.beginPath(); ctx.roundRect(58, 548, W - 116, 64, 14); ctx.fill();
+    ctx.textAlign = 'center'; ctx.font = '900 19px "Noto Sans JP", sans-serif';
+    ctx.fillStyle = won ? '#020308' : '#ffffff';
+    ctx.fillText(primaryLbl, W / 2, 587);
+    registerBtn(58, 548, W - 116, 64, () => {
       if (hasNext) startFight(state.diffId, state.stageIdx + 1);
-      else if (won) state.screen = 'select';
+      else if (won) state.screen = 'title';
       else startFight(state.diffId, state.stageIdx);
     });
 
     ctx.fillStyle = '#1e293b';
-    ctx.beginPath();
-    ctx.roundRect(62, 624, W - 124, 54, 14);
-    ctx.fill();
-    ctx.font = '800 16px "Noto Sans JP", sans-serif';
-    ctx.fillStyle = '#e2e8f0';
-    ctx.fillText('15強敵セレクトへ戻る', W / 2, 657);
-    registerBtn(62, 624, W - 124, 54, () => { state.screen = 'select'; });
+    ctx.beginPath(); ctx.roundRect(58, 630, W - 116, 54, 14); ctx.fill();
+    ctx.font = '800 15.5px "Noto Sans JP", sans-serif'; ctx.fillStyle = '#e2e8f0';
+    ctx.fillText('5試合セレクトへ戻る', W / 2, 663);
+    registerBtn(58, 630, W - 116, 54, () => { state.screen = 'select'; });
     ctx.restore();
   }
 
-  // =========================================================================
-  // MAIN RENDER
-  // =========================================================================
   function render() {
+    renderer.render(scene, camera);
+
+    ctx.clearRect(0, 0, W, H);
     state.uiButtons = [];
 
-    if (state.screen === 'title') {
-      drawTitleScreen();
-      return;
-    }
-    if (state.screen === 'select') {
-      drawStageSelectScreen();
-      return;
-    }
-
-    // First-person 3D Fight Scene
-    const shakeX = (rand() - 0.5) * 2 * state.screenShake;
-    const shakeY = (rand() - 0.5) * 2 * state.screenShake;
-
-    ctx.save();
-    ctx.translate(W / 2 + shakeX, H / 2 + shakeY);
-    ctx.rotate(state.camRoll);
-    const zoom = 1 + state.camFovBoost;
-    ctx.scale(zoom, zoom);
-    ctx.translate(-W / 2 - state.camX, -H / 2 - state.camY);
-
-    drawArena(W / 2, H * 0.44);
-    drawOpponent3D(W / 2, H * 0.45);
-    ctx.restore();
-
-    // Foreground First-Person Player Gloves (slightly counter-shifted for parallax!)
-    ctx.save();
-    ctx.translate(shakeX * 0.65 - state.camX * 0.25, shakeY * 0.65 - state.camY * 0.18);
-    drawPlayerGloves1stPerson();
-    ctx.restore();
-
-    drawActionOverlays();
+    if (state.screen === 'title') { drawTitleScreen(); return; }
+    if (state.screen === 'select') { drawStageSelectScreen(); return; }
     drawFightHUD();
-
     if (state.screen === 'victory') drawResultOverlay(true);
     else if (state.screen === 'defeat') drawResultOverlay(false);
   }
 
   // =========================================================================
-  // ZERO-FRAME LATENCY POINTER & KEYBOARD INPUTS
+  // 0-FRAME LATENCY POINTER & KEYBOARD INPUTS
   // =========================================================================
-  let pointerState = { active: false, id: null, sx: 0, sy: 0, swiped: false };
-
-  function toLogicalPos(ev) {
-    const rect = canvas.getBoundingClientRect();
-    return {
-      x: ((ev.clientX - rect.left) / rect.width) * W,
-      y: ((ev.clientY - rect.top) / rect.height) * H,
-    };
+  let ptr = { active: false, id: null, sx: 0, sy: 0, swiped: false };
+  function toPos(ev) {
+    const r = hudCanvas.getBoundingClientRect();
+    return { x: ((ev.clientX - r.left) / r.width) * W, y: ((ev.clientY - r.top) / r.height) * H };
   }
 
-  canvas.addEventListener('pointerdown', (ev) => {
+  hudCanvas.addEventListener('pointerdown', (ev) => {
     ev.preventDefault();
     unlockAudio();
-    const pos = toLogicalPos(ev);
-
-    // Check UI buttons first (instant 0-frame tap!)
+    const pos = toPos(ev);
     for (let i = state.uiButtons.length - 1; i >= 0; i--) {
       const b = state.uiButtons[i];
       if (pos.x >= b.x && pos.x <= b.x + b.w && pos.y >= b.y && pos.y <= b.y + b.h) {
@@ -2881,43 +2512,32 @@
         return;
       }
     }
-
     if (state.screen !== 'fight') return;
-    pointerState = { active: true, id: ev.pointerId, sx: pos.x, sy: pos.y, swiped: false };
+    ptr = { active: true, id: ev.pointerId, sx: pos.x, sy: pos.y, swiped: false };
   }, { passive: false });
 
-  canvas.addEventListener('pointermove', (ev) => {
-    if (!pointerState.active || ev.pointerId !== pointerState.id || pointerState.swiped) return;
+  hudCanvas.addEventListener('pointermove', (ev) => {
+    if (!ptr.active || ev.pointerId !== ptr.id || ptr.swiped) return;
     ev.preventDefault();
-    const pos = toLogicalPos(ev);
-    const dx = pos.x - pointerState.sx;
-    const dy = pos.y - pointerState.sy;
-    const dist = Math.hypot(dx, dy);
-
-    // 0-FRAME DELAY TRIGGER: Fires immediately when finger moves >= 18px!
-    if (dist >= 18) {
-      pointerState.swiped = true;
-      if (Math.abs(dx) >= Math.abs(dy) * 0.85) {
-        triggerDodge(dx < 0 ? 'left' : 'right');
-      } else if (dy > 0) {
-        triggerDodge('duck');
-      } else {
-        triggerUppercut();
-      }
+    const pos = toPos(ev);
+    const dx = pos.x - ptr.sx;
+    const dy = pos.y - ptr.sy;
+    if (Math.hypot(dx, dy) >= 18) {
+      ptr.swiped = true;
+      if (Math.abs(dx) >= Math.abs(dy) * 0.85) triggerDodge(dx < 0 ? 'left' : 'right');
+      else if (dy > 0) triggerDodge('duck');
+      else triggerUppercut();
     }
   }, { passive: false });
 
-  function finishPointer(ev) {
-    if (!pointerState.active || ev.pointerId !== pointerState.id) return;
-    const pos = toLogicalPos(ev);
-    if (!pointerState.swiped && state.screen === 'fight') {
-      // Crisp tap -> Left or Right Counter Punch!
-      triggerPunch(pos.x < W * 0.5 ? 'left' : 'right');
-    }
-    pointerState.active = false;
+  function endPtr(ev) {
+    if (!ptr.active || ev.pointerId !== ptr.id) return;
+    const pos = toPos(ev);
+    if (!ptr.swiped && state.screen === 'fight') triggerPunch(pos.x < W * 0.5 ? 'left' : 'right');
+    ptr.active = false;
   }
-  canvas.addEventListener('pointerup', finishPointer);
-  canvas.addEventListener('pointercancel', () => { pointerState.active = false; });
+  hudCanvas.addEventListener('pointerup', endPtr);
+  hudCanvas.addEventListener('pointercancel', () => { ptr.active = false; });
 
   window.addEventListener('keydown', (ev) => {
     if (ev.repeat) return;
@@ -2936,29 +2556,26 @@
   });
 
   // =========================================================================
-  // MAIN LOOP & DETERMINISTIC SHORTS STEPPER
+  // INITIALIZE & MAIN LOOP
   // =========================================================================
-  window.__manualStep = false;
-  window.__stepFrame = (dtSec = 1 / 60) => {
-    update(dtSec);
-    render();
-  };
+  window.__manualStep = SHORTS_MODE;
+  window.__stepFrame = (dtSec = 1 / 60) => { update(dtSec); render(); };
 
+  // Build Zeus Omega 3D showcase on Title screen immediately!
+  buildOpponentRig(ROSTER.vhard[4]);
   if (SHORTS_MODE) {
     startFight('vhard', 4, true);
+    render();
   }
 
   let lastTs = performance.now();
-  function rafLoop(ts) {
+  function raf(ts) {
     const dt = Math.min(0.05, (ts - lastTs) / 1000);
     lastTs = ts;
-    if (!window.__manualStep) {
-      update(dt);
-      render();
-    }
-    requestAnimationFrame(rafLoop);
+    if (!window.__manualStep) { update(dt); render(); }
+    requestAnimationFrame(raf);
   }
-  requestAnimationFrame(rafLoop);
+  requestAnimationFrame(raf);
 })();
 </script>
 </body>

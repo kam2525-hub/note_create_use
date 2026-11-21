@@ -174,10 +174,10 @@ def start_static_server(directory: Path):
 # High-retention punchy Japanese narration timed around beats & KO impacts
 NARRATION_CUES = [
     (0.02, "零点一秒の見切りから、一撃カウンターKO！"),
-    (1.90, "ゼロフレーム遅延スワイプの一人称3Dボクシング！"),
-    (4.65, "ただし、しゃがみ連打はダック狩りアッパーで即死！"),
-    (7.45, "三つの難度、全十五人の強敵をなぎ倒せ！"),
-    (10.50, "三連見切りからの必殺アッパー！ベリーハード制覇できる？"),
+    (1.35, "立体3Dでガードしてくる強敵を、アッパーでぶち破れ！"),
+    (4.65, "しゃがみ連打はダック狩りアッパーで即死！上下左右を極めろ！"),
+    (7.45, "4難度かける5試合、勝つほど強くなる全20人の強敵！"),
+    (10.50, "上下左右の3連見切りからの必殺KO！ベリーハード制覇できる？"),
 ]
 
 
@@ -341,6 +341,25 @@ def generate_audio(total_dur: float, events: list, wav_path: Path):
             lt = np.arange(e_len, dtype=np.float32) / sr
             freq = np.linspace(320.0, 1180.0, e_len, dtype=np.float32)
             sfx[idx0 : idx0 + e_len] += np.sin(2.0 * math.pi * np.cumsum(freq) / sr) * np.exp(-lt * 5.0) * 0.24
+
+        elif kind == "sweep_warn":
+            e_len = min(int(0.24 * sr), n_samples - idx0)
+            lt = np.arange(e_len, dtype=np.float32) / sr
+            freq = np.linspace(720.0, 260.0, e_len, dtype=np.float32)
+            sfx[idx0 : idx0 + e_len] += np.sin(2.0 * math.pi * np.cumsum(freq) / sr) * np.exp(-lt * 6.5) * 0.20
+
+        elif kind == "blocked":
+            e_len = min(int(0.10 * sr), n_samples - idx0)
+            lt = np.arange(e_len, dtype=np.float32) / sr
+            sfx[idx0 : idx0 + e_len] += np.sign(np.sin(2.0 * math.pi * 190.0 * lt)) * np.exp(-lt * 32.0) * 0.16
+
+        elif kind == "guard_break":
+            e_len = min(int(0.30 * sr), n_samples - idx0)
+            lt = np.arange(e_len, dtype=np.float32) / sr
+            rng = np.random.default_rng(seed=idx0 + 91)
+            shatter = rng.uniform(-1.0, 1.0, e_len).astype(np.float32) * np.exp(-lt * 14.0) * 0.26
+            chime = np.sin(2.0 * math.pi * np.cumsum(np.linspace(480.0, 1480.0, e_len)) / sr) * np.exp(-lt * 10.0) * 0.26
+            sfx[idx0 : idx0 + e_len] += shatter + chime
 
         elif kind == "just_slip":
             # Time-slow bass drop + electric crystalline flash!
@@ -604,13 +623,13 @@ h1 span{{color:#fde047;}}
 }}
 </style></head><body>
   <div class="left">
-    <div class="badge">GAME DAY 06 ｜ 一人称3Dボクシング</div>
+    <div class="badge">GAME DAY 06 ｜ Three.js 一人称3Dボクシング</div>
     <h1>COUNTER <span>KO 3D</span></h1>
-    <div class="sub"><strong>0.1秒見切り</strong>×<strong>ダック狩りアッパー</strong><br>0フレーム遅延スワイプで全15強敵を粉砕！</div>
+    <div class="sub"><strong>上下左右の極限見切り</strong>×<strong>ガード崩し</strong><br>4難度×5連戦（全20強敵）を0遅延で粉砕！</div>
     <div class="chips">
-      <div class="chip">⚡ 0フレーム遅延スワイプ</div>
-      <div class="chip">⚠ ダック狩りアッパー</div>
-      <div class="chip">🥊 3難度×全15強敵</div>
+      <div class="chip">⚡ Three.js ネオン3D</div>
+      <div class="chip">⚠ ダック狩り＆ガード崩し</div>
+      <div class="chip">🥊 4難度×5試合＝20強敵</div>
     </div>
   </div>
   <div class="right">
@@ -624,7 +643,8 @@ h1 span{{color:#fde047;}}
     try:
         subprocess.run(
             [
-                browser, "--headless=new", "--no-sandbox", "--disable-gpu",
+                browser, "--headless=new", "--no-sandbox",
+                "--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader",
                 "--window-size=1280,670", f"--screenshot={out_png}",
                 f"file://{tmp_html}",
             ],
@@ -641,7 +661,8 @@ def main():
     profile_dir = tempfile.mkdtemp(prefix="cdp_day06_")
     proc = subprocess.Popen(
         [
-            browser, "--headless=new", "--no-sandbox", "--disable-gpu",
+            browser, "--headless=new", "--no-sandbox",
+            "--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader",
             "--disable-dev-shm-usage", "--remote-allow-origins=*",
             f"--user-data-dir={profile_dir}",
             f"--remote-debugging-port={dbg_port}", "--window-size=540,960",
@@ -655,7 +676,7 @@ def main():
     for old in frames_dir.glob("*.*"):
         old.unlink()
 
-    fps = 60
+    fps = 30
     dt_sec = 1.0 / fps
     total_dur = 14.5
     total_frames = int(fps * total_dur)
@@ -698,31 +719,30 @@ def main():
         font_sub = ImageFont.truetype(FONT_SANS, 38)
 
         # New Fight-Night PPV Caption Script (zero tofu boxes!)
-        # (t0, t1, kicker_tag, main_headline, sub_punchline, accent_rgb)
         caption_plan = [
-            (0.00, 1.15, "0.1秒見切り", "一撃カウンターKO!!", "一人称3Dボクシング爆誕!!", (253, 224, 71)),
-            (1.15, 2.75, "0フレーム遅延", "指の動きに即反応!!", "スワイプ見切り → カウンター連打!!", (56, 189, 248)),
-            (2.75, 4.10, "厳格タイミング", "早すぎ回避は即被弾!!", "ギリギリで避けろ!!", (56, 189, 248)),
-            (4.10, 5.10, "駆け引き", "フックは下ダックで回避!", "しかし次の瞬間…", (163, 230, 53)),
+            (0.00, 1.15, "0.1秒見切り", "一撃カウンターKO!!", "Three.js リアルネオン3Dボクシング!!", (253, 224, 71)),
+            (1.15, 2.80, "鉄壁3Dガード", "アッパーでガード粉砕!!", "上スワイプでガードブレイク連打!!", (0, 229, 255)),
+            (2.80, 4.10, "上下左右の読み合い", "緑の薙ぎ払いは下ダック!!", "横逃げ不可!! 潜って反撃!!", (74, 222, 128)),
+            (4.10, 5.10, "駆け引き", "フックはダックで回避!", "しかし次の瞬間…", (163, 230, 53)),
             (5.10, 7.40, "ダック狩りアッパー", "しゃがみ連打は即死!!", "赤アッパーは横へ見切れ!!", (244, 63, 94)),
-            (7.40, 9.45, "全3難度 × 5戦", "全15人の強敵に挑め!!", "EASY / HARD / VERY HARD", (250, 204, 21)),
-            (9.45, 11.60, "裏世界最強 15人目", "3連ラッシュを全見切り!!", "左!! 右!! アッパー回避!!", (56, 189, 248)),
-            (11.60, 14.55, "ULTRA COUNTER KO", "ベリーハード制覇できる？", "プロフィール/リンクから無料プレイ ▼", (253, 224, 71)),
+            (7.40, 9.45, "4難度 × 5連戦", "勝つほど強敵が進化!!", "EASY / NORMAL / HARD / VERY HARD", (250, 204, 21)),
+            (9.45, 11.60, "20人目の裏世界王者", "右・下・左の3連見切り!!", "全方向スワイプで捌き切れ!!", (0, 229, 255)),
+            (11.60, 14.55, "ULTRA COUNTER KO", "ベリーハード5連戦制覇できる？", "プロフィール/リンクから無料プレイ ▼", (253, 224, 71)),
         ]
 
         # Peaks where chromatic RGB split + manga impact lines fire!
-        impact_peaks = [0.00, 0.14, 0.42, 1.15, 1.60, 2.38, 4.10, 5.60, 6.60, 7.40, 8.40, 9.45, 11.24, 11.98]
+        impact_peaks = [0.00, 0.14, 0.42, 1.15, 1.98, 3.28, 4.10, 5.60, 6.60, 7.40, 8.40, 9.45, 11.24, 11.98]
 
         thumb_src_path = OUT_DIR / "_thumb_src.png"
 
         for f_idx in range(total_frames):
             t = f_idx * dt_sec
-            cdp.eval_js("window.__stepFrame(1/60);")
+            cdp.eval_js(f"window.__stepFrame({dt_sec:.6f});")
             res = cdp.call("Page.captureScreenshot", {"format": "jpeg", "quality": 95})
             raw_img = Image.open(io.BytesIO(base64.b64decode(res["data"]))).convert("RGB")
 
-            # Capture crisp mid-impact ULTRA COUNTER KO frame (banner cleanly below face!)
-            if f_idx == 28:
+            # Capture crisp mid-impact ULTRA COUNTER KO frame (0.46s)
+            if f_idx == 14:
                 raw_img.save(thumb_src_path)
 
             tag, main_txt, sub_txt, accent, s0 = "", "", "", (253, 224, 71), t
