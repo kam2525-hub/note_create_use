@@ -6,19 +6,20 @@
   <title>Day 06 投稿ヘルパー｜COUNTER KO 3D</title>
   <style>
     :root {
-      --bg: #0b0d17;
-      --card: #141827;
+      --bg: #05070e;
+      --card: #0e1322;
       --text: #f8fafc;
       --muted: #94a3b8;
       --accent: #f43f5e;
+      --cyan: #00e5ff;
       --gold: #f59e0b;
-      --border: #27304a;
+      --border: #222c46;
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       padding: 24px 16px 60px;
-      background: radial-gradient(circle at 20% 0%, #241023 0%, #0b0d17 65%);
+      background: radial-gradient(circle at 20% 0%, #1d102b 0%, #05070e 65%);
       color: var(--text);
       font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
       line-height: 1.65;
@@ -43,14 +44,14 @@
       background: linear-gradient(90deg, #f43f5e, #f59e0b);
       color: #ffffff;
     }
-    .action-link.secondary { background: #1c2236; color: var(--text); border: 1px solid var(--border); }
+    .action-link.secondary { background: #141c30; color: var(--text); border: 1px solid var(--border); }
     .section {
       background: var(--card);
       border: 1px solid var(--border);
       border-radius: 18px;
       padding: 18px 20px;
       margin-bottom: 18px;
-      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
     }
     .section-head {
       display: flex;
@@ -60,7 +61,7 @@
       margin-bottom: 10px;
       flex-wrap: wrap;
     }
-    .section-title { font-size: 15px; font-weight: 800; color: #fde047; }
+    .section-title { font-size: 15px; font-weight: 800; color: var(--cyan); }
     .thumb-actions { display: flex; gap: 8px; flex-wrap: wrap; }
     .copy-btn {
       border: none;
@@ -73,11 +74,11 @@
       cursor: pointer;
       text-decoration: none;
     }
-    .copy-btn.secondary { background: #26314d; color: var(--text); }
+    .copy-btn.secondary { background: #1d2844; color: var(--text); }
     .copy-btn.done { background: var(--gold); color: #09090b; }
     textarea {
       width: 100%;
-      background: #0d111e;
+      background: #080c17;
       color: var(--text);
       border: 1px solid var(--border);
       border-radius: 12px;
@@ -94,7 +95,7 @@
 <body>
   <div class="wrap">
     <h1>Day 06 投稿ヘルパー（ゲーム6日目：COUNTER KO 3D）</h1>
-    <p class="lead">一人称3Dカウンターボクシング『COUNTER KO 3D』（全3難度×15強敵）のX・note・YouTube Shorts投稿用データです。</p>
+    <p class="lead">Three.js ガチ立体3Dネオンボクシング『COUNTER KO 3D』（全4難度×5試合＝20強敵）のX・note・YouTube Shorts投稿用データです。</p>
 
     <div class="quick-bar">
       <a class="action-link" id="xIntentBtn" href="#" target="_blank" rel="noopener">X（Twitter）の投稿画面を開く</a>
@@ -107,16 +108,17 @@
         <span class="section-title">X（Twitter）投稿テキスト</span>
         <button class="copy-btn" data-target="xText">コピー</button>
       </div>
-      <textarea id="xText" rows="9" readonly>【100日後にバズるゲームを作る男｜6日目】
-0.1秒見切り→一撃カウンターKO!!
-一人称3Dボクシング『COUNTER KO 3D』を作りました🥊⚡
+      <textarea id="xText" rows="10" readonly>【100日後にバズるゲームを作る男｜6日目】
+Three.js ガチ立体3D × ネオン漆黒リング🥊⚡
+一人称3Dカウンターボクシング『COUNTER KO 3D』を作りました！
 
-✅ 0フレーム遅延スワイプで指の動きに即反応！
-✅ 厳格タイミング見切り『JUST SLIP!!』→確定カウンター連打
-✅ しゃがみ連打を狩る「ダック狩りアッパー」搭載⚠
-✅ イージー／ハード／ベリーハード × 各5戦 ＝ 全15強敵！
+✅ 0フレーム遅延スワイプで上下左右を見切る！
+✅ 2本指長押し（PC: Shift/右クリック）でガード＆直前パリィ🛡
+✅ 相手3Dガード → 上アッパーでGUARD BREAK!!
+✅ しゃがみ連打を狩る「赤アッパー」＆横逃げ不可の「緑薙ぎ払い」⚠
+✅ イージー／ノーマル／ハード／ベリーハード × 各5試合（全20強敵）！
 
-ベリーハード15人目をKOできる？👇
+ベリーハード5連戦制覇できる？👇
 https://kam2525-hub.github.io/note_create_use/games/day06-counter-ko-3d/
 
 #100日後にバズるゲームを作る男 #個人開発 #ゲーム制作</textarea>
@@ -127,7 +129,7 @@ https://kam2525-hub.github.io/note_create_use/games/day06-counter-ko-3d/
         <span class="section-title">note タイトル</span>
         <button class="copy-btn" data-target="noteTitle">コピー</button>
       </div>
-      <textarea id="noteTitle" rows="2" readonly>【ゲーム6日目】0.1秒の見切り×ダック狩りアッパー！0フレーム遅延スワイプの一人称3Dボクシング『COUNTER KO 3D』（全15強敵）を作った【無料プレイ可】</textarea>
+      <textarea id="noteTitle" rows="2" readonly>【ゲーム6日目】Three.jsガチ立体3D×ネオンリング！相手ガード崩し＆上下左右の見切りで5連戦制覇する一人称3Dボクシング『COUNTER KO 3D』【全4難度・無料プレイ可】</textarea>
     </div>
 
     <div class="section">
@@ -146,26 +148,28 @@ https://kam2525-hub.github.io/note_create_use/games/day06-counter-ko-3d/
         <span class="section-title">note 本文</span>
         <button class="copy-btn" data-target="noteBody">コピー</button>
       </div>
-      <textarea id="noteBody" rows="16" readonly>100日後にバズるゲームを作る男、6日目です。
+      <textarea id="noteBody" rows="17" readonly>100日後にバズるゲームを作る男、6日目です。
 
 スマホで遊ぶボクシングゲームで一番気持ちいい瞬間――
-それは「相手の剛拳を0.1秒ギリギリで見切り、時間がスローになった瞬間に顎へカウンターアッパーを叩き込んで一撃KOする快感」です！
+それは「黒背景×ネオンが光る立体3Dリングで、相手の剛拳を0.1秒ギリギリで見切り、顎へカウンターアッパーを叩き込んで一撃KOする快感」です！
 
-6日目の今日は、その脳汁体験を極限まで研ぎ澄ませた一人称3Dボクシング『COUNTER KO 3D』を作りました！
+6日目の今日は、Three.js によるガチ立体3Dモデル＆ツヤツヤの立体3Dグローブで作り込んだ『COUNTER KO 3D』を公開します！
 
 スマホ縦画面・片手スワイプだけで今すぐ無料で遊べます👇
 
 https://kam2525-hub.github.io/note_create_use/games/day06-counter-ko-3d/
 
 ■ ガチ仕様＆脳汁ポイント
-・⚡ 0フレーム遅延スワイプ：指を離すのを待たず、動かした同一フレームで即座に回避＆アッパー発動！
-・🎯 厳格タイミング見切り：早すぎる回避は被弾！ギリギリで見切るとスローモーション＆確定カウンター連打！
-・⚠ ダック狩りアッパー：しゃがみ連打すると赤いアッパーで顎をカチ上げられる！横スワイプで見切れ！
-・🥊 全3難度（イージー／ハード／ベリーハード）× 各5ステージ ＝ 全15強敵！
+・🥊 Three.js ガチ立体3D×漆黒ネオンリング：立体キャラ＆自分の3Dグローブで臨場感MAX！
+・⚡ 0フレーム遅延スワイプ：指を離さず移動開始の同一フレームで回避＆アッパー発動！
+・🛡 2本指ガード＆直前パリィ：2本指同時押し（PC: Shift/右クリック）で3Dガード展開＆直前JUST PARRYで無傷カウンター！
+・🛡 相手の3Dガードを崩せ：連打はガードされる！上スワイプのアッパーでGUARD BREAK or 見切りカウンター！
+・⚠ 上下左右のガチ読み合い：赤のダック狩りアッパーは横回避、緑のワイド薙ぎ払いは下ダック必須！
+・🔥 全4難度（イージー／ノーマル／ハード／ベリーハード）× 各5試合（勝つほど強敵が進化・全20強敵）！
 
-あなたはベリーハード15人目「雷帝ゼウス・オメガ」をKOできますか？記録をぜひコメント欄で教えてください！
+あなたはベリーハード5連戦を制覇できますか？記録をぜひコメント欄で教えてください！
 
-#100日後にバズるゲームを作る男 #個人開発 #ゲーム制作 #ボクシングゲーム #無料ゲーム #ブラウザゲーム</textarea>
+#100日後にバズるゲームを作る男 #個人開発 #ゲーム制作 #ThreeJS #ボクシングゲーム #無料ゲーム #ブラウザゲーム</textarea>
     </div>
 
     <div class="section">
@@ -173,7 +177,7 @@ https://kam2525-hub.github.io/note_create_use/games/day06-counter-ko-3d/
         <span class="section-title">YouTube Shorts タイトル</span>
         <button class="copy-btn" data-target="ytTitle">コピー</button>
       </div>
-      <textarea id="ytTitle" rows="2" readonly>0.1秒見切り→一撃カウンターKO!! 一人称3Dボクシング『COUNTER KO 3D』を作った【全15強敵】 #Shorts #ゲーム制作 #個人開発</textarea>
+      <textarea id="ytTitle" rows="2" readonly>0.1秒見切り→一撃カウンターKO!! Three.jsガチ立体3Dボクシング『COUNTER KO 3D』を作った【全4難度×5連戦】 #Shorts #ゲーム制作 #個人開発</textarea>
     </div>
 
     <div class="section">
@@ -181,19 +185,21 @@ https://kam2525-hub.github.io/note_create_use/games/day06-counter-ko-3d/
         <span class="section-title">YouTube Shorts 説明文</span>
         <button class="copy-btn" data-target="ytDesc">コピー</button>
       </div>
-      <textarea id="ytDesc" rows="12" readonly>スマホ・PCで今すぐ無料で遊べます▼
+      <textarea id="ytDesc" rows="13" readonly>スマホ・PCで今すぐ無料で遊べます▼
 https://kam2525-hub.github.io/note_create_use/games/day06-counter-ko-3d/
 
 100日後にバズるゲームを作る男【ゲーム6日目】
-『COUNTER KO 3D（一人称3Dカウンターボクシング・全15強敵）』
+『COUNTER KO 3D（Three.js 一人称ネオン3Dボクシング）』
 
+🥊 Three.js による立体3Dキャラクター＆ツヤツヤの立体3Dグローブ×漆黒ネオンリング！
 ⚡ 0フレーム遅延スワイプ操作で指の動きに即反応！
-🎯 厳格タイミング見切り（JUST SLIP）→ スローモーション＆確定カウンター連打！
-⚠ しゃがみ連打を狩る「ダック狩りアッパー」搭載！赤アッパーは横スワイプで見切れ！
-🥊 全3難度（イージー／ハード／ベリーハード）× 各5ステージ ＝ 全15強敵！
-15人目の裏世界最強王者「雷帝ゼウス・オメガ」をKOできるか？記録をコメント欄で教えてください！
+🛡 2本指同時押し（PC: Shift/右クリック）で3Dガード＆直前「JUST PARRY!!」対応！
+🛡 相手も立体3Dガードしてくる！上スワイプのアッパーで「GUARD BREAK!!」 or 見切りカウンターで粉砕！
+⚠ 下ダック連打は「赤のダック狩りアッパー」で即狩られる！緑の薙ぎ払いは「下ダック」で潜れ！上下左右すべての読み合い！
+🔥 最初から選べる全4難度（イージー／ノーマル／ハード／ベリーハード）× 各5試合（勝つほど強敵が進化・全20強敵）！
+あなたはベリーハード5連戦を制覇できる？記録をコメント欄で教えてください！
 
-#Shorts #ゲーム制作 #個人開発 #ボクシング #ボクシングゲーム #カウンター #KO #3Dゲーム #一人称ゲーム #アクションゲーム #タイミングゲーム #無料ゲーム #ブラウザゲーム #スマホゲーム #ミニゲーム #インディーゲーム #神ゲー #脳汁 #死にゲー #高難易度 #暇つぶし #ゲーム紹介 #自作ゲーム #100日後にバズるゲームを作る男 #COUNTERKO3D</textarea>
+#Shorts #ゲーム制作 #個人開発 #ThreeJS #ボクシング #ボクシングゲーム #カウンター #KO #3Dゲーム #一人称ゲーム #アクションゲーム #タイミングゲーム #無料ゲーム #ブラウザゲーム #スマホゲーム #ミニゲーム #インディーゲーム #神ゲー #脳汁 #死にゲー #高難易度 #暇つぶし #ゲーム紹介 #自作ゲーム #100日後にバズるゲームを作る男 #COUNTERKO3D</textarea>
     </div>
   </div>
 
