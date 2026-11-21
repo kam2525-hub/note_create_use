@@ -355,11 +355,11 @@
     powerPreference: 'high-performance',
     preserveDrawingBuffer: true,
   });
-  renderer.setPixelRatio(SHORTS_MODE ? 1.25 : DPR);
+  renderer.setPixelRatio(SHORTS_MODE ? 1.0 : DPR);
   renderer.setSize(W, H, false);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.02;
-  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.enabled = !SHORTS_MODE;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   const scene = new THREE.Scene();
@@ -895,6 +895,19 @@
   pRightArm.position.set(0, -0.02, -0.38);
   pRightGlove.add(pRightArm);
 
+  // Foreground 3D Player Guard Shield (flares up on 2-finger guard!)
+  const pGuardShieldMat = new THREE.MeshBasicMaterial({
+    color: 0x00e5ff,
+    transparent: true,
+    opacity: 0,
+    side: THREE.DoubleSide,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  const pGuardShield = new THREE.Mesh(new THREE.RingGeometry(0.18, 0.24, 6), pGuardShieldMat);
+  pGuardShield.position.set(0, -0.04, -0.62);
+  playerRig.add(pGuardShield);
+
   // =========================================================================
   // 3D WORLD-SPACE SPARKS & SHOCKWAVE TORUSES
   // =========================================================================
@@ -1073,7 +1086,8 @@
     state.camOffX = 0; state.camOffY = 0; state.camOffZ = 0; state.camRoll = 0;
 
     state.player = {
-      hp: 100, maxHp: 100, koGauge: 0, combo: 0, maxCombo: 0, justCount: 0, guardBreaks: 0,
+      hp: 100, maxHp: 100, koGauge: 0, combo: 0, maxCombo: 0, justCount: 0, guardBreaks: 0, parryCount: 0,
+      guarding: false, guardStartTime: -10,
       dodgeDir: 'none', dodgeTimer: 0, dodgeDur: 0.31, dodgeQuality: 'none', dodgeInvuln: 0,
       punchSide: 'none', punchTimer: 0, punchDur: 0.18, punchHitDone: false,
       hurtTimer: 0,
@@ -1108,8 +1122,28 @@
   }
 
   // =========================================================================
-  // COMBAT MECHANICS (0-FRAME SWIPE, STRICT TIMING, GUARD BREAK, DUCK HUNT, HIGH SWEEP)
+  // COMBAT MECHANICS (0-FRAME SWIPE, 2-FINGER GUARD & PARRY, GUARD BREAK)
   // =========================================================================
+  function setPlayerGuard(active) {
+    const p = state.player;
+    if (state.screen !== 'fight' || state.enemy.state === 'ko') {
+      p.guarding = false;
+      return;
+    }
+    if (active && !p.guarding) {
+      p.guarding = true;
+      p.guardStartTime = state.elapsed;
+      p.punchSide = 'none';
+      p.punchTimer = 0;
+      p.dodgeTimer = 0;
+      p.dodgeDir = 'none';
+      emitEvent('player_guard_on');
+    } else if (!active && p.guarding) {
+      p.guarding = false;
+      emitEvent('player_guard_off');
+    }
+  }
+
   function isCorrectDodge(attackType, dir) {
     if (attackType === 'left_hook') return dir === 'right' || dir === 'duck';
     if (attackType === 'right_hook') return dir === 'left' || dir === 'duck';
@@ -1128,6 +1162,7 @@
     if (p.dodgeTimer > 0.08 && p.dodgeDir === dir) return;
 
     // 0-Frame Dodge Cancel
+    p.guarding = false;
     p.punchSide = 'none';
     p.punchTimer = 0;
     p.dodgeDir = dir;
@@ -1427,6 +1462,63 @@
     if (isDuckCaught) dmg = Math.round(dmg * 1.9);
     else if (p.dodgeQuality === 'early') dmg = Math.round(dmg * diff.earlyMult);
 
+    // 2-FINGER PLAYER GUARD & JUST PARRY RESOLUTION!
+    if (p.guarding && !isDuckCaught) {
+      const heldFor = state.elapsed - p.guardStartTime;
+      if (heldFor <= diff.justWin + 0.05 && e.attackType !== 'duck_upper') {
+        // PERFECT JUST PARRY!! Zero damage + enemy staggered!
+        p.parryCount++;
+        p.koGauge = clamp(p.koGauge + 22, 0, 100);
+        state.slowMoTimer = 0.22;
+        state.slowMoScale = 0.28;
+        state.screenShake = 14;
+        state.flashAlpha = 0.26;
+        state.flashColor = '#00e5ff';
+        state.speedLines = 0.35;
+        state.speedLineColor = '#00e5ff';
+        spawn3DImpact(new THREE.Vector3(0, 1.54, 1.25), 0x00e5ff, 20, true);
+        addPopup('JUST PARRY!! 0 DMG', W / 2, 370, '#00e5ff', 33, 0.78);
+        SFX.guardBreak();
+        emitEvent('just_parry', { attack: e.attackType });
+        e.state = 'stunned';
+        e.stateTimer = diff.counterWindow * 0.95;
+        e.counterWindow = diff.counterWindow * 0.95;
+        e.counterBonus = 2.05;
+        e.comboLeft = 0;
+        return;
+      } else {
+        // Standard 2-Finger Guard (cuts 80% on normal punches, 50% on Duck-Hunting Uppercut)
+        const chipRatio = e.attackType === 'duck_upper' ? 0.50 : 0.20;
+        const chip = Math.max(2, Math.round(dmg * chipRatio));
+        p.hp = Math.max(0, p.hp - chip);
+        p.koGauge = clamp(p.koGauge + 6, 0, 100);
+        state.screenShake = 9;
+        spawn3DImpact(new THREE.Vector3(0, 1.50, 1.35), 0x38bdf8, 12, false);
+        addPopup(
+          e.attackType === 'duck_upper' ? `アッパー貫通!! -${chip}` : `GUARD -${chip}`,
+          W / 2, 455, e.attackType === 'duck_upper' ? '#fb7185' : '#38bdf8', 26, 0.58
+        );
+        SFX.guard();
+        emitEvent('player_guard_hit', { chip, attack: e.attackType });
+        if (p.hp <= 0) {
+          state.screen = 'defeat';
+          setBanner('DOWN... K.O.', 'ガードを貫かれた!!', '#f43f5e', 1.4);
+          SFX.bell();
+          return;
+        }
+        if (e.comboLeft > 0) {
+          startEnemyAttack(pickNextAttack(), e.comboLeft - 1);
+          e.windupDur *= 0.90;
+          e.stateTimer = e.windupDur;
+        } else {
+          e.state = 'idle';
+          e.stateTimer = e.cfg.cooldown * 0.78;
+          e.guarding = rand() < e.cfg.guardRate;
+        }
+        return;
+      }
+    }
+
     p.hp = Math.max(0, p.hp - dmg);
     p.combo = 0;
     p.hurtTimer = isDuckCaught ? 0.42 : 0.28;
@@ -1461,13 +1553,13 @@
   }
 
   // =========================================================================
-  // SHORTS CHOREOGRAPHY (14.5s — REAL THREE.JS 3D FOOTAGE!)
+  // SHORTS CHOREOGRAPHY (22.5s — REAL THREE.JS 3D FOOTAGE!)
   // =========================================================================
   let shortsDone = new Set();
   function runShortsChoreography(t) {
     const once = (k, fn) => { if (!shortsDone.has(k)) { shortsDone.add(k); fn(); } };
 
-    // ACT 1 (0.00 - 1.15s): NUCLEAR 1-SECOND COLD OPEN — ZEUS OMEGA 3D COUNTER KO!
+    // ACT 1 (0.00 - 1.80s): NUCLEAR 1-SECOND COLD OPEN — ZEUS OMEGA 3D COUNTER KO!
     if (t >= 0.0) once('a1_s', () => {
       startFight('vhard', 4, true);
       state.player.koGauge = 100;
@@ -1487,106 +1579,134 @@
       state.slowMoTimer = 0; state.slowMoScale = 1.0;
     });
 
-    // ACT 2 (1.15 - 4.10s): GUARD BREAK & 0-FRAME SWIPE COMBAT — VIPER NEON (NORMAL BOSS)
-    if (t >= 1.15) once('a2_s', () => {
-      startFight('normal', 4, true);
-      state.enemy.state = 'idle';
-      state.enemy.guarding = true;
-      state.enemy.stateTimer = 4.0;
-      state.flashAlpha = 0.42; state.flashColor = '#00e5ff';
+    // ACT 2 (1.80 - 6.20s): NEW 2-FINGER GUARD + JUST PARRY & OPPONENT GUARD BREAK!
+    if (t >= 1.80) once('a2_s', () => {
+      startFight('normal', 4, true); // VIPER NEON
+      state.flashAlpha = 0.40; state.flashColor = '#00e5ff';
+      state.enemy.state = 'windup'; state.enemy.attackType = 'right_hook';
+      state.enemy.windupDur = 0.56; state.enemy.stateTimer = 0.48;
+      state.swipeCue = { dir: 'guard', timer: 0.50 };
       emitEvent('cut_act2');
     });
-    if (t >= 1.48) once('a2_blk', () => triggerPunch('left')); // Blocked by 3D Guard!
-    if (t >= 1.88) once('a2_brk', () => { state.swipeCue = { dir: 'up', timer: 0.35 }; triggerUppercut(); }); // GUARD BREAK!!
-    if (t >= 2.30) once('a2_c1', () => triggerPunch('right'));
-    if (t >= 2.54) once('a2_c2', () => triggerPunch('left'));
-    if (t >= 2.86) once('a2_atk', () => {
+    if (t >= 2.18) once('a2_gd', () => setPlayerGuard(true)); // 2-FINGER JUST PARRY!!
+    if (t >= 2.55) once('a2_gdoff', () => setPlayerGuard(false));
+    if (t >= 2.72) once('a2_p1', () => { state.slowMoTimer = 0; state.slowMoScale = 1; triggerPunch('left'); });
+    if (t >= 2.98) once('a2_p2', () => triggerPunch('right'));
+    if (t >= 3.45) once('a2_eg', () => {
+      state.enemy.state = 'idle'; state.enemy.guarding = true; state.enemy.stateTimer = 4.0;
+    });
+    if (t >= 3.85) once('a2_blk', () => triggerPunch('left')); // Blocked by Enemy 3D Guard!
+    if (t >= 4.42) once('a2_brk', () => { state.swipeCue = { dir: 'up', timer: 0.38 }; triggerUppercut(); }); // GUARD BREAK!!
+    if (t >= 4.92) once('a2_c1', () => triggerPunch('right'));
+    if (t >= 5.18) once('a2_c2', () => triggerPunch('left'));
+    if (t >= 5.55) once('a2_atk', () => {
       state.enemy.state = 'windup'; state.enemy.attackType = 'high_sweep';
-      state.enemy.windupDur = 0.56; state.enemy.stateTimer = 0.48; state.enemy.attackResolved = false;
+      state.enemy.windupDur = 0.54; state.enemy.stateTimer = 0.48; state.enemy.attackResolved = false;
       state.swipeCue = { dir: 'duck', timer: 0.48 };
       emitEvent('sweep_warn');
     });
-    if (t >= 3.28) once('a2_dck', () => { state.enemy.stateTimer = 0.06; triggerDodge('duck'); });
-    if (t >= 3.58) once('a2_c3', () => { state.slowMoTimer = 0; state.slowMoScale = 1; triggerPunch('right'); });
-    if (t >= 3.80) once('a2_c4', () => triggerPunch('left'));
+    if (t >= 5.96) once('a2_dck', () => { state.enemy.stateTimer = 0.06; triggerDodge('duck'); });
 
-    // ACT 3 (4.10 - 7.40s): DUCK-HUNTING UPPERCUT TRAP! — VIKTOR KRANE (HARD 4)
-    if (t >= 4.10) once('a3_s', () => {
-      startFight('hard', 3, true);
+    // ACT 3 (6.25 - 10.80s): DUCK-HUNTING UPPERCUT TRAP! — VIKTOR KRANE (HARD 4)
+    if (t >= 6.25) once('a3_s', () => {
+      setPlayerGuard(false);
+      startFight('hard', 3, true); // VIKTOR KRANE
       state.flashAlpha = 0.40; state.flashColor = '#f43f5e';
       state.enemy.state = 'windup'; state.enemy.attackType = 'left_hook';
-      state.enemy.windupDur = 0.50; state.enemy.stateTimer = 0.42;
-      state.swipeCue = { dir: 'duck', timer: 0.42 };
+      state.enemy.windupDur = 0.52; state.enemy.stateTimer = 0.44;
+      state.swipeCue = { dir: 'duck', timer: 0.44 };
       emitEvent('cut_act3');
     });
-    if (t >= 4.46) once('a3_d1', () => { state.enemy.stateTimer = 0.07; triggerDodge('duck'); });
-    if (t >= 4.74) once('a3_p1', () => { state.slowMoTimer = 0; state.slowMoScale = 1; triggerPunch('left'); });
-    if (t >= 5.10) once('a3_up', () => {
+    if (t >= 6.62) once('a3_d1', () => { state.enemy.stateTimer = 0.06; triggerDodge('duck'); });
+    if (t >= 6.95) once('a3_p1', () => { state.slowMoTimer = 0; state.slowMoScale = 1; triggerPunch('left'); });
+    if (t >= 7.25) once('a3_p2', () => triggerPunch('right'));
+    if (t >= 7.70) once('a3_up', () => {
       state.enemy.state = 'windup'; state.enemy.attackType = 'duck_upper';
-      state.enemy.windupDur = 0.62; state.enemy.stateTimer = 0.56; state.enemy.attackResolved = false;
-      state.swipeCue = { dir: 'right', timer: 0.56 };
+      state.enemy.windupDur = 0.65; state.enemy.stateTimer = 0.58; state.enemy.attackResolved = false;
+      state.swipeCue = { dir: 'right', timer: 0.58 };
       emitEvent('upper_warn');
     });
-    if (t >= 5.60) once('a3_sl', () => { state.enemy.stateTimer = 0.05; triggerDodge('right'); });
-    if (t >= 5.92) once('a3_c1', () => { state.slowMoTimer = 0; state.slowMoScale = 1; triggerPunch('left'); });
-    if (t >= 6.14) once('a3_c2', () => triggerPunch('right'));
-    if (t >= 6.36) once('a3_c3', () => triggerPunch('left'));
-    if (t >= 6.60) once('a3_c4', () => triggerUppercut());
+    if (t >= 8.22) once('a3_sl', () => { state.enemy.stateTimer = 0.05; triggerDodge('right'); });
+    if (t >= 8.60) once('a3_c1', () => { state.slowMoTimer = 0; state.slowMoScale = 1; triggerPunch('left'); });
+    if (t >= 8.85) once('a3_c2', () => triggerPunch('right'));
+    if (t >= 9.10) once('a3_c3', () => triggerPunch('left'));
+    if (t >= 9.40) once('a3_c4', () => triggerUppercut());
 
-    // ACT 4 (7.40 - 9.45s): 4 DIFFICULTIES x 5 MATCHES MONTAGE (TITAN REX & AZRAEL)
-    if (t >= 7.40) once('a4_t', () => {
-      startFight('hard', 4, true); // TITAN REX (Gold Crown!)
+    // ACT 4 (10.80 - 15.40s): 4 DIFFICULTIES x 5 MATCHES MONTAGE!
+    if (t >= 10.80) once('a4_m', () => {
+      startFight('easy', 4, true); // MARCO CRUZ
+      state.flashAlpha = 0.42; state.flashColor = '#22d3ee';
+      state.enemy.state = 'windup'; state.enemy.attackType = 'left_hook';
+      state.enemy.windupDur = 0.48; state.enemy.stateTimer = 0.36;
+      state.swipeCue = { dir: 'right', timer: 0.36 };
+      emitEvent('cut_montage', { fighter: 'MARCO CRUZ' });
+    });
+    if (t >= 11.10) once('a4_ms', () => { state.enemy.stateTimer = 0.06; triggerDodge('right'); });
+    if (t >= 11.40) once('a4_mh', () => { state.slowMoTimer = 0; state.slowMoScale = 1; triggerUppercut(); });
+
+    if (t >= 12.15) once('a4_t', () => {
+      startFight('hard', 4, true); // TITAN REX
       state.flashAlpha = 0.45; state.flashColor = '#fde047';
       state.enemy.state = 'windup'; state.enemy.attackType = 'straight';
       state.enemy.windupDur = 0.44; state.enemy.stateTimer = 0.34;
       state.swipeCue = { dir: 'left', timer: 0.34 };
       emitEvent('cut_montage', { fighter: 'TITAN REX' });
     });
-    if (t >= 7.68) once('a4_ts', () => { state.enemy.stateTimer = 0.06; triggerDodge('left'); });
-    if (t >= 7.95) once('a4_th', () => { state.slowMoTimer = 0; state.slowMoScale = 1; triggerUppercut(); });
+    if (t >= 12.44) once('a4_ts', () => { state.enemy.stateTimer = 0.06; triggerDodge('left'); });
+    if (t >= 12.74) once('a4_th1', () => { state.slowMoTimer = 0; state.slowMoScale = 1; triggerPunch('right'); });
+    if (t >= 12.98) once('a4_th2', () => triggerUppercut());
 
-    if (t >= 8.40) once('a4_a', () => {
+    if (t >= 13.70) once('a4_a', () => {
       startFight('vhard', 3, true); // AZRAEL MOON
       state.flashAlpha = 0.45; state.flashColor = '#f43f5e';
       state.enemy.state = 'windup'; state.enemy.attackType = 'right_hook';
-      state.enemy.windupDur = 0.42; state.enemy.stateTimer = 0.32;
-      state.swipeCue = { dir: 'left', timer: 0.32 };
+      state.enemy.windupDur = 0.42; state.enemy.stateTimer = 0.34;
+      state.swipeCue = { dir: 'left', timer: 0.34 };
       emitEvent('cut_montage', { fighter: 'AZRAEL' });
     });
-    if (t >= 8.66) once('a4_as', () => { state.enemy.stateTimer = 0.05; triggerDodge('left'); });
-    if (t >= 8.94) once('a4_ah1', () => { state.slowMoTimer = 0; state.slowMoScale = 1; triggerPunch('right'); });
-    if (t >= 9.12) once('a4_ah2', () => triggerPunch('left'));
+    if (t >= 13.98) once('a4_as', () => { state.enemy.stateTimer = 0.05; triggerDodge('left'); });
+    if (t >= 14.28) once('a4_ah1', () => { state.slowMoTimer = 0; state.slowMoScale = 1; triggerPunch('right'); });
+    if (t >= 14.52) once('a4_ah2', () => triggerPunch('left'));
+    if (t >= 14.78) once('a4_ah3', () => triggerUppercut());
 
-    // ACT 5 (9.45 - 14.50s): ZEUS OMEGA 3-DIRECTION DODGE (RIGHT -> DUCK -> LEFT) -> ULTRA KO!
-    if (t >= 9.45) once('a5_s', () => {
-      startFight('vhard', 4, true);
-      state.enemy.hp = 160; state.player.koGauge = 60;
+    // ACT 5 (15.40 - 22.50s): ZEUS OMEGA 4-WAY + 2-FINGER GUARD -> ULTRA COUNTER KO FINALE!
+    if (t >= 15.40) once('a5_s', () => {
+      startFight('vhard', 4, true); // ZEUS OMEGA
+      state.enemy.hp = 180; state.player.koGauge = 40;
       state.flashAlpha = 0.50; state.flashColor = '#00e5ff';
       state.enemy.state = 'windup'; state.enemy.attackType = 'left_hook'; state.enemy.comboLeft = 0;
-      state.enemy.windupDur = 0.44; state.enemy.stateTimer = 0.42;
+      state.enemy.windupDur = 0.46; state.enemy.stateTimer = 0.42;
       state.swipeCue = { dir: 'right', timer: 0.42 };
       emitEvent('cut_finale');
     });
-    if (t >= 9.81) once('a5_s1', () => { state.enemy.stateTimer = 0.05; triggerDodge('right'); });
-    if (t >= 10.15) once('a5_a2', () => {
+    if (t >= 15.76) once('a5_s1', () => { state.enemy.stateTimer = 0.05; triggerDodge('right'); });
+    if (t >= 16.12) once('a5_a2', () => {
       state.slowMoTimer = 0; state.slowMoScale = 1;
       state.enemy.state = 'windup'; state.enemy.attackType = 'high_sweep'; state.enemy.comboLeft = 0;
-      state.enemy.windupDur = 0.42; state.enemy.stateTimer = 0.38; state.enemy.attackResolved = false;
-      state.swipeCue = { dir: 'duck', timer: 0.38 };
+      state.enemy.windupDur = 0.46; state.enemy.stateTimer = 0.40; state.enemy.attackResolved = false;
+      state.swipeCue = { dir: 'duck', timer: 0.40 };
       emitEvent('sweep_warn');
     });
-    if (t >= 10.48) once('a5_s2', () => { state.enemy.stateTimer = 0.05; triggerDodge('duck'); });
-    if (t >= 10.82) once('a5_a3', () => {
+    if (t >= 16.46) once('a5_s2', () => { state.enemy.stateTimer = 0.05; triggerDodge('duck'); });
+    if (t >= 16.84) once('a5_a3', () => {
+      state.slowMoTimer = 0; state.slowMoScale = 1;
+      state.enemy.state = 'windup'; state.enemy.attackType = 'right_hook'; state.enemy.comboLeft = 0;
+      state.enemy.windupDur = 0.44; state.enemy.stateTimer = 0.40; state.enemy.attackResolved = false;
+      state.swipeCue = { dir: 'guard', timer: 0.40 };
+    });
+    if (t >= 17.16) once('a5_par', () => setPlayerGuard(true)); // JUST PARRY!!
+    if (t >= 17.50) once('a5_par_off', () => setPlayerGuard(false));
+    if (t >= 17.66) once('a5_a4', () => {
       state.slowMoTimer = 0; state.slowMoScale = 1;
       state.enemy.state = 'windup'; state.enemy.attackType = 'duck_upper'; state.enemy.comboLeft = 0;
-      state.enemy.windupDur = 0.52; state.enemy.stateTimer = 0.48; state.enemy.attackResolved = false;
+      state.enemy.windupDur = 0.54; state.enemy.stateTimer = 0.48; state.enemy.attackResolved = false;
       state.swipeCue = { dir: 'left', timer: 0.48 };
       emitEvent('upper_warn');
     });
-    if (t >= 11.24) once('a5_s3', () => { state.enemy.stateTimer = 0.04; triggerDodge('left'); });
-    if (t >= 11.62) once('a5_ko', () => {
+    if (t >= 18.08) once('a5_s4', () => { state.enemy.stateTimer = 0.04; triggerDodge('left'); });
+    if (t >= 18.48) once('a5_ko', () => {
       state.slowMoTimer = 0; state.slowMoScale = 1;
-      state.player.koGauge = 100; state.enemy.hp = 120;
+      state.player.koGauge = 100; state.enemy.hp = 130;
       state.enemy.state = 'whiff'; state.enemy.counterWindow = 1.0;
       triggerUppercut();
     });
@@ -1806,6 +1926,21 @@
     pRightGlove.userData.leatherMat.emissive.setHex(ultraReady ? 0xfde047 : 0x00e5ff);
     pLeftGlove.userData.leatherMat.emissiveIntensity = ultraReady ? 0.52 : (e.counterWindow > 0 ? 0.32 : 0.14);
     pRightGlove.userData.leatherMat.emissiveIntensity = ultraReady ? 0.52 : (e.counterWindow > 0 ? 0.32 : 0.14);
+
+    if (p.guarding) {
+      // Raise both 3D gloves tightly in front of player's face + activate 3D neon guard shield!
+      lx = -0.15; ly = -0.07; lz = -0.66;
+      rx = 0.15; ry = -0.07; rz = -0.66;
+      pLeftGlove.rotation.set(0.10, 0.25, -0.45);
+      pRightGlove.rotation.set(0.10, -0.25, 0.45);
+      pGuardShieldMat.opacity = 0.48 + 0.14 * Math.sin(state.elapsed * 12);
+      pGuardShield.rotation.z = state.elapsed * 1.4;
+      pGuardShield.scale.setScalar(1.0 + 0.04 * Math.sin(state.elapsed * 10));
+    } else {
+      pLeftGlove.rotation.set(0.28, 0.42, -0.22);
+      pRightGlove.rotation.set(0.28, -0.42, 0.22);
+      pGuardShieldMat.opacity = lerp(pGuardShieldMat.opacity, 0, Math.min(1, dtClamped * 16));
+    }
 
     if (p.punchTimer > 0) {
       const prog = 1 - p.punchTimer / p.punchDur;
@@ -2055,12 +2190,28 @@
       ctx.globalAlpha = pulse;
       ctx.font = '900 32px "Chakra Petch", "Noto Sans JP", sans-serif';
       ctx.textAlign = 'center';
-      const label = d === 'right' ? 'SWIPE ━━▶' : (d === 'left' ? '◀━━ SWIPE' : (d === 'up' ? '▲ UPPER BREAK ▲' : '▼ DUCK ▼'));
+      const label = d === 'right' ? 'SWIPE ━━▶'
+        : (d === 'left' ? '◀━━ SWIPE'
+          : (d === 'up' ? '▲ UPPER BREAK ▲'
+            : (d === 'guard' ? '🛡 2本指長押しでガード!!' : '▼ DUCK ▼')));
       const col = d === 'duck' ? '#4ade80' : (d === 'up' ? '#fde047' : '#00e5ff');
       ctx.lineWidth = 8; ctx.strokeStyle = '#020308';
       ctx.strokeText(label, W / 2, 730);
       ctx.fillStyle = col;
       ctx.fillText(label, W / 2, 730);
+      ctx.restore();
+    }
+
+    // Active Player Guard Indicator
+    if (p.guarding && e.state !== 'ko') {
+      ctx.save();
+      ctx.fillStyle = 'rgba(0, 229, 255, 0.20)';
+      ctx.strokeStyle = '#00e5ff';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.roundRect(W / 2 - 115, H - 134, 230, 38, 999); ctx.fill(); ctx.stroke();
+      ctx.font = '900 16px "Chakra Petch", "Noto Sans JP", sans-serif';
+      ctx.textAlign = 'center'; ctx.fillStyle = '#e0f2fe';
+      ctx.fillText('🛡 GUARDING (80%カット)', W / 2, H - 109);
       ctx.restore();
     }
 
@@ -2306,21 +2457,23 @@
 
     // Controls Guide
     ctx.fillStyle = 'rgba(8,12,24,0.88)';
-    ctx.beginPath(); ctx.roundRect(28, 784, W - 56, 148, 14); ctx.fill();
+    ctx.beginPath(); ctx.roundRect(24, 780, W - 48, 162, 14); ctx.fill();
     ctx.strokeStyle = 'rgba(0,229,255,0.25)'; ctx.lineWidth = 1.5; ctx.stroke();
 
     ctx.textAlign = 'center';
-    ctx.font = '900 14px "Noto Sans JP", sans-serif';
+    ctx.font = '900 13.5px "Noto Sans JP", sans-serif';
     ctx.fillStyle = '#00e5ff';
-    ctx.fillText('⚡ 0フレーム遅延スワイプ × 上下左右の読み合い', W / 2, 810);
-    ctx.font = '700 12.5px "Noto Sans JP", sans-serif';
+    ctx.fillText('⚡ 0フレーム遅延スワイプ × 2本指ガード', W / 2, 804);
+    ctx.font = '700 12px "Noto Sans JP", sans-serif';
     ctx.fillStyle = '#e2e8f0';
-    ctx.fillText('← → 左右スワイプ：サイド回避   ／   ↓ 下スワイプ：ダック', W / 2, 838);
-    ctx.fillText('左右タップ：パンチ連打   ／   ↑ 上スワイプ：ガード崩し・必殺KO', W / 2, 864);
+    ctx.fillText('← → スワイプ：サイド回避  ／  ↓ 下スワイプ：ダック', W / 2, 830);
+    ctx.fillText('左右タップ：パンチ  ／  ↑ 上スワイプ：ガード崩し・必殺KO', W / 2, 854);
+    ctx.fillStyle = '#7dd3fc';
+    ctx.fillText('🛡 2本指同時押し（PC: Shift / 右クリック）：ガード・直前パリィ', W / 2, 880);
     ctx.fillStyle = '#fda4af';
-    ctx.fillText('⚠ 赤アッパーに下ダックすると即狩られる！横へ避けろ！', W / 2, 892);
+    ctx.fillText('⚠ 赤アッパーに下ダックすると即狩られる！横へ避けろ！', W / 2, 906);
     ctx.fillStyle = '#86efac';
-    ctx.fillText('⚡ 緑の薙ぎ払いは横逃げ不可！下ダックで潜れ！', W / 2, 916);
+    ctx.fillText('⚡ 緑の薙ぎ払いは横逃げ不可！下ダックで潜れ！', W / 2, 930);
     ctx.restore();
   }
 
@@ -2493,30 +2646,52 @@
   }
 
   // =========================================================================
-  // 0-FRAME LATENCY POINTER & KEYBOARD INPUTS
+  // 0-FRAME LATENCY MULTI-TOUCH (2-FINGER GUARD) & KEYBOARD INPUTS
   // =========================================================================
-  let ptr = { active: false, id: null, sx: 0, sy: 0, swiped: false };
+  const activePointers = new Map();
+  let ptr = { active: false, id: null, sx: 0, sy: 0, swiped: false, guardLocked: false };
   function toPos(ev) {
     const r = hudCanvas.getBoundingClientRect();
     return { x: ((ev.clientX - r.left) / r.width) * W, y: ((ev.clientY - r.top) / r.height) * H };
   }
 
+  hudCanvas.addEventListener('contextmenu', (ev) => ev.preventDefault());
+
   hudCanvas.addEventListener('pointerdown', (ev) => {
     ev.preventDefault();
     unlockAudio();
     const pos = toPos(ev);
-    for (let i = state.uiButtons.length - 1; i >= 0; i--) {
-      const b = state.uiButtons[i];
-      if (pos.x >= b.x && pos.x <= b.x + b.w && pos.y >= b.y && pos.y <= b.y + b.h) {
-        b.onClick();
-        return;
+
+    // Check UI buttons first (single tap)
+    if (activePointers.size === 0) {
+      for (let i = state.uiButtons.length - 1; i >= 0; i--) {
+        const b = state.uiButtons[i];
+        if (pos.x >= b.x && pos.x <= b.x + b.w && pos.y >= b.y && pos.y <= b.y + b.h) {
+          b.onClick();
+          return;
+        }
       }
     }
     if (state.screen !== 'fight') return;
-    ptr = { active: true, id: ev.pointerId, sx: pos.x, sy: pos.y, swiped: false };
+
+    activePointers.set(ev.pointerId, pos);
+
+    // Right mouse button OR 2+ fingers down simultaneously -> INSTANT 3D GUARD!
+    if (ev.button === 2 || activePointers.size >= 2) {
+      ptr.active = false;
+      ptr.guardLocked = true;
+      setPlayerGuard(true);
+      return;
+    }
+
+    ptr = { active: true, id: ev.pointerId, sx: pos.x, sy: pos.y, swiped: false, guardLocked: false };
   }, { passive: false });
 
   hudCanvas.addEventListener('pointermove', (ev) => {
+    if (activePointers.has(ev.pointerId)) {
+      activePointers.set(ev.pointerId, toPos(ev));
+    }
+    if (state.player.guarding || ptr.guardLocked) return;
     if (!ptr.active || ev.pointerId !== ptr.id || ptr.swiped) return;
     ev.preventDefault();
     const pos = toPos(ev);
@@ -2531,13 +2706,28 @@
   }, { passive: false });
 
   function endPtr(ev) {
-    if (!ptr.active || ev.pointerId !== ptr.id) return;
-    const pos = toPos(ev);
-    if (!ptr.swiped && state.screen === 'fight') triggerPunch(pos.x < W * 0.5 ? 'left' : 'right');
-    ptr.active = false;
+    activePointers.delete(ev.pointerId);
+    if (state.player.guarding && activePointers.size < 2 && ev.button !== 2) {
+      setPlayerGuard(false);
+    }
+    if (ev.button === 2) {
+      setPlayerGuard(false);
+    }
+    if (activePointers.size === 0) {
+      if (ptr.active && ev.pointerId === ptr.id && !ptr.swiped && !ptr.guardLocked && state.screen === 'fight') {
+        const pos = toPos(ev);
+        triggerPunch(pos.x < W * 0.5 ? 'left' : 'right');
+      }
+      ptr.active = false;
+      ptr.guardLocked = false;
+    }
   }
   hudCanvas.addEventListener('pointerup', endPtr);
-  hudCanvas.addEventListener('pointercancel', () => { ptr.active = false; });
+  hudCanvas.addEventListener('pointercancel', (ev) => {
+    activePointers.delete(ev.pointerId);
+    if (activePointers.size < 2) setPlayerGuard(false);
+    if (activePointers.size === 0) { ptr.active = false; ptr.guardLocked = false; }
+  });
 
   window.addEventListener('keydown', (ev) => {
     if (ev.repeat) return;
@@ -2547,12 +2737,20 @@
       return;
     }
     if (state.screen !== 'fight') return;
-    if (ev.code === 'ArrowLeft' || ev.code === 'KeyA') triggerDodge('left');
+    if (ev.code === 'ShiftLeft' || ev.code === 'ShiftRight' || ev.code === 'KeyB') {
+      setPlayerGuard(true);
+    } else if (ev.code === 'ArrowLeft' || ev.code === 'KeyA') triggerDodge('left');
     else if (ev.code === 'ArrowRight' || ev.code === 'KeyD') triggerDodge('right');
     else if (ev.code === 'ArrowDown' || ev.code === 'KeyS') triggerDodge('duck');
     else if (ev.code === 'ArrowUp' || ev.code === 'KeyW' || ev.code === 'Space') triggerUppercut();
     else if (ev.code === 'KeyZ' || ev.code === 'KeyJ') triggerPunch('left');
     else if (ev.code === 'KeyX' || ev.code === 'KeyK') triggerPunch('right');
+  });
+
+  window.addEventListener('keyup', (ev) => {
+    if (ev.code === 'ShiftLeft' || ev.code === 'ShiftRight' || ev.code === 'KeyB') {
+      setPlayerGuard(false);
+    }
   });
 
   // =========================================================================

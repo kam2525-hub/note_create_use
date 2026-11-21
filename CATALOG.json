@@ -68,7 +68,7 @@
       "title": "COUNTER KO 3D（Three.js 一人称ネオン3Dボクシング・全4難度×5試合）",
       "type": "game",
       "genre": "Three.js 一人称3Dボクシング / 厳格タイミングカウンターアクション",
-      "core_mechanic": "Three.js立体3Dキャラ＆立体3Dグローブ×黒背景ネオンリング！0フレーム遅延スワイプで左右・下ダック・上アッパーを使い分け、相手の3Dガードはアッパーでガードブレイク、赤のダック狩りアッパーは横見切り、緑のワイド薙ぎ払いは下ダックで攻略！最初から選べる4難度（イージー／ノーマル／ハード／ベリーハード）×各5試合（勝つほど強敵進化・全20強敵）",
+      "core_mechanic": "Three.js立体3Dキャラ＆立体3Dグローブ×黒背景ネオンリング！0フレーム遅延スワイプで左右・下ダック・上アッパーを使い分け、2本指同時押し（PC: Shift/右クリック）で3Dガード＆直前JUST PARRY！相手の3Dガードはアッパーでガードブレイク、赤のダック狩りアッパーは横見切り、緑のワイド薙ぎ払いは下ダックで攻略！最初から選べる4難度×各5試合（全20強敵）",
       "game_path": "games/day06-counter-ko-3d/index.html",
       "note_path": "notes/day06/note_draft.md",
       "shorts_script": "shorts/day06/generate_shorts.py"

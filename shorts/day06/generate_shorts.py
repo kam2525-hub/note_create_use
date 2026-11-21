@@ -171,13 +171,15 @@ def start_static_server(directory: Path):
     return srv, port
 
 
-# High-retention punchy Japanese narration timed around beats & KO impacts
+# High-retention concise Japanese narration cues (guaranteed non-overlapping across 22.5s!)
 NARRATION_CUES = [
-    (0.02, "零点一秒の見切りから、一撃カウンターKO！"),
-    (1.35, "立体3Dでガードしてくる強敵を、アッパーでぶち破れ！"),
-    (4.65, "しゃがみ連打はダック狩りアッパーで即死！上下左右を極めろ！"),
-    (7.45, "4難度かける5試合、勝つほど強くなる全20人の強敵！"),
-    (10.50, "上下左右の3連見切りからの必殺KO！ベリーハード制覇できる？"),
+    (0.05, "零点一秒の見切りから、一撃カウンターKO！"),
+    (2.35, "二本指押しでガードとパリィ！"),
+    (4.35, "敵のガードは上アッパーでぶち破れ！"),
+    (7.30, "しゃがみ連打はダック狩りアッパーで即死！"),
+    (10.85, "四つの難易度、勝つほど進化する全二十人の強敵！"),
+    (15.45, "上下左右の極限見切りから、必殺アッパーで完全粉砕！"),
+    (19.20, "ベリーハード五連戦、君は制覇できる？"),
 ]
 
 
@@ -186,12 +188,12 @@ def synthesize_tts_line(text: str, out_wav: Path, sr: int = 44100) -> bool:
     if not os.environ.get("REQUESTS_CA_BUNDLE") and os.path.exists("/etc/ssl/certs/ca-certificates.crt"):
         os.environ["REQUESTS_CA_BUNDLE"] = "/etc/ssl/certs/ca-certificates.crt"
 
-    # Try edge-tts energetic male voice (KeitaNeural) first for fresh Fight-Night taste!
+    # Try edge-tts energetic male voice (KeitaNeural) with crisp punchy pacing
     try:
         import edge_tts
 
         async def _gen():
-            comm = edge_tts.Communicate(text, voice="ja-JP-KeitaNeural", rate="+22%", pitch="+4Hz")
+            comm = edge_tts.Communicate(text, voice="ja-JP-KeitaNeural", rate="+32%", pitch="+4Hz")
             await asyncio.wait_for(comm.save(str(tmp_mp3)), timeout=8.0)
 
         asyncio.run(_gen())
@@ -199,7 +201,7 @@ def synthesize_tts_line(text: str, out_wav: Path, sr: int = 44100) -> bool:
             subprocess.run(
                 [
                     "ffmpeg", "-y", "-i", str(tmp_mp3),
-                    "-af", "acompressor=threshold=-16dB:ratio=3:attack=5:release=60,highpass=f=90",
+                    "-af", "silenceremove=start_periods=1:start_silence=0.05:start_threshold=-42dB,areverse,silenceremove=start_periods=1:start_silence=0.05:start_threshold=-42dB,areverse,acompressor=threshold=-16dB:ratio=3:attack=5:release=60,highpass=f=95",
                     "-ar", str(sr), "-ac", "1", "-c:a", "pcm_s16le", str(out_wav),
                 ],
                 check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -210,7 +212,7 @@ def synthesize_tts_line(text: str, out_wav: Path, sr: int = 44100) -> bool:
         print(f"edge-tts fallback to gTTS for '{text}': {exc}")
         tmp_mp3.unlink(missing_ok=True)
 
-    # Fallback: gTTS with fast punchy pitch shift
+    # Fallback: gTTS with fast punchy pitch shift & silence trim
     try:
         from gtts import gTTS
 
@@ -218,7 +220,7 @@ def synthesize_tts_line(text: str, out_wav: Path, sr: int = 44100) -> bool:
         subprocess.run(
             [
                 "ffmpeg", "-y", "-i", str(tmp_mp3),
-                "-af", "atempo=1.32,asetrate=44100*0.92,aresample=44100",
+                "-af", "silenceremove=start_periods=1:start_silence=0.05:start_threshold=-40dB,areverse,silenceremove=start_periods=1:start_silence=0.05:start_threshold=-40dB,areverse,atempo=1.42,asetrate=44100*0.92,aresample=44100",
                 "-ar", str(sr), "-ac", "1", "-c:a", "pcm_s16le", str(out_wav),
             ],
             check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -245,15 +247,14 @@ def generate_audio(total_dur: float, events: list, wav_path: Path):
     voice = np.zeros(n_samples, dtype=np.float32)
 
     # =====================================================================
-    # 144 BPM DARK PHONK / FIGHT-NIGHT TRAP BOXING BEAT (NEW AUDIO TASTE!)
+    # 144 BPM DARK PHONK + NEON SYNTH ARENA BEAT (22.5s FULL PROGRESSION)
     # =====================================================================
     bpm = 144.0
-    step_dur = 60.0 / bpm / 4.0  # 16th-note grid for crisp trap hats & cowbell!
-    # Dark aggressive Phonk minor bassline (E1 -> G1 -> A1 -> F#1)
+    step_dur = 60.0 / bpm / 4.0  # 16th-note grid
     bass_notes = [41.20, 41.20, 49.00, 41.20, 55.00, 55.00, 46.25, 49.00]
-    # Iconic viral Phonk cowbell riff (E5, G5, B5, A5, G5, F#5, E5, B4)
     cowbell_riff = [659.25, 0, 783.99, 0, 987.77, 0, 880.00, 783.99,
                     659.25, 0, 739.99, 0, 659.25, 493.88, 659.25, 0]
+    synth_arp = [329.63, 392.00, 493.88, 659.25, 587.33, 493.88, 440.00, 392.00]
 
     num_steps = int(total_dur / step_dur)
     for i in range(num_steps):
@@ -263,45 +264,57 @@ def generate_audio(total_dur: float, events: list, wav_path: Path):
         if s_len <= 0:
             break
         lt = np.arange(s_len, dtype=np.float32) / sr
-
-        # Heavy Distorted 808 Sub-Kick on beats 0, 6, 8, 14
         step16 = i % 16
+
+        # Heavy Distorted 808 Sub-Kick
         if step16 in (0, 6, 8, 14):
             bf = bass_notes[(i // 8) % len(bass_notes)]
-            pitch_env = bf + 95.0 * np.exp(-lt * 34.0)
-            sub = np.tanh(np.sin(2.0 * math.pi * np.cumsum(pitch_env) / sr) * 2.4) * np.exp(-lt * 6.5) * 0.25
+            pitch_env = bf + 98.0 * np.exp(-lt * 34.0)
+            sub = np.tanh(np.sin(2.0 * math.pi * np.cumsum(pitch_env) / sr) * 2.5) * np.exp(-lt * 6.2) * 0.26
             bgm[s0 : s0 + s_len] += sub
 
-        # Punchy Trap Snare on 4 and 12
+        # Punchy Trap Snare + Crisp Clap Layer on 4 and 12
         if step16 in (4, 12):
             rng = np.random.default_rng(seed=i + 404)
-            sn_len = min(int(0.11 * sr), n_samples - s0)
+            sn_len = min(int(0.12 * sr), n_samples - s0)
             slt = np.arange(sn_len, dtype=np.float32) / sr
             snare = (
-                rng.uniform(-1.0, 1.0, sn_len).astype(np.float32) * np.exp(-slt * 34.0) * 0.17
-                + np.sin(2.0 * math.pi * (210.0 * np.exp(-slt * 22.0) + 120.0) * slt) * np.exp(-slt * 28.0) * 0.14
+                rng.uniform(-1.0, 1.0, sn_len).astype(np.float32) * np.exp(-slt * 32.0) * 0.18
+                + np.sin(2.0 * math.pi * (215.0 * np.exp(-slt * 22.0) + 125.0) * slt) * np.exp(-slt * 26.0) * 0.15
             )
             bgm[s0 : s0 + sn_len] += snare
 
-        # Crisp Trap Hi-Hats (with 32nd-note rolls before drops!)
-        if step16 % 2 == 0 or t_step > 7.35:
+        # Trap Hi-Hats (double-time 16th rolls in Act 4 & Act 5 climax!)
+        if step16 % 2 == 0 or t_step > 10.8:
             rng = np.random.default_rng(seed=i + 808)
             h_len = min(int(0.032 * sr), n_samples - s0)
             hlt = np.arange(h_len, dtype=np.float32) / sr
-            hat = rng.uniform(-1.0, 1.0, h_len).astype(np.float32) * np.exp(-hlt * 110.0) * 0.048
+            hat = rng.uniform(-1.0, 1.0, h_len).astype(np.float32) * np.exp(-hlt * 110.0) * 0.052
             bgm[s0 : s0 + h_len] += hat
 
-        # Iconic Phonk Cowbell Hook (kicks in hard right after 0.40s cold-open impact!)
+        # Iconic Phonk Cowbell Hook
         cf = cowbell_riff[step16]
         if cf > 0 and t_step >= 0.40:
             c_len = min(int(0.14 * sr), n_samples - s0)
             clt = np.arange(c_len, dtype=np.float32) / sr
-            # Classic 808 cowbell uses two detuned square-ish partials (ratio ~1.50)
             cb = (
                 np.sign(np.sin(2.0 * math.pi * cf * clt)) * 0.55
                 + np.sign(np.sin(2.0 * math.pi * (cf * 1.498) * clt)) * 0.45
-            ) * np.exp(-clt * 22.0) * (0.095 if t_step > 7.35 else 0.070)
+            ) * np.exp(-clt * 22.0) * (0.10 if t_step > 15.0 else 0.072)
             bgm[s0 : s0 + c_len] += cb
+
+        # Dark Neon Arena Synth Arp (kicks in from Act 3 & peaks in Act 5!)
+        if t_step >= 6.25 and step16 % 2 == 0:
+            sf = synth_arp[(i // 2) % len(synth_arp)] * (1.5 if t_step > 15.4 else 1.0)
+            a_len = min(int(0.15 * sr), n_samples - s0)
+            alt = np.arange(a_len, dtype=np.float32) / sr
+            arp = np.sin(2.0 * math.pi * sf * alt) * np.exp(-alt * 16.0) * (0.085 if t_step > 15.4 else 0.055)
+            bgm[s0 : s0 + a_len] += arp
+
+    # Smooth 0.9s tail fade on BGM at the very end (21.6s..22.5s)
+    fade_n = int(0.90 * sr)
+    if fade_n < n_samples:
+        bgm[-fade_n:] *= np.linspace(1.0, 0.08, fade_n, dtype=np.float32)
 
     # =====================================================================
     # 0.00s NUCLEAR HOOK SOUND: BOXING BELL CLANG + SUB SLAM!
@@ -314,7 +327,6 @@ def generate_audio(total_dur: float, events: list, wav_path: Path):
         + np.sin(2.0 * math.pi * 2642.0 * blt) * 0.10
     ) * np.exp(-blt * 5.2)
     sfx[:bell_len] += bell
-    # Instant attention-grabbing 808 impact slam at frame 0
     slam_len = min(int(0.24 * sr), n_samples)
     slt0 = np.arange(slam_len, dtype=np.float32) / sr
     sfx[:slam_len] += np.tanh(np.sin(2.0 * math.pi * np.cumsum(220.0 * np.exp(-slt0 * 18.0) + 42.0) / sr) * 2.0) * np.exp(-slt0 * 9.0) * 0.36
@@ -336,7 +348,6 @@ def generate_audio(total_dur: float, events: list, wav_path: Path):
             sfx[idx0 : idx0 + e_len] += rng.uniform(-1.0, 1.0, e_len).astype(np.float32) * np.exp(-lt * 26.0) * 0.14
 
         elif kind == "upper_warn":
-            # Crimson siren rise for Duck-Hunting Uppercut!
             e_len = min(int(0.32 * sr), n_samples - idx0)
             lt = np.arange(e_len, dtype=np.float32) / sr
             freq = np.linspace(320.0, 1180.0, e_len, dtype=np.float32)
@@ -348,21 +359,20 @@ def generate_audio(total_dur: float, events: list, wav_path: Path):
             freq = np.linspace(720.0, 260.0, e_len, dtype=np.float32)
             sfx[idx0 : idx0 + e_len] += np.sin(2.0 * math.pi * np.cumsum(freq) / sr) * np.exp(-lt * 6.5) * 0.20
 
-        elif kind == "blocked":
-            e_len = min(int(0.10 * sr), n_samples - idx0)
+        elif kind in ("blocked", "player_guard_hit"):
+            e_len = min(int(0.11 * sr), n_samples - idx0)
             lt = np.arange(e_len, dtype=np.float32) / sr
-            sfx[idx0 : idx0 + e_len] += np.sign(np.sin(2.0 * math.pi * 190.0 * lt)) * np.exp(-lt * 32.0) * 0.16
+            sfx[idx0 : idx0 + e_len] += np.sign(np.sin(2.0 * math.pi * 195.0 * lt)) * np.exp(-lt * 30.0) * 0.18
 
-        elif kind == "guard_break":
-            e_len = min(int(0.30 * sr), n_samples - idx0)
+        elif kind in ("guard_break", "just_parry"):
+            e_len = min(int(0.32 * sr), n_samples - idx0)
             lt = np.arange(e_len, dtype=np.float32) / sr
             rng = np.random.default_rng(seed=idx0 + 91)
             shatter = rng.uniform(-1.0, 1.0, e_len).astype(np.float32) * np.exp(-lt * 14.0) * 0.26
-            chime = np.sin(2.0 * math.pi * np.cumsum(np.linspace(480.0, 1480.0, e_len)) / sr) * np.exp(-lt * 10.0) * 0.26
+            chime = np.sin(2.0 * math.pi * np.cumsum(np.linspace(520.0, 1580.0, e_len)) / sr) * np.exp(-lt * 10.0) * 0.28
             sfx[idx0 : idx0 + e_len] += shatter + chime
 
         elif kind == "just_slip":
-            # Time-slow bass drop + electric crystalline flash!
             e_len = min(int(0.28 * sr), n_samples - idx0)
             lt = np.arange(e_len, dtype=np.float32) / sr
             drop = np.sin(2.0 * math.pi * np.cumsum(190.0 * np.exp(-lt * 16.0) + 46.0) / sr) * np.exp(-lt * 9.0) * 0.34
@@ -380,7 +390,6 @@ def generate_audio(total_dur: float, events: list, wav_path: Path):
             sfx[idx0 : idx0 + e_len] += thud + crack + ring
 
         elif kind in ("ko_hit", "ultra_hit", "ko_finish"):
-            # MONUMENTAL JAW-SHATTERING ULTRA KO BOOM + BELL + CROWD ROAR!
             e_len = min(int(0.85 * sr), n_samples - idx0)
             lt = np.arange(e_len, dtype=np.float32) / sr
             rng = np.random.default_rng(seed=idx0 + 77)
@@ -393,33 +402,60 @@ def generate_audio(total_dur: float, events: list, wav_path: Path):
             sfx[idx0 : idx0 + e_len] += mega_sub + shatter + ko_bell
 
         elif kind in ("cut_act2", "cut_act3", "cut_montage", "cut_finale"):
-            # Crisp vinyl/glitch riser swipe on fast cut!
             e_len = min(int(0.10 * sr), n_samples - idx0)
             lt = np.arange(e_len, dtype=np.float32) / sr
             freq = np.linspace(1200.0, 260.0, e_len, dtype=np.float32)
             sfx[idx0 : idx0 + e_len] += np.sin(2.0 * math.pi * np.cumsum(freq) / sr) * np.exp(-lt * 24.0) * 0.20
 
-    # Mix Japanese Narration with clean sidechain BGM ducking
+    # =====================================================================
+    # NON-OVERLAPPING DYNAMIC VOICEOVER SCHEDULER + SMOOTH SIDECHAIN DUCK
+    # =====================================================================
     duck = np.ones(n_samples, dtype=np.float32)
     tts_tmp = Path(tempfile.mkdtemp(prefix="tts_day06_"))
     try:
+        prev_end_s = 0
+        ramp_n = int(0.12 * sr)
         for idx, (cue_t, line_txt) in enumerate(NARRATION_CUES):
             cue_wav = tts_tmp / f"cue_{idx}.wav"
             if synthesize_tts_line(line_txt, cue_wav, sr=sr):
                 arr = load_wav_mono(cue_wav)
                 peak = float(np.max(np.abs(arr))) if len(arr) else 0.0
                 if peak > 0.01:
-                    arr = (arr / peak) * 0.82
-                s0 = int(cue_t * sr)
+                    arr = (arr / peak) * 0.86
+                # Guarantee zero overlap with previous cue!
+                s0 = max(int(cue_t * sr), prev_end_s + int(0.18 * sr))
+                if s0 + len(arr) > n_samples - int(0.35 * sr):
+                    # Gently time-compress if needed so last word NEVER clips!
+                    avail = max(int(0.5 * sr), n_samples - int(0.35 * sr) - s0)
+                    if len(arr) > avail:
+                        ratio = min(1.35, len(arr) / float(avail))
+                        fast_wav = tts_tmp / f"cue_{idx}_fast.wav"
+                        subprocess.run(
+                            ["ffmpeg", "-y", "-i", str(cue_wav), "-af", f"atempo={ratio:.3f}", "-ar", str(sr), "-ac", "1", str(fast_wav)],
+                            check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                        )
+                        arr = load_wav_mono(fast_wav)
+                        peak2 = float(np.max(np.abs(arr))) if len(arr) else 0.0
+                        if peak2 > 0.01:
+                            arr = (arr / peak2) * 0.86
                 s_len = min(len(arr), n_samples - s0)
                 if s_len > 0:
                     voice[s0 : s0 + s_len] += arr[:s_len]
-                    duck[s0 : s0 + s_len] = np.minimum(duck[s0 : s0 + s_len], 0.30)
+                    prev_end_s = s0 + s_len
+                    # Smooth duck envelope around voice
+                    d0 = max(0, s0 - ramp_n)
+                    d1 = min(n_samples, s0 + s_len + ramp_n)
+                    duck[s0 : s0 + s_len] = np.minimum(duck[s0 : s0 + s_len], 0.24)
+                    if s0 > d0:
+                        duck[d0:s0] = np.minimum(duck[d0:s0], np.linspace(1.0, 0.24, s0 - d0, dtype=np.float32))
+                    if d1 > s0 + s_len:
+                        duck[s0 + s_len : d1] = np.minimum(duck[s0 + s_len : d1], np.linspace(0.24, 1.0, d1 - (s0 + s_len), dtype=np.float32))
+                    print(f"  Voice cue {idx}: {s0/sr:.2f}s .. {(s0+s_len)/sr:.2f}s ({line_txt})")
     finally:
         shutil.rmtree(tts_tmp, ignore_errors=True)
 
-    mixed = bgm * duck + sfx * 0.88 + voice
-    mixed = np.tanh(mixed * 1.20) * 0.90
+    mixed = bgm * duck + sfx * 0.84 + voice
+    mixed = np.tanh(mixed * 1.18) * 0.90
     pcm = np.clip(mixed * 32767.0, -32767, 32767).astype(np.int16)
 
     with wave.open(str(wav_path), "wb") as wf:
@@ -456,7 +492,7 @@ def draw_fight_night_overlay(
     font_sub,
 ) -> Image.Image:
     if frame_img.size != (1080, 1920):
-        frame_img = frame_img.resize((1080, 1920), Image.Resampling.LANCZOS)
+        frame_img = frame_img.resize((1080, 1920), Image.Resampling.BILINEAR)
 
     # Chromatic RGB aberration burst on heavy impacts & fast cuts!
     if impact_pulse > 0.15:
@@ -558,8 +594,8 @@ def draw_fight_night_overlay(
                 stroke_fill=(8, 10, 18, 255),
             )
 
-    # Bottom Viral Beat-Progress Bar (sleek 8px crimson/gold energy bar at very bottom)
-    prog = min(1.0, t / 14.5)
+    # Bottom Viral Beat-Progress Bar (sleek 10px neon energy bar at very bottom)
+    prog = min(1.0, t / 22.5)
     draw.rectangle((0, H - 10, W, H), fill=(15, 23, 42, 200))
     draw.rectangle((0, H - 10, int(W * prog), H), fill=(*accent_rgb, 255))
 
@@ -625,10 +661,10 @@ h1 span{{color:#fde047;}}
   <div class="left">
     <div class="badge">GAME DAY 06 ｜ Three.js 一人称3Dボクシング</div>
     <h1>COUNTER <span>KO 3D</span></h1>
-    <div class="sub"><strong>上下左右の極限見切り</strong>×<strong>ガード崩し</strong><br>4難度×5連戦（全20強敵）を0遅延で粉砕！</div>
+    <div class="sub"><strong>上下左右の見切り</strong>×<strong>2本指ガード</strong><br>4難度×5連戦（全20強敵）を0遅延で粉砕！</div>
     <div class="chips">
       <div class="chip">⚡ Three.js ネオン3D</div>
-      <div class="chip">⚠ ダック狩り＆ガード崩し</div>
+      <div class="chip">🛡 2本指ガード＆崩し</div>
       <div class="chip">🥊 4難度×5試合＝20強敵</div>
     </div>
   </div>
@@ -676,9 +712,9 @@ def main():
     for old in frames_dir.glob("*.*"):
         old.unlink()
 
-    fps = 30
+    fps = 24
     dt_sec = 1.0 / fps
-    total_dur = 14.5
+    total_dur = 22.5
     total_frames = int(fps * total_dur)
 
     try:
@@ -701,7 +737,7 @@ def main():
         cdp.call("Page.enable")
         cdp.call("Runtime.enable")
         cdp.call("Emulation.setDeviceMetricsOverride", {
-            "width": 540, "height": 960, "deviceScaleFactor": 2, "mobile": True
+            "width": 540, "height": 960, "deviceScaleFactor": 1.5, "mobile": True
         })
 
         cdp.call("Page.navigate", {"url": f"http://127.0.0.1:{port}/games/day06-counter-ko-3d/index.html?shorts=1"})
@@ -718,32 +754,33 @@ def main():
         font_med = ImageFont.truetype(FONT_SANS, 48)
         font_sub = ImageFont.truetype(FONT_SANS, 38)
 
-        # New Fight-Night PPV Caption Script (zero tofu boxes!)
+        # Full 22.5s Fight-Night PPV Caption Script (zero tofu boxes!)
         caption_plan = [
-            (0.00, 1.15, "0.1秒見切り", "一撃カウンターKO!!", "Three.js リアルネオン3Dボクシング!!", (253, 224, 71)),
-            (1.15, 2.80, "鉄壁3Dガード", "アッパーでガード粉砕!!", "上スワイプでガードブレイク連打!!", (0, 229, 255)),
-            (2.80, 4.10, "上下左右の読み合い", "緑の薙ぎ払いは下ダック!!", "横逃げ不可!! 潜って反撃!!", (74, 222, 128)),
-            (4.10, 5.10, "駆け引き", "フックはダックで回避!", "しかし次の瞬間…", (163, 230, 53)),
-            (5.10, 7.40, "ダック狩りアッパー", "しゃがみ連打は即死!!", "赤アッパーは横へ見切れ!!", (244, 63, 94)),
-            (7.40, 9.45, "4難度 × 5連戦", "勝つほど強敵が進化!!", "EASY / NORMAL / HARD / VERY HARD", (250, 204, 21)),
-            (9.45, 11.60, "20人目の裏世界王者", "右・下・左の3連見切り!!", "全方向スワイプで捌き切れ!!", (0, 229, 255)),
-            (11.60, 14.55, "ULTRA COUNTER KO", "ベリーハード5連戦制覇できる？", "プロフィール/リンクから無料プレイ ▼", (253, 224, 71)),
+            (0.00, 1.80, "0.1秒見切り", "一撃カウンターKO!!", "Three.js リアルネオン3Dボクシング!!", (253, 224, 71)),
+            (1.80, 3.45, "新機能 2本指ガード", "2本指同時押しでパリィ!!", "直前ガードで0ダメージ＆カウンター!!", (0, 229, 255)),
+            (3.45, 5.45, "鉄壁3Dガード", "上アッパーでガード粉砕!!", "連打は弾かれる → 上スワイプで崩せ!!", (0, 229, 255)),
+            (5.45, 6.25, "上下左右の読み合い", "緑の薙ぎ払いは下ダック!!", "横逃げ不可!! 潜って反撃!!", (74, 222, 128)),
+            (6.25, 7.65, "駆け引き", "フックはダックで回避!", "しかし次の瞬間…", (163, 230, 53)),
+            (7.65, 10.80, "ダック狩りアッパー", "しゃがみ連打は即死!!", "赤アッパーは横へ見切れ!!", (244, 63, 94)),
+            (10.80, 15.40, "4難度 × 5連戦", "勝つほど強敵が進化!!", "EASY / NORMAL / HARD / VERY HARD", (250, 204, 21)),
+            (15.40, 18.48, "20人目の裏世界王者", "4方向見切り＆2本指パリィ!!", "右!! 下!! ガード!! 左見切り!!", (0, 229, 255)),
+            (18.48, 22.55, "ULTRA COUNTER KO", "ベリーハード5連戦制覇できる？", "リンクから今すぐ無料プレイ ▼", (253, 224, 71)),
         ]
 
         # Peaks where chromatic RGB split + manga impact lines fire!
-        impact_peaks = [0.00, 0.14, 0.42, 1.15, 1.98, 3.28, 4.10, 5.60, 6.60, 7.40, 8.40, 9.45, 11.24, 11.98]
+        impact_peaks = [0.00, 0.14, 0.42, 1.80, 2.28, 4.52, 5.96, 6.25, 8.22, 9.52, 10.80, 12.15, 13.70, 15.40, 17.24, 18.08, 18.62]
 
         thumb_src_path = OUT_DIR / "_thumb_src.png"
 
         for f_idx in range(total_frames):
             t = f_idx * dt_sec
             cdp.eval_js(f"window.__stepFrame({dt_sec:.6f});")
-            res = cdp.call("Page.captureScreenshot", {"format": "jpeg", "quality": 95})
+            res = cdp.call("Page.captureScreenshot", {"format": "jpeg", "quality": 93})
             raw_img = Image.open(io.BytesIO(base64.b64decode(res["data"]))).convert("RGB")
 
             # Capture crisp mid-impact ULTRA COUNTER KO frame (0.46s)
-            if f_idx == 14:
-                raw_img.save(thumb_src_path)
+            if f_idx == 11:
+                raw_img.resize((1080, 1920), Image.Resampling.LANCZOS).save(thumb_src_path)
 
             tag, main_txt, sub_txt, accent, s0 = "", "", "", (253, 224, 71), t
             for seg in caption_plan:
