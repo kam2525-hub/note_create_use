@@ -9,6 +9,12 @@
 ## 制作ログ（重複防止カタログ）
 - 一覧表: [CATALOG.md](CATALOG.md) / 機械可読データ: [CATALOG.json](CATALOG.json)
 
+## Day 06: COUNTER KO 3D（一人称3Dカウンターボクシング・全15強敵）
+- ゲーム本体: [games/day06-counter-ko-3d/index.html](games/day06-counter-ko-3d/index.html)
+- 1クリックコピペヘルパー: [notes/day06/copy_helper.html](notes/day06/copy_helper.html)
+- note 記事原稿: [notes/day06/note_draft.md](notes/day06/note_draft.md)
+- ショート動画生成スクリプト（1080×1920 60fps・新テイスト Fight-Night バズ編集）: [shorts/day06/generate_shorts.py](shorts/day06/generate_shorts.py)
+
 ## Day 05: CROWD ×999（あの広告の増殖ゲートをガチ神ゲー化）
 - ゲーム本体: [games/day05-crowd-999/index.html](games/day05-crowd-999/index.html)
 - 1クリックコピペヘルパー: [notes/day05/copy_helper.html](notes/day05/copy_helper.html)
