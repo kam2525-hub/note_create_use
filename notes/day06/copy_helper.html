@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Day 06 投稿ヘルパー｜COUNTER KO 3D</title>
+  <style>
+    :root {
+      --bg: #0b0d17;
+      --card: #141827;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #f43f5e;
+      --gold: #f59e0b;
+      --border: #27304a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px 16px 60px;
+      background: radial-gradient(circle at 20% 0%, #241023 0%, #0b0d17 65%);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
+      line-height: 1.65;
+    }
+    .wrap { max-width: 760px; margin: 0 auto; }
+    h1 { font-size: 22px; margin: 0 0 8px; }
+    .lead { margin: 0 0 20px; color: var(--muted); font-size: 14px; }
+    .quick-bar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 12px;
+      margin-bottom: 22px;
+    }
+    .action-link {
+      display: block;
+      text-align: center;
+      text-decoration: none;
+      border-radius: 14px;
+      padding: 14px 16px;
+      font-weight: 900;
+      font-size: 14px;
+      background: linear-gradient(90deg, #f43f5e, #f59e0b);
+      color: #ffffff;
+    }
+    .action-link.secondary { background: #1c2236; color: var(--text); border: 1px solid var(--border); }
+    .section {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 18px 20px;
+      margin-bottom: 18px;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+    }
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+    .section-title { font-size: 15px; font-weight: 800; color: #fde047; }
+    .thumb-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .copy-btn {
+      border: none;
+      border-radius: 10px;
+      padding: 8px 14px;
+      background: var(--accent);
+      color: #ffffff;
+      font-weight: 800;
+      font-size: 13px;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .copy-btn.secondary { background: #26314d; color: var(--text); }
+    .copy-btn.done { background: var(--gold); color: #09090b; }
+    textarea {
+      width: 100%;
+      background: #0d111e;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-family: inherit;
+      font-size: 14px;
+      line-height: 1.6;
+      resize: vertical;
+    }
+    .thumb-preview { width: 100%; border-radius: 12px; display: block; margin-top: 8px; border: 1px solid var(--border); }
+    .hint-small { margin: 8px 0 0; font-size: 12px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Day 06 投稿ヘルパー（ゲーム6日目：COUNTER KO 3D）</h1>
+    <p class="lead">一人称3Dカウンターボクシング『COUNTER KO 3D』（全3難度×15強敵）のX・note・YouTube Shorts投稿用データです。</p>
+
+    <div class="quick-bar">
+      <a class="action-link" id="xIntentBtn" href="#" target="_blank" rel="noopener">X（Twitter）の投稿画面を開く</a>
+      <a class="action-link secondary" href="https://note.com/notes/new" target="_blank" rel="noopener">note 新規記事作成を開く</a>
+      <a class="action-link secondary" href="../../games/day06-counter-ko-3d/">ゲーム本体を開く</a>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">X（Twitter）投稿テキスト</span>
+        <button class="copy-btn" data-target="xText">コピー</button>
+      </div>
+      <textarea id="xText" rows="9" readonly>【100日後にバズるゲームを作る男｜6日目】
+0.1秒見切り→一撃カウンターKO!!
+一人称3Dボクシング『COUNTER KO 3D』を作りました🥊⚡
+
+✅ 0フレーム遅延スワイプで指の動きに即反応！
+✅ 厳格タイミング見切り『JUST SLIP!!』→確定カウンター連打
+✅ しゃがみ連打を狩る「ダック狩りアッパー」搭載⚠
+✅ イージー／ハード／ベリーハード × 各5戦 ＝ 全15強敵！
+
+ベリーハード15人目をKOできる？👇
+https://kam2525-hub.github.io/note_create_use/games/day06-counter-ko-3d/
+
+#100日後にバズるゲームを作る男 #個人開発 #ゲーム制作</textarea>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">note タイトル</span>
+        <button class="copy-btn" data-target="noteTitle">コピー</button>
+      </div>
+      <textarea id="noteTitle" rows="2" readonly>【ゲーム6日目】0.1秒の見切り×ダック狩りアッパー！0フレーム遅延スワイプの一人称3Dボクシング『COUNTER KO 3D』（全15強敵）を作った【無料プレイ可】</textarea>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">note 見出し画像（1280×670）</span>
+        <div class="thumb-actions">
+          <a class="copy-btn secondary" href="../../shorts/day06/output/note_thumbnail.png" download="day06_counter_ko_3d_thumbnail.png">画像をダウンロード</a>
+        </div>
+      </div>
+      <img class="thumb-preview" src="../../shorts/day06/output/note_thumbnail.png" alt="Day 06 COUNTER KO 3D note見出し画像" />
+      <p class="hint-small">スマホの場合は画像を長押しして「写真に保存」してください。</p>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">note 本文</span>
+        <button class="copy-btn" data-target="noteBody">コピー</button>
+      </div>
+      <textarea id="noteBody" rows="16" readonly>100日後にバズるゲームを作る男、6日目です。
+
+スマホで遊ぶボクシングゲームで一番気持ちいい瞬間――
+それは「相手の剛拳を0.1秒ギリギリで見切り、時間がスローになった瞬間に顎へカウンターアッパーを叩き込んで一撃KOする快感」です！
+
+6日目の今日は、その脳汁体験を極限まで研ぎ澄ませた一人称3Dボクシング『COUNTER KO 3D』を作りました！
+
+スマホ縦画面・片手スワイプだけで今すぐ無料で遊べます👇
+
+https://kam2525-hub.github.io/note_create_use/games/day06-counter-ko-3d/
+
+■ ガチ仕様＆脳汁ポイント
+・⚡ 0フレーム遅延スワイプ：指を離すのを待たず、動かした同一フレームで即座に回避＆アッパー発動！
+・🎯 厳格タイミング見切り：早すぎる回避は被弾！ギリギリで見切るとスローモーション＆確定カウンター連打！
+・⚠ ダック狩りアッパー：しゃがみ連打すると赤いアッパーで顎をカチ上げられる！横スワイプで見切れ！
+・🥊 全3難度（イージー／ハード／ベリーハード）× 各5ステージ ＝ 全15強敵！
+
+あなたはベリーハード15人目「雷帝ゼウス・オメガ」をKOできますか？記録をぜひコメント欄で教えてください！
+
+#100日後にバズるゲームを作る男 #個人開発 #ゲーム制作 #ボクシングゲーム #無料ゲーム #ブラウザゲーム</textarea>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">YouTube Shorts タイトル</span>
+        <button class="copy-btn" data-target="ytTitle">コピー</button>
+      </div>
+      <textarea id="ytTitle" rows="2" readonly>0.1秒見切り→一撃カウンターKO!! 一人称3Dボクシング『COUNTER KO 3D』を作った【全15強敵】 #Shorts #ゲーム制作 #個人開発</textarea>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">YouTube Shorts 説明文</span>
+        <button class="copy-btn" data-target="ytDesc">コピー</button>
+      </div>
+      <textarea id="ytDesc" rows="12" readonly>スマホ・PCで今すぐ無料で遊べます▼
+https://kam2525-hub.github.io/note_create_use/games/day06-counter-ko-3d/
+
+100日後にバズるゲームを作る男【ゲーム6日目】
+『COUNTER KO 3D（一人称3Dカウンターボクシング・全15強敵）』
+
+⚡ 0フレーム遅延スワイプ操作で指の動きに即反応！
+🎯 厳格タイミング見切り（JUST SLIP）→ スローモーション＆確定カウンター連打！
+⚠ しゃがみ連打を狩る「ダック狩りアッパー」搭載！赤アッパーは横スワイプで見切れ！
+🥊 全3難度（イージー／ハード／ベリーハード）× 各5ステージ ＝ 全15強敵！
+15人目の裏世界最強王者「雷帝ゼウス・オメガ」をKOできるか？記録をコメント欄で教えてください！
+
+#Shorts #ゲーム制作 #個人開発 #ボクシング #ボクシングゲーム #カウンター #KO #3Dゲーム #一人称ゲーム #アクションゲーム #タイミングゲーム #無料ゲーム #ブラウザゲーム #スマホゲーム #ミニゲーム #インディーゲーム #神ゲー #脳汁 #死にゲー #高難易度 #暇つぶし #ゲーム紹介 #自作ゲーム #100日後にバズるゲームを作る男 #COUNTERKO3D</textarea>
+    </div>
+  </div>
+
+  <script>
+    const xText = document.getElementById('xText').value;
+    document.getElementById('xIntentBtn').href =
+      'https://twitter.com/intent/tweet?text=' + encodeURIComponent(xText);
+
+    document.querySelectorAll('.copy-btn[data-target]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const el = document.getElementById(btn.dataset.target);
+        try {
+          await navigator.clipboard.writeText(el.value);
+        } catch (_) {
+          el.select();
+          document.execCommand('copy');
+        }
+        const orig = btn.textContent;
+        btn.textContent = 'コピー完了!';
+        btn.classList.add('done');
+        setTimeout(() => {
+          btn.textContent = orig;
+          btn.classList.remove('done');
+        }, 1500);
+      });
+    });
+  </script>
+</body>
+</html>

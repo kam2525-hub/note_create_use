@@ -60,6 +60,18 @@
       "game_path": "games/day05-crowd-999/index.html",
       "note_path": "notes/day05/note_draft.md",
       "shorts_script": "shorts/day05/generate_shorts.py"
+    },
+    {
+      "day": 6,
+      "date": "2026-11-20",
+      "slug": "day06-counter-ko-3d",
+      "title": "COUNTER KO 3D（一人称3Dカウンターボクシング・全15強敵）",
+      "type": "game",
+      "genre": "一人称3Dボクシング / 厳格タイミングカウンターアクション",
+      "core_mechanic": "0フレーム遅延スワイプ（指を離さず移動開始即発動）＋厳格タイミング見切り（JUST SLIPスロー＆確定カウンター連打）＋しゃがみ連打を狩る真紅のダック狩りアッパー対応＋3難度（イージー／ハード／ベリーハード）×各5ステージ＝全15強敵に挑む一人称3Dボクシング",
+      "game_path": "games/day06-counter-ko-3d/index.html",
+      "note_path": "notes/day06/note_draft.md",
+      "shorts_script": "shorts/day06/generate_shorts.py"
     }
   ]
 }
