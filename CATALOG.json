@@ -100,12 +100,12 @@
     {
       "day": 9,
       "date": "2026-11-23",
-      "slug": "day09-edit-pump-3d",
-      "title": "EDIT PUMP 3D（移動自動×3×3建築編集×200ポンプ・ワンパン）",
+      "slug": "day09-overclock-gunner-3d",
+      "title": "OVERCLOCK GUNNER 3D（武器6段階進化×超爽快一人称3Dシューティング）",
       "type": "game",
-      "genre": "Three.js 一人称3D建築編集ガンアクション / ボックスファイト",
-      "core_mechanic": "移動は完全自動！敵の射撃をWALL(3×3壁)やRAMP(階段ハイグラウンド)で捌き、青い3×3パネルを直接ドラッグして窓(WINDOW)・右上三角(PEANUT BUTTER)・上段(TOP ROW)を自在に編集→自動ピークで敵の頭を200+ ONE-PUMP!!で一撃粉砕！敵の赤い壁はツルハシで張り替え(WALL REPLACE)＆編集リセットも可能！全5ステージ（建築王ARCHITECT ZERO決戦）＋30秒チュートリアル＋無限ENDLESS RUSH搭載",
-      "game_path": "games/day09-edit-pump-3d/index.html",
+      "genre": "Three.js 一人称3Dアーケードシューティング / 武器進化ガンアクション",
+      "core_mechanic": "指1本（マウス1つ）で狙って撃ちまくる本格アーケード一人称3Dシューティング！敵を倒すほど手元の多パーツ3D銃がハンドガン→左右二丁拳銃→8発散弾ショットガン→サイバーSMG→6銃身回転バルカン→貫通電磁レール砲＋自動追尾ミサイルへ6段階リアルタイム進化！燃料コア連鎖爆破・敵ミサイル撃ち落としINTERCEPT・JUST DODGEスローカウンター・巨大メックボス『TITAN-IX OMEGA』両肩ポッド部位破壊＆3択MOD覚醒！縦画面＆横画面フル対応",
+      "game_path": "games/day09-overclock-gunner-3d/index.html",
       "note_path": "notes/day09/note_draft.md",
       "shorts_script": "shorts/day09/generate_shorts.py"
     }
