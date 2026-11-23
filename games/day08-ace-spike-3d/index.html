@@ -2868,7 +2868,7 @@
       intro: '「今日がレギュラー昇格テスト。まずは落ち着いてレシーブ・トス・スパイクを決めろ！」',
       epilogue: '見事レギュラー奪取！全国大会への第一歩を踏み出した！',
       jersey: 0x10b981, trim: 0xfef08a,
-      enemySpeed: 4.4, blockCount: 1, spikePower: 0.86, servePower: 0.84, receiveSkill: 0.30
+      enemySpeed: 5.4, blockCount: 1, spikePower: 0.86, servePower: 0.84, receiveSkill: 0.48, serveReceiveSkill: 0.76
     },
     {
       id: 'normal', diff: 'NORMAL', diffCls: 'normal', stars: '★★☆☆☆',
@@ -2877,7 +2877,7 @@
       intro: '「地区大会決勝。相手は鉄壁の2枚ブロック――クロス打ちと軟打で打ち破れ！」',
       epilogue: 'クロガネ工業を撃破！県大会の切符を掴み取った！',
       jersey: 0x64748b, trim: 0x38bdf8,
-      enemySpeed: 5.5, blockCount: 2, spikePower: 1.04, servePower: 1.00, receiveSkill: 0.48
+      enemySpeed: 6.6, blockCount: 2, spikePower: 1.04, servePower: 1.00, receiveSkill: 0.72, serveReceiveSkill: 0.87
     },
     {
       id: 'hard', diff: 'HARD', diffCls: 'hard', stars: '★★★☆☆',
@@ -2886,7 +2886,7 @@
       intro: '「全国ベスト4の強豪。鋭いサーブと高速スパイクをスローで見極めろ！」',
       epilogue: '強豪シロトリ学園を撃破！ついに全国決勝の舞台へ！',
       jersey: 0x7c3aed, trim: 0xfacc15,
-      enemySpeed: 6.5, blockCount: 2, spikePower: 1.20, servePower: 1.15, receiveSkill: 0.62
+      enemySpeed: 7.8, blockCount: 2, spikePower: 1.20, servePower: 1.15, receiveSkill: 0.83, serveReceiveSkill: 0.93
     },
     {
       id: 'vhard', diff: 'VERY HARD', diffCls: 'vhard', stars: '★★★★☆',
@@ -2895,7 +2895,7 @@
       intro: '「無敗の絶対王者・コウテイ学院。ZONEを覚醒させ、頂点の座を奪い取れ！」',
       epilogue: '全国制覇達成!! だが、さらなる怪物たちが裏舞台で待っていた…',
       jersey: 0x18181b, trim: 0xf43f5e,
-      enemySpeed: 7.4, blockCount: 2, spikePower: 1.36, servePower: 1.28, receiveSkill: 0.74
+      enemySpeed: 8.8, blockCount: 2, spikePower: 1.36, servePower: 1.28, receiveSkill: 0.90, serveReceiveSkill: 0.96
     },
     {
       id: 'oni', diff: '鬼', diffCls: 'oni', stars: '★★★★★',
@@ -2904,7 +2904,7 @@
       intro: '「世界最強の怪物たちが集う鬼ステージ。一瞬の隙も許されない神速ラリーを制せ！」',
       epilogue: '鬼ステージ完全制覇!! あなたは伝説の『ACE SPIKE GOD』となった!!',
       jersey: 0x7f1d1d, trim: 0xfacc15,
-      enemySpeed: 8.4, blockCount: 3, spikePower: 1.54, servePower: 1.42, receiveSkill: 0.84
+      enemySpeed: 10.0, blockCount: 3, spikePower: 1.54, servePower: 1.42, receiveSkill: 0.96, serveReceiveSkill: 0.99
     }
   ];
 
@@ -3372,6 +3372,7 @@
     ball.isFeint = !!opts.feint;
     ball.isJust = !!opts.just;
     ball.isMeteor = !!opts.meteor;
+    ball.isServe = !!opts.isServe;
     ball.incomingHigh = !!opts.incomingHigh;
     recvSlowNotified = false;
   }
@@ -3927,9 +3928,9 @@
         const heightErr = Math.abs(ball.y - (player.y + 1.65));
         const just = heightErr < 0.55;
         const isShort = kind === 'feint';
-        const tx = Math.max(-4.1, Math.min(4.1, player.aimX));
-        const tz = isShort ? -3.6 : (isJumpServe ? -7.8 : -7.2);
-        const speedT = isShort ? 0.94 : (isJumpServe ? (just ? 0.55 : 0.68) : (just ? 0.74 : 0.88));
+        const tx = Math.max(-3.9, Math.min(3.9, player.aimX));
+        const tz = isShort ? -3.4 : (isJumpServe ? -6.8 : -6.2);
+        const speedT = isShort ? 1.02 : (isJumpServe ? (just ? 0.62 : 0.72) : (just ? 1.04 : 1.14));
 
         ball.side = 'enemy';
         ball.touches = 0;
@@ -3943,6 +3944,7 @@
           trailPower: isJumpServe ? (just ? 1.25 : 0.85) : 0.60,
           just,
           feint: isShort,
+          isServe: true,
           omegaX: isJumpServe ? -28 : 0,
           knuckle: !isJumpServe
         });
@@ -4184,11 +4186,24 @@
     const dists = enemies.map((e, i) => ({ i, d: Math.hypot(e.x - ball.x, e.z - ball.z) })).sort((a, b) => a.d - b.d);
     const closest = enemies[dists[0].i];
 
-    let saveChance = st.receiveSkill;
-    if (ball.isMeteor) saveChance = 0.04;
-    else if (ball.isJust) saveChance *= 0.44;
-    else if (ball.isFeint) saveChance *= 0.52;
-    if (dists[0].d > 3.9) saveChance *= 0.35;
+    let saveChance;
+    if (ball.isServe) {
+      // Serves are almost always picked up cleanly on higher difficulties so rallies start properly
+      saveChance = st.serveReceiveSkill ?? Math.min(0.98, 0.56 + st.receiveSkill * 0.44);
+      if (ball.isJust) saveChance -= 0.14 * (1 - st.receiveSkill * 0.72);
+      else if (ball.isFeint) saveChance -= 0.10 * (1 - st.receiveSkill * 0.65);
+    } else {
+      saveChance = st.receiveSkill;
+      if (ball.isMeteor) saveChance = Math.max(0.08, (st.receiveSkill - 0.38) * 0.92);
+      else if (ball.isJust) saveChance *= (0.76 + st.receiveSkill * 0.18);
+      else if (ball.isFeint) saveChance *= (0.78 + st.receiveSkill * 0.16);
+    }
+
+    const maxDigReach = 1.85 + st.receiveSkill * 2.4;
+    if (dists[0].d > maxDigReach) {
+      saveChance *= Math.max(0.55, 1.0 - (dists[0].d - maxDigReach) * 0.14);
+    }
+    saveChance = Math.max(0.05, Math.min(0.99, saveChance));
 
     if (gameMode === 'drill_spike' || Math.random() > saveChance || Math.abs(ball.x) > COURT_HALF_W || ball.z < -COURT_HALF_L) {
       spawnShockwave(ball.x, 0.03, ball.z, 0xfacc15, 3.2);
@@ -4198,14 +4213,19 @@
       ball.vx *= 0.68; ball.vz *= 0.68;
       ball.deadBounce = true;
       crowdExcitement = 1.0;
-      awardPoint('us', ball.isMeteor ? 'METEOR ACE!!' : (ball.isFeint ? 'FEINT ACE!!' : 'ACE KILL!!'));
+      awardPoint('us', ball.isMeteor ? 'METEOR ACE!!' : (ball.isServe ? 'SERVICE ACE!!' : (ball.isFeint ? 'FEINT ACE!!' : 'ACE KILL!!')));
       return;
     }
 
     closest.x = ball.x; closest.z = ball.z;
-    closest.pose = 'receive'; closest.poseTimer = 0.48;
+    closest.targetX = closest.homeX; closest.targetZ = closest.homeZ;
+    closest.pose = 'receive'; closest.poseTimer = 0.52;
     SFX.receive(false, false, 1);
-    spawnShockwave(ball.x, 0.03, ball.z, 0xfb7185, 1.3);
+    spawnShockwave(ball.x, 0.03, ball.z, 0xfb7185, 1.45);
+    if (ball.isMeteor || ball.isJust) {
+      spawnBurstParticles(ball.x, 0.32, ball.z, 0xfb7185, 16, 0.90);
+      if (ball.isMeteor) addCallout('SUPER DIG!!', '', '#fb7185');
+    }
 
     ball.side = 'enemy';
     ball.touches = 1;
@@ -4729,14 +4749,17 @@
     serverSide = 'us';
     if (mode === 'tourney') { startStageMatch(storyIndex); return; }
     targetPts = 99;
-    spawnCharacters(STAGES[0]);
+    spawnCharacters(STAGES[stageIdx] || STAGES[0]);
     SFX.whistle();
     SFX.startBeat(() => ({ playing: gameMode !== 'title' && gameMode !== 'over', zone: zoneActiveTimer > 0 }));
     startNextPoint();
   }
 
   document.getElementById('btn-open-story').addEventListener('click', openStorySelect);
-  document.getElementById('btn-quick-play').addEventListener('click', () => startMode('drill_all'));
+  document.getElementById('btn-quick-play').addEventListener('click', () => {
+    const clearedCnt = Object.keys(saveData.cleared || {}).length;
+    startMode('drill_all', Math.min(3, Math.max(1, clearedCnt)));
+  });
   document.getElementById('btn-home-skin').addEventListener('click', () => {
     const unlocked = SKINS.filter(s => saveData.wins >= s.req);
     if (unlocked.length <= 1) {
@@ -5533,6 +5556,28 @@
         ballShadow.scale.set(sSc, sSc, 1);
       }
     }
+    if (gameMode !== 'online' && gameMode !== 'title' && gameMode !== 'drill_spike' && enemies.length >= 3) {
+      if (matchState === 'serve_wait' || (ball.side === 'enemy' && ball.expectedActor === 'enemy_play' && ball.isServe)) {
+        enemies[0].targetX = -2.2; enemies[0].targetZ = -4.2;
+        enemies[1].targetX = 2.2;  enemies[1].targetZ = -4.2;
+        enemies[2].targetX = 0.0;  enemies[2].targetZ = -6.8;
+      }
+      if (ball.side === 'enemy' && ball.expectedActor === 'enemy_play' && ball.enemySpikeEta <= 0 && !ball.deadBounce) {
+        const tx = Math.max(-COURT_HALF_W, Math.min(COURT_HALF_W, ball.targetX));
+        const tz = Math.max(-COURT_HALF_L, Math.min(-0.85, ball.targetZ));
+        let bestIdx = 2, bestDist = 999;
+        for (let i = 0; i < enemies.length; i++) {
+          const d = Math.hypot(enemies[i].x - tx, enemies[i].z - tz);
+          if (d < bestDist) { bestDist = d; bestIdx = i; }
+        }
+        enemies[bestIdx].targetX = tx;
+        enemies[bestIdx].targetZ = tz;
+      } else if (ball.side === 'us' && ball.enemySpikeEta <= 0) {
+        enemies.forEach(e => {
+          if (e.poseTimer <= 0) { e.targetX = e.homeX; e.targetZ = e.homeZ; }
+        });
+      }
+    }
     enemies.forEach((e, idx) => {
       if (gameMode === 'online' && idx === 0 && onlineRivalTarget.active) {
         animateChar(e, 0, elapsedTotal, 0);
@@ -5845,10 +5890,10 @@
   }
 
   window.__manualStep = SHORTS_MODE;
-  window.__stepFrame = (dtSec = 1 / 24) => {
+  window.__stepFrame = (dtSec = 1 / 24, skipRender = false) => {
     shortsElapsed += dtSec;
     if (SHORTS_MODE) runShortsChoreography(shortsElapsed);
-    stepFrame(dtSec);
+    stepFrame(dtSec, skipRender);
   };
 
   let prevTime = performance.now();
@@ -5899,7 +5944,7 @@
       player: { x: +player.x.toFixed(2), y: +player.y.toFixed(2), z: +player.z.toFixed(2), vy: +player.vy.toFixed(2), aimX: +player.aimX.toFixed(2) },
       ball: { x: +ball.x.toFixed(2), y: +ball.y.toFixed(2), z: +ball.z.toFixed(2), omegaX: +ball.omegaX.toFixed(1), side: ball.side, touches: ball.touches, expectedActor: ball.expectedActor, incomingHigh: ball.incomingHigh, active: ball.active }
     }),
-    startMode: (m) => startMode(m),
+    startMode: (m, idx = 0) => startMode(m, idx),
     act: (k, d) => executePlayerAction(k, d),
     setPlayerPos: (x, z) => { player.x = x; player.z = z; },
     setAim: (ax) => { player.aimX = ax; },
