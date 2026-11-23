@@ -1622,15 +1622,15 @@
     body:not(.shorts-mode) .stage-pill { padding: 4px 9px; border-radius: 10px; }
     body:not(.shorts-mode) .zone-wrap { margin-top: 5px; max-width: 320px; }
     body:not(.shorts-mode) .status-strip { margin-top: 4px; }
-    body:not(.shorts-mode) .vpad-guide { width: 84px; height: 84px; font-size: 9px; }
+    body:not(.shorts-mode) .vpad-guide { width: 80px; height: 80px; font-size: 9px; }
     body:not(.shorts-mode) .vpad-guide span { font-size: 14px; }
-    body:not(.shorts-mode) .action-cluster { gap: 6px; }
-    body:not(.shorts-mode) .sub-actions { max-width: 340px; }
-    body:not(.shorts-mode) .sub-btn { min-height: 38px; min-width: 62px; padding: 6px 10px; font-size: 12px; border-radius: 12px; }
-    body:not(.shorts-mode) .sub-btn.over-btn { min-width: 126px; min-height: 46px; font-size: 14px; }
-    body:not(.shorts-mode) #btn-main-act { width: 136px; height: 64px; font-size: 16px; border-radius: 18px; }
-    body:not(.shorts-mode) #callout-stack { top: 22%; }
-    body:not(.shorts-mode) #speed-pop { top: 27%; }
+    body:not(.shorts-mode) .action-cluster { flex-direction: row; align-items: flex-end; gap: 8px; }
+    body:not(.shorts-mode) .sub-actions { max-width: 380px; gap: 5px; }
+    body:not(.shorts-mode) .sub-btn { min-height: 38px; min-width: 60px; padding: 6px 10px; font-size: 12px; border-radius: 12px; }
+    body:not(.shorts-mode) .sub-btn.over-btn { min-width: 120px; min-height: 44px; font-size: 13.5px; }
+    body:not(.shorts-mode) #btn-main-act { width: 132px; height: 62px; font-size: 16px; border-radius: 18px; flex-shrink: 0; }
+    body:not(.shorts-mode) #callout-stack { top: 20%; }
+    body:not(.shorts-mode) #speed-pop { top: 25%; }
 
     body:not(.shorts-mode) .hero-wordmark { font-size: clamp(30px, 9.5vh, 46px); }
     body:not(.shorts-mode) .hero-3d-plate { font-size: 14px; padding: 4px 7px; }
@@ -1642,12 +1642,21 @@
     body:not(.shorts-mode) .dock-tile-text strong { font-size: 12px; }
     body:not(.shorts-mode) .home-ticker { padding: 6px 10px; font-size: 9.5px; }
 
-    body:not(.shorts-mode) .overlay:not(#screen-title) { padding: 12px 14px; justify-content: flex-start; }
-    body:not(.shorts-mode):not(.is-fullscreen) .sheet-head { padding-left: 110px; }
+    body:not(.shorts-mode) .overlay:not(#screen-title) {
+      padding: max(10px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+      justify-content: flex-start;
+    }
+    body:not(.shorts-mode):not(.is-fullscreen) .sheet-head { padding-left: max(112px, calc(env(safe-area-inset-left) + 98px)); }
     body:not(.shorts-mode) .sheet-head { margin-bottom: 8px; padding-bottom: 6px; }
     body:not(.shorts-mode) .sheet-head-title h2 { font-size: 17px; }
     body:not(.shorts-mode) .story-card { padding: 8px 11px 8px 14px; }
     body:not(.shorts-mode) .story-chapter { font-size: 12px; }
+    body:not(.shorts-mode) .story-intro-box,
+    body:not(.shorts-mode) .result-box { padding: 14px 16px; }
+    body:not(.shorts-mode) .story-quote { margin: 6px 0 8px; padding: 7px 10px; font-size: 11px; }
+    body:not(.shorts-mode) .res-grid { gap: 6px; margin-bottom: 8px; }
+    body:not(.shorts-mode) .res-cell { padding: 6px 8px; }
+    body:not(.shorts-mode) .cta-btn { padding: 11px 14px; font-size: 14px; }
     body:not(.shorts-mode) .tut-layout {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -1657,6 +1666,30 @@
     body:not(.shorts-mode) .drill-grid { margin-bottom: 0; }
     body:not(.shorts-mode) .tut-controls { margin: 0; gap: 5px; }
     body:not(.shorts-mode) .tut-row { padding: 5px 8px; font-size: 10.5px; }
+  }
+
+  /* Ultra-Short Non-Fullscreen Mobile Landscape (with Safari/Chrome bars visible, <= 350px height) */
+  @media (min-aspect-ratio: 11/10) and (max-height: 350px) {
+    body:not(.shorts-mode) .home-topbar { padding-top: max(6px, env(safe-area-inset-top)); padding-bottom: 4px; }
+    body:not(.shorts-mode) .home-hero-lockup { bottom: max(10px, env(safe-area-inset-bottom)); }
+    body:not(.shorts-mode) .hero-series-tag { display: none; }
+    body:not(.shorts-mode) .hero-wordmark { font-size: clamp(24px, 8.8vh, 34px); }
+    body:not(.shorts-mode) .home-dock { bottom: max(8px, env(safe-area-inset-bottom)); gap: 5px; }
+    body:not(.shorts-mode) .dock-hero { padding: 7px 12px 7px 14px; }
+    body:not(.shorts-mode) .dock-jp { font-size: 15px; }
+    body:not(.shorts-mode) .dock-next-line { display: none; }
+    body:not(.shorts-mode) .dock-tile { padding: 6px 8px; }
+    body:not(.shorts-mode) .home-ticker { display: none; }
+
+    body:not(.shorts-mode) #hud { padding-top: max(6px, env(safe-area-inset-top)); padding-bottom: 6px; }
+    body:not(.shorts-mode) .zone-wrap { margin-top: 3px; max-width: 280px; }
+    body:not(.shorts-mode) .hud-bottom { padding-top: 4px; padding-bottom: max(6px, env(safe-area-inset-bottom)); }
+    body:not(.shorts-mode) .vpad-guide { width: 68px; height: 68px; font-size: 8.5px; }
+    body:not(.shorts-mode) .sub-actions { max-width: 340px; }
+    body:not(.shorts-mode) .sub-btn { min-height: 33px; min-width: 54px; padding: 4px 8px; font-size: 11px; border-radius: 10px; }
+    body:not(.shorts-mode) .sub-btn.over-btn { min-height: 38px; min-width: 108px; font-size: 12px; }
+    body:not(.shorts-mode) #btn-main-act { width: 120px; height: 52px; font-size: 14.5px; border-radius: 14px; }
+    body:not(.shorts-mode) #btn-main-act small { font-size: 8px; }
   }
 </style>
 </head>
@@ -2575,13 +2608,16 @@
       renderer.setSize(W, H, false);
       const aspect = W / H;
       camera.aspect = aspect;
-      currentBaseFov = SHORTS_MODE ? BASE_FOV : (aspect >= 1.25 ? 58 : (aspect >= 0.9 ? 62 : 66));
+      currentBaseFov = SHORTS_MODE ? BASE_FOV : (aspect >= 1.9 ? 63 : (aspect >= 1.25 ? 59 : (aspect >= 0.9 ? 62 : 66)));
       camera.fov = currentBaseFov;
       camera.updateProjectionMatrix();
     }
   }
   window.addEventListener('resize', resizeRenderer);
-  window.addEventListener('orientationchange', () => setTimeout(resizeRenderer, 90));
+  window.addEventListener('orientationchange', () => {
+    setTimeout(resizeRenderer, 90);
+    setTimeout(resizeRenderer, 320);
+  });
   if (window.visualViewport) window.visualViewport.addEventListener('resize', resizeRenderer);
   resizeRenderer();
 
