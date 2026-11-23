@@ -113,6 +113,8 @@
     padding: 12px 14px 16px;
   }
   body:not(.shorts-mode) #hud { padding-top: 44px; }
+  body.shorts-mode #hud { padding-top: 76px; }
+  body.shorts-mode .home-topbar { margin-top: 54px; }
 
   .hud-top {
     display: flex;
@@ -1604,23 +1606,6 @@
           </span>
         </button>
 
-        <button class="dock-online" id="btn-open-online">
-          <div style="display:flex;align-items:center;gap:10px;min-width:0;">
-            <span class="dock-tile-ico" style="color:#34d399;background:rgba(16,185,129,0.16);">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="square">
-                <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
-                <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
-                <circle cx="12" cy="19.5" r="1.4" fill="currentColor"></circle>
-              </svg>
-            </span>
-            <span class="dock-tile-text">
-              <small style="color:#6ee7b7;">ONLINE 1VS1 // ROOM CODE</small>
-              <strong style="font-size:15px;">オンライン対戦</strong>
-            </span>
-          </div>
-          <span class="online-pill-live"><span class="online-dot"></span>P2P</span>
-        </button>
-
         <div class="dock-split">
           <button class="dock-tile" id="btn-howto">
             <span class="dock-tile-ico ice">
@@ -1655,42 +1640,6 @@
           <span>CLEAR <strong id="tick-clear">0/5</strong></span>
           <span>MAX RALLY <strong id="tick-rally">0</strong></span>
           <span>JUST <strong id="tick-just">0</strong></span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Online 1vs1 Room Match Lobby (WebRTC PeerJS + Local 2-Tab Link) -->
-    <div class="overlay hidden" id="screen-online">
-      <div class="screen-sheet online-panel">
-        <div class="sheet-head" style="margin-bottom:12px;">
-          <div class="sheet-head-title">
-            <small style="color:#34d399;">ONLINE 1VS1 // P2P WEBRTC</small>
-            <h2>ルーム対戦</h2>
-          </div>
-          <button class="back-chip" id="btn-online-back">BACK</button>
-        </div>
-
-        <div class="online-card">
-          <div class="online-card-label">HOST // ルームを作成して友達を待つ</div>
-          <div class="online-card-title">合言葉（4桁コード）を発行</div>
-          <div class="room-code-display hidden" id="room-code-box">
-            <span class="room-code-digits" id="room-code-digits">----</span>
-            <button class="room-copy-btn" id="btn-copy-code">COPY</button>
-          </div>
-          <button class="cta-btn" id="btn-create-room" style="margin-bottom:0;padding:11px 14px;font-size:14px;">ルームを作成 // CREATE</button>
-        </div>
-
-        <div class="online-card join">
-          <div class="online-card-label">GUEST // 友達のコードを入力して参加</div>
-          <div class="online-card-title">ルームに参加</div>
-          <div class="room-join-row">
-            <input class="room-code-input" id="input-room-code" type="text" inputmode="numeric" maxlength="4" placeholder="0000" autocomplete="off" />
-            <button class="room-join-btn" id="btn-join-room">参加 // JOIN</button>
-          </div>
-        </div>
-
-        <div class="online-status-bar" id="online-status">
-          4桁の合言葉で1vs1対戦（7点先取）。相手のサーブ・スパイクをリアルタイムにレシーブ＆ブロック！
         </div>
       </div>
     </div>
@@ -1791,7 +1740,6 @@
 </div>
 
 <script src="./three.min.js"></script>
-<script src="./peerjs.min.js"></script>
 <script>
 (() => {
   'use strict';
@@ -1839,7 +1787,7 @@
   const btnSound = document.getElementById('btn-sound');
   const btnMenu = document.getElementById('btn-menu');
   const screenTitle = document.getElementById('screen-title');
-  const screenOnline = document.getElementById('screen-online');
+  const screenOnline = document.getElementById('screen-online') || { classList: { add() {}, remove() {} } };
   const screenStory = document.getElementById('screen-story');
   const screenStoryIntro = document.getElementById('screen-story-intro');
   const storyListEl = document.getElementById('story-list');
@@ -4788,37 +4736,6 @@
   }
 
   document.getElementById('btn-open-story').addEventListener('click', openStorySelect);
-  document.getElementById('btn-open-online').addEventListener('click', () => {
-    document.body.classList.add('on-menu');
-    screenTitle.classList.add('hidden');
-    screenOnline.classList.remove('hidden');
-    setOnlineStatus('4桁の合言葉で1vs1対戦（7点先取）。相手のサーブ・スパイクをリアルタイムにレシーブ＆ブロック！');
-  });
-  document.getElementById('btn-online-back').addEventListener('click', () => {
-    NetP2P.close(true);
-    document.getElementById('room-code-box').classList.add('hidden');
-    screenOnline.classList.add('hidden');
-    screenTitle.classList.remove('hidden');
-    updateTitleBest();
-  });
-  document.getElementById('btn-create-room').addEventListener('click', async () => {
-    const code = await NetP2P.createRoom();
-    document.getElementById('room-code-digits').textContent = code;
-    document.getElementById('room-code-box').classList.remove('hidden');
-  });
-  document.getElementById('btn-copy-code').addEventListener('click', () => {
-    const code = document.getElementById('room-code-digits').textContent;
-    if (navigator.clipboard && code && code !== '----') {
-      navigator.clipboard.writeText(code).catch(() => {});
-      const b = document.getElementById('btn-copy-code');
-      b.textContent = 'COPIED';
-      setTimeout(() => { b.textContent = 'COPY'; }, 1200);
-    }
-  });
-  document.getElementById('btn-join-room').addEventListener('click', () => {
-    const inp = document.getElementById('input-room-code');
-    NetP2P.joinRoom(inp ? inp.value : '');
-  });
   document.getElementById('btn-quick-play').addEventListener('click', () => startMode('drill_all'));
   document.getElementById('btn-home-skin').addEventListener('click', () => {
     const unlocked = SKINS.filter(s => saveData.wins >= s.req);
@@ -5750,31 +5667,181 @@
   function shortsOnce(key, fn) {
     if (!firedActs.has(key)) { firedActs.add(key); fn(); }
   }
+  function hideAllMenusForShorts() {
+    document.body.classList.remove('on-menu');
+    screenTitle.classList.add('hidden');
+    screenStory.classList.add('hidden');
+    screenStoryIntro.classList.add('hidden');
+    screenHowto.classList.add('hidden');
+    screenUpgrade.classList.add('hidden');
+    screenOver.classList.add('hidden');
+  }
   function resetActState(stageIndex, myPts, enPts, mode = 'tourney') {
+    hideAllMenusForShorts();
     gameMode = mode;
     stageIdx = stageIndex;
     spawnCharacters(STAGES[stageIndex] || STAGES[0]);
     myScore = myPts; enScore = enPts; targetPts = 7;
     matchState = 'rally'; pauseTimer = 0; blockPointTimer = 0; drillRecvNextTimer = 0;
     rallyGuardTimer = 0; hitstopTimer = 0; ball.enemySpikeEta = 0; ball.deadBounce = false;
-    player.vx = 0; player.vy = 0; player.vz = 0; player.diveTimer = 0; player.approachTimer = 0;
+    player.vx = 0; player.vy = 0; player.vz = 0; player.y = 0;
+    player.diveTimer = 0; player.approachTimer = 0;
     player.cameraRoll = 0; player.actionBuffer = null;
     calloutStack.innerHTML = '';
     updateHud();
   }
   function runShortsChoreography(t) {
+    // ACT 1 (0.00 - 3.85s): COLD OPEN — Instant First-Second Impact METEOR SPIKE!! -> Pro Home Screen
     shortsOnce('act1_init', () => {
-      startMode('tourney');
-      resetActState(3, 4, 4);
+      startMode('tourney', 4);
+      resetActState(4, 5, 5);
       zone = 100; zoneActiveTimer = 10;
-      player.x = -0.6; player.z = 1.65; player.y = 0.0; player.aimX = 2.2;
+      player.x = -0.55; player.z = 1.62; player.y = 0.0; player.aimX = 2.4;
       ball.side = 'us'; ball.touches = 2; ball.expectedActor = 'player_spike';
-      ball.x = -0.6; ball.y = 2.4; ball.z = 1.15;
-      launchBallTo(-0.5, 3.05, 1.1, 0.52, { trailColor: 0xfacc15, trailPower: 0.9 });
+      ball.x = -0.55; ball.y = 2.35; ball.z = 1.12;
+      launchBallTo(-0.5, 3.05, 1.1, 0.50, { trailColor: 0xfacc15, trailPower: 0.95 });
       enemies[0].targetX = -0.5; enemies[0].targetZ = -0.7; enemies[0].vy = 5.4; enemies[0].pose = 'block';
     });
-    if (t >= 0.14) shortsOnce('act1_jump', () => executePlayerAction('main'));
-    if (t >= 0.48) shortsOnce('act1_spike', () => { player.aimX = 2.2; executePlayerAction('main'); });
+    if (t >= 0.12) shortsOnce('act1_jump', () => executePlayerAction('main', true));
+    if (t >= 0.44) shortsOnce('act1_spike', () => { player.aimX = 2.4; executePlayerAction('main', true); });
+    if (t >= 2.25) shortsOnce('act1_home', () => {
+      hideAllMenusForShorts();
+      gameMode = 'title';
+      document.body.classList.add('on-menu');
+      screenTitle.classList.remove('hidden');
+      spawnCharacters(STAGES[0]);
+      updateTitleBest();
+    });
+
+    // ACT 2 (3.85 - 8.45s): TUTORIAL Screen -> Live Spike Drill Play!
+    if (t >= 3.85) shortsOnce('act2_tutorial_ui', () => {
+      hideAllMenusForShorts();
+      gameMode = 'title';
+      document.body.classList.add('on-menu');
+      screenHowto.classList.remove('hidden');
+    });
+    if (t >= 5.65) shortsOnce('act2_tutorial_play', () => {
+      resetActState(0, 0, 0, 'drill_spike');
+      zone = 45; zoneActiveTimer = 0;
+      player.x = -0.45; player.z = 1.72; player.aimX = 1.85;
+      ball.side = 'us'; ball.touches = 2; ball.expectedActor = 'player_spike';
+      ball.x = 0.85; ball.y = 2.15; ball.z = 1.15;
+      launchBallTo(-0.42, 3.02, 1.18, 0.58, { trailColor: 0x38bdf8, trailPower: 0.72 });
+      allies[0].pose = 'toss'; allies[0].poseTimer = 0.45;
+    });
+    if (t >= 5.88) shortsOnce('act2_tut_jump', () => executePlayerAction('main', true));
+    if (t >= 6.24) shortsOnce('act2_tut_spike', () => { player.aimX = 1.9; executePlayerAction('main', true); });
+
+    // ACT 3 (8.45 - 12.80s): Slow-Mo OVER/UNDER RECEIVE -> Cross Spike!
+    if (t >= 8.45) shortsOnce('act3_recv_init', () => {
+      resetActState(2, 4, 3);
+      zone = 62; zoneActiveTimer = 0;
+      player.x = 0.25; player.z = 5.45; player.aimX = -1.6;
+      ball.side = 'us'; ball.touches = 0; ball.expectedActor = 'player_recv';
+      ball.x = -1.35; ball.y = 2.85; ball.z = -3.8;
+      enemies[1].x = -1.35; enemies[1].z = -3.8; enemies[1].y = 1.1; enemies[1].pose = 'spike_hit'; enemies[1].poseTimer = 0.48;
+      launchBallTo(0.25, 1.56, 5.45, 0.92, { trailColor: 0x34d399, trailPower: 0.90, incomingHigh: true, omegaX: -12 });
+    });
+    if (t >= 9.30) shortsOnce('act3_recv_over', () => {
+      player.x = ball.x; player.z = Math.max(2.0, ball.z);
+      executePlayerAction('over', true);
+    });
+    if (t >= 10.72) shortsOnce('act3_setup_spike', () => {
+      player.x = -0.5; player.z = 1.65; player.y = 0; player.aimX = 2.1;
+      ball.side = 'us'; ball.touches = 2; ball.expectedActor = 'player_spike';
+      ball.x = 0.7; ball.y = 2.1; ball.z = 1.1;
+      launchBallTo(-0.48, 3.04, 1.15, 0.54, { trailColor: 0xfacc15, trailPower: 0.85 });
+      allies[0].pose = 'toss'; allies[0].poseTimer = 0.45;
+    });
+    if (t >= 10.94) shortsOnce('act3_spike_jump', () => executePlayerAction('main', true));
+    if (t >= 11.32) shortsOnce('act3_spike_hit', () => { player.aimX = 2.15; executePlayerAction('main', true); });
+
+    // ACT 4 (12.80 - 16.20s): MONSTER BLOCK!! + Quick Toss Combo!
+    if (t >= 12.80) shortsOnce('act4_block_init', () => {
+      resetActState(3, 5, 4);
+      zone = 80; zoneActiveTimer = 0;
+      player.x = 0.15; player.z = 0.95; player.y = 0;
+      const spk = enemies[1];
+      spk.x = 0.15; spk.z = -1.15; spk.targetX = 0.15; spk.targetZ = -1.05;
+      ball.side = 'enemy'; ball.touches = 2; ball.expectedActor = 'enemy_play';
+      ball.x = -1.2; ball.y = 2.15; ball.z = -1.4;
+      launchBallTo(0.15, 3.05, -1.05, 0.65, { trailColor: 0xf43f5e, trailPower: 0.72 });
+      ball.enemySpikeEta = 0.66;
+    });
+    if (t >= 13.16) shortsOnce('act4_block_jump', () => executePlayerAction('main', true));
+    if (t >= 14.55) shortsOnce('act4_toss_init', () => {
+      resetActState(3, 6, 4);
+      player.x = 0.2; player.z = 2.15; player.y = 0;
+      ball.side = 'us'; ball.touches = 1; ball.expectedActor = 'player_toss';
+      ball.x = -1.2; ball.y = 1.4; ball.z = 5.4;
+      launchBallTo(0.2, 2.25, 2.05, 0.56, { trailColor: 0x38bdf8, trailPower: 0.65 });
+    });
+    if (t >= 15.04) shortsOnce('act4_toss_do', () => {
+      player.x = ball.x; player.z = ball.z + 0.18;
+      executePlayerAction('quick', true);
+    });
+
+    // ACT 5 (16.20 - 21.15s): Story Select (EASY ~ 鬼) -> Final Boss 鬼 METEOR FINISH!!
+    if (t >= 16.20) shortsOnce('act5_story_ui', () => {
+      hideAllMenusForShorts();
+      gameMode = 'title';
+      document.body.classList.add('on-menu');
+      renderStoryList();
+      screenStory.classList.remove('hidden');
+      spawnCharacters(STAGES[4]);
+    });
+    if (t >= 18.00) shortsOnce('act5_oni_match', () => {
+      resetActState(4, 6, 6);
+      zone = 100; zoneActiveTimer = 10;
+      player.x = 0.45; player.z = 1.62; player.y = 0; player.aimX = -2.35;
+      ball.side = 'us'; ball.touches = 2; ball.expectedActor = 'player_spike';
+      ball.x = -0.8; ball.y = 2.25; ball.z = 1.15;
+      launchBallTo(0.42, 3.08, 1.10, 0.52, { trailColor: 0xfacc15, trailPower: 0.95 });
+      enemies[0].targetX = 0.4; enemies[0].targetZ = -0.7; enemies[0].vy = 5.6; enemies[0].pose = 'block';
+    });
+    if (t >= 18.22) shortsOnce('act5_oni_jump', () => executePlayerAction('main', true));
+    if (t >= 18.58) shortsOnce('act5_oni_meteor', () => { player.aimX = -2.4; executePlayerAction('main', true); });
+
+    // ACT 6 (21.15 - 25.15s): Subscribe CTA — Live Jump Serve & Rally in Background!
+    if (t >= 21.15) shortsOnce('act6_serve_init', () => {
+      resetActState(4, 6, 5);
+      matchState = 'serve_wait';
+      serverSide = 'us';
+      player.x = 1.1; player.z = 10.6; player.y = 0; player.aimX = -1.6;
+      ball.side = 'us'; ball.touches = 0; ball.active = false; ball.deadBounce = false;
+      ball.expectedActor = 'player_serve_toss';
+      ball.x = player.x - 0.14; ball.y = 1.32; ball.z = player.z - 0.44;
+    });
+    if (t >= 21.35) shortsOnce('act6_serve_toss', () => executePlayerAction('main', true));
+    if (t >= 21.92) shortsOnce('act6_serve_jump', () => executePlayerAction('main', true));
+    if (t >= 22.32) shortsOnce('act6_serve_hit', () => {
+      if (ball.expectedActor === 'player_serve_hit') {
+        ball.x = player.x; ball.z = player.z - 0.35; ball.y = player.y + 1.68;
+        executePlayerAction('main', true);
+      }
+    });
+
+    // ACT 7 (25.15 - 28.50s): Comment CTA — Double Meteor Finale in Background!
+    if (t >= 25.15) shortsOnce('act7_fin1_init', () => {
+      resetActState(4, 6, 6);
+      zone = 100; zoneActiveTimer = 10;
+      player.x = -0.55; player.z = 1.60; player.y = 0; player.aimX = 2.2;
+      ball.side = 'us'; ball.touches = 2; ball.expectedActor = 'player_spike';
+      ball.x = 0.7; ball.y = 2.2; ball.z = 1.15;
+      launchBallTo(-0.52, 3.05, 1.12, 0.50, { trailColor: 0xfacc15, trailPower: 0.95 });
+    });
+    if (t >= 25.35) shortsOnce('act7_fin1_jump', () => executePlayerAction('main', true));
+    if (t >= 25.68) shortsOnce('act7_fin1_spike', () => { player.aimX = 2.3; executePlayerAction('main', true); });
+    if (t >= 26.85) shortsOnce('act7_fin2_init', () => {
+      resetActState(4, 6, 6);
+      zone = 100; zoneActiveTimer = 10;
+      player.x = 0.5; player.z = 1.62; player.y = 0; player.aimX = -2.2;
+      ball.side = 'us'; ball.touches = 2; ball.expectedActor = 'player_spike';
+      ball.x = -0.7; ball.y = 2.2; ball.z = 1.15;
+      launchBallTo(0.48, 3.05, 1.12, 0.50, { trailColor: 0xfacc15, trailPower: 0.95 });
+    });
+    if (t >= 27.05) shortsOnce('act7_fin2_jump', () => executePlayerAction('main', true));
+    if (t >= 27.38) shortsOnce('act7_fin2_spike', () => { player.aimX = -2.3; executePlayerAction('main', true); });
   }
 
   window.__manualStep = SHORTS_MODE;
