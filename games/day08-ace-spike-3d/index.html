@@ -44,22 +44,9 @@
     position: relative;
     width: 100%;
     height: 100%;
-    max-width: 540px;
-    max-height: 960px;
-    aspect-ratio: 9 / 16;
     overflow: hidden;
     background: #071022;
-    box-shadow: 0 24px 90px rgba(0, 0, 0, 0.9), 0 0 46px rgba(56, 189, 248, 0.18);
     touch-action: none;
-  }
-  @media (max-aspect-ratio: 9/16) {
-    #viewport {
-      max-width: 100vw;
-      max-height: 100dvh;
-      width: 100vw;
-      height: calc(100vw * 16 / 9);
-      box-shadow: none;
-    }
   }
   body.shorts-mode #viewport {
     max-width: 100vw;
@@ -81,7 +68,7 @@
   .back-link {
     position: fixed;
     top: max(10px, env(safe-area-inset-top));
-    left: 10px;
+    left: max(10px, env(safe-area-inset-left));
     z-index: 60;
     padding: 6px 12px;
     border-radius: 999px;
@@ -110,9 +97,9 @@
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
-    padding: 12px 14px 16px;
+    padding: 12px max(14px, env(safe-area-inset-right)) 16px max(14px, env(safe-area-inset-left));
   }
-  body:not(.shorts-mode) #hud { padding-top: 44px; }
+  body:not(.shorts-mode) #hud { padding-top: max(44px, calc(env(safe-area-inset-top) + 34px)); }
   body.shorts-mode #hud { padding-top: 76px; }
   body.shorts-mode .home-topbar { margin-top: 54px; }
 
@@ -1473,6 +1460,137 @@
   }
   .mod-card strong { font-size: 14px; color: #f5b800; }
   .mod-card span { font-size: 11px; color: #cbd5e1; font-weight: 700; }
+
+  /* =========================================================
+     RESPONSIVE FULLSCREEN & LANDSCAPE LAYOUTS
+     ========================================================= */
+  body:not(.shorts-mode):not(.is-fullscreen) .home-topbar {
+    padding-top: max(42px, calc(env(safe-area-inset-top) + 32px));
+  }
+  body.is-fullscreen .back-link {
+    display: none !important;
+  }
+  body.is-fullscreen #hud {
+    padding-top: max(14px, env(safe-area-inset-top)) !important;
+  }
+
+  .tut-layout {
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Wide Desktop & Landscape Screens (except 9:16 Shorts capture) */
+  @media (min-aspect-ratio: 11/10) {
+    body:not(.shorts-mode) .home-topbar {
+      padding: max(12px, env(safe-area-inset-top)) max(22px, env(safe-area-inset-right)) 8px max(22px, env(safe-area-inset-left));
+    }
+    body:not(.shorts-mode):not(.is-fullscreen) .home-topbar {
+      padding-left: max(128px, calc(env(safe-area-inset-left) + 120px));
+    }
+    body:not(.shorts-mode) #hud {
+      padding-top: max(12px, env(safe-area-inset-top));
+      padding-left: max(20px, env(safe-area-inset-left));
+      padding-right: max(20px, env(safe-area-inset-right));
+    }
+    body:not(.shorts-mode):not(.is-fullscreen) .hud-top {
+      padding-left: 112px;
+    }
+    body:not(.shorts-mode) .zone-wrap {
+      max-width: 440px;
+    }
+    body:not(.shorts-mode) .hud-bottom {
+      padding: 10px max(24px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
+    }
+
+    /* Landscape Broadcast Sports Home Layout */
+    body:not(.shorts-mode) #screen-title {
+      background:
+        linear-gradient(90deg, rgba(6, 10, 20, 0.78) 0%, rgba(6, 10, 20, 0.14) 44%, rgba(6, 10, 20, 0.10) 64%, rgba(6, 10, 20, 0.82) 100%),
+        linear-gradient(180deg, rgba(6, 10, 20, 0.62) 0%, rgba(6, 10, 20, 0.0) 32%, rgba(6, 10, 20, 0.68) 100%);
+    }
+    body:not(.shorts-mode) .home-hero-lockup {
+      position: absolute;
+      left: max(24px, env(safe-area-inset-left));
+      bottom: max(22px, env(safe-area-inset-bottom));
+      padding: 0;
+      z-index: 2;
+    }
+    body:not(.shorts-mode) .hero-wordmark {
+      font-size: clamp(38px, 6.2vw, 68px);
+    }
+    body:not(.shorts-mode) .home-dock {
+      position: absolute;
+      right: max(24px, env(safe-area-inset-right));
+      bottom: max(18px, env(safe-area-inset-bottom));
+      width: clamp(310px, 34vw, 410px);
+      padding: 0;
+      z-index: 2;
+    }
+
+    /* Wider Sub-Screens in Landscape */
+    body:not(.shorts-mode) .screen-sheet {
+      max-width: min(680px, 92vw);
+    }
+    body:not(.shorts-mode) .story-list {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    body:not(.shorts-mode) .story-card.diff-oni {
+      grid-column: 1 / -1;
+    }
+    body:not(.shorts-mode) .story-intro-box,
+    body:not(.shorts-mode) .result-box {
+      max-width: 480px;
+    }
+    body:not(.shorts-mode) .mod-list {
+      max-width: 520px;
+    }
+  }
+
+  /* Compact Short-Height Mobile Landscape (e.g. 844x390 / 667x375) */
+  @media (min-aspect-ratio: 11/10) and (max-height: 540px) {
+    body:not(.shorts-mode) .team-score { font-size: 20px; }
+    body:not(.shorts-mode) .scoreboard { padding: 5px 10px; border-radius: 11px; }
+    body:not(.shorts-mode) .stage-pill { padding: 4px 9px; border-radius: 10px; }
+    body:not(.shorts-mode) .zone-wrap { margin-top: 5px; max-width: 320px; }
+    body:not(.shorts-mode) .status-strip { margin-top: 4px; }
+    body:not(.shorts-mode) .vpad-guide { width: 84px; height: 84px; font-size: 9px; }
+    body:not(.shorts-mode) .vpad-guide span { font-size: 14px; }
+    body:not(.shorts-mode) .action-cluster { gap: 6px; }
+    body:not(.shorts-mode) .sub-actions { max-width: 340px; }
+    body:not(.shorts-mode) .sub-btn { min-height: 38px; min-width: 62px; padding: 6px 10px; font-size: 12px; border-radius: 12px; }
+    body:not(.shorts-mode) .sub-btn.over-btn { min-width: 126px; min-height: 46px; font-size: 14px; }
+    body:not(.shorts-mode) #btn-main-act { width: 136px; height: 64px; font-size: 16px; border-radius: 18px; }
+    body:not(.shorts-mode) #callout-stack { top: 22%; }
+    body:not(.shorts-mode) #speed-pop { top: 27%; }
+
+    body:not(.shorts-mode) .hero-wordmark { font-size: clamp(30px, 9.5vh, 46px); }
+    body:not(.shorts-mode) .hero-3d-plate { font-size: 14px; padding: 4px 7px; }
+    body:not(.shorts-mode) .home-dock { width: clamp(280px, 44vw, 370px); gap: 6px; }
+    body:not(.shorts-mode) .dock-hero { padding: 10px 14px 10px 16px; }
+    body:not(.shorts-mode) .dock-jp { font-size: 18px; }
+    body:not(.shorts-mode) .dock-play-arrow { width: 32px; height: 32px; }
+    body:not(.shorts-mode) .dock-tile { padding: 8px 9px; }
+    body:not(.shorts-mode) .dock-tile-text strong { font-size: 12px; }
+    body:not(.shorts-mode) .home-ticker { padding: 6px 10px; font-size: 9.5px; }
+
+    body:not(.shorts-mode) .overlay:not(#screen-title) { padding: 12px 14px; justify-content: flex-start; }
+    body:not(.shorts-mode):not(.is-fullscreen) .sheet-head { padding-left: 110px; }
+    body:not(.shorts-mode) .sheet-head { margin-bottom: 8px; padding-bottom: 6px; }
+    body:not(.shorts-mode) .sheet-head-title h2 { font-size: 17px; }
+    body:not(.shorts-mode) .story-card { padding: 8px 11px 8px 14px; }
+    body:not(.shorts-mode) .story-chapter { font-size: 12px; }
+    body:not(.shorts-mode) .tut-layout {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      align-items: start;
+    }
+    body:not(.shorts-mode) .drill-grid { margin-bottom: 0; }
+    body:not(.shorts-mode) .tut-controls { margin: 0; gap: 5px; }
+    body:not(.shorts-mode) .tut-row { padding: 5px 8px; font-size: 10.5px; }
+  }
 </style>
 </head>
 <body class="on-menu">
@@ -1504,6 +1622,7 @@
             <div class="rally-line" id="hud-rally">RALLY: 0 // MAX: 0</div>
           </div>
           <div class="ctrl-row">
+            <button class="mini-btn" id="btn-fs" title="全画面切替 (F)">⛶ FULL</button>
             <button class="mini-btn" id="btn-sound">🔊 SOUND</button>
             <button class="mini-btn" id="btn-menu">🏠 MENU</button>
           </div>
@@ -1570,6 +1689,15 @@
             </div>
           </div>
           <div class="top-utils">
+            <button class="top-icon-btn" id="btn-home-fs" title="全画面表示切替 (F)">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square">
+                <polyline points="15 3 21 3 21 9"></polyline>
+                <polyline points="9 21 3 21 3 15"></polyline>
+                <line x1="21" y1="3" x2="14" y2="10"></line>
+                <line x1="3" y1="21" x2="10" y2="14"></line>
+              </svg>
+              <span id="home-fs-label">FULL</span>
+            </button>
             <button class="top-icon-btn" id="btn-home-skin" title="ボールスキン切替">
               <span class="skin-swatch" id="home-skin-dot"></span>
               <span id="home-skin-code">PRO</span>
@@ -1689,17 +1817,19 @@
           </div>
           <button class="back-chip" id="btn-close-howto">BACK</button>
         </div>
-        <div class="drill-grid">
-          <button class="drill-btn" id="btn-drill-recv">レシーブ練習<small>オーバー / アンダー</small></button>
-          <button class="drill-btn" id="btn-drill-toss">トス練習<small>レフト / 速攻 / ライト</small></button>
-          <button class="drill-btn" id="btn-drill-spike">スパイク練習<small>ジャンプ ＆ コース打ち</small></button>
-          <button class="drill-btn" id="btn-drill-all">フリー練習<small>全技ミックスラリー</small></button>
-        </div>
-        <div class="tut-controls">
-          <div class="tut-row"><strong>レシーブ</strong><span>スロー中に オーバー<span class="tut-key">E</span> / アンダー<span class="tut-key">SPACE</span></span></div>
-          <div class="tut-row"><strong>トス</strong><span>落下点で レフト / 速攻 / ライト / ツー<span class="tut-key">E</span></span></div>
-          <div class="tut-row"><strong>スパイク</strong><span>近づいて JUMP → 打点で 強打 / 軟打<span class="tut-key">E</span></span></div>
-          <div class="tut-row"><strong>サーブ</strong><span>トス → 助走 JUMP → 空中で打つ</span></div>
+        <div class="tut-layout">
+          <div class="drill-grid">
+            <button class="drill-btn" id="btn-drill-recv">レシーブ練習<small>オーバー / アンダー</small></button>
+            <button class="drill-btn" id="btn-drill-toss">トス練習<small>レフト / 速攻 / ライト</small></button>
+            <button class="drill-btn" id="btn-drill-spike">スパイク練習<small>ジャンプ ＆ コース打ち</small></button>
+            <button class="drill-btn" id="btn-drill-all">フリー練習<small>全技ミックスラリー</small></button>
+          </div>
+          <div class="tut-controls">
+            <div class="tut-row"><strong>レシーブ</strong><span>スロー中に オーバー<span class="tut-key">E</span> / アンダー<span class="tut-key">SPACE</span></span></div>
+            <div class="tut-row"><strong>トス</strong><span>落下点で レフト / 速攻 / ライト / ツー<span class="tut-key">E</span></span></div>
+            <div class="tut-row"><strong>スパイク</strong><span>近づいて JUMP → 打点で 強打 / 軟打<span class="tut-key">E</span></span></div>
+            <div class="tut-row"><strong>サーブ</strong><span>トス → 助走 JUMP → 空中で打つ</span></div>
+          </div>
         </div>
       </div>
     </div>
@@ -1754,8 +1884,8 @@
     if (SHORTS_MODE) window.__gameEvents.push({ t: +shortsElapsed.toFixed(3), type, ...extra });
   }
 
-  const W = 540;
-  const H = 960;
+  let W = 540;
+  let H = 960;
   const viewport = document.getElementById('viewport');
   const glCanvas = document.getElementById('gl-canvas');
   const fxCanvas = document.getElementById('fx-canvas');
@@ -2264,6 +2394,34 @@
 
   btnSound.addEventListener('click', () => SFX.toggle());
 
+  const btnFs = document.getElementById('btn-fs');
+  const btnHomeFs = document.getElementById('btn-home-fs');
+  const homeFsLabel = document.getElementById('home-fs-label');
+  function isFullscreenNow() {
+    return !!(document.fullscreenElement || document.webkitFullscreenElement);
+  }
+  function syncFullscreenUI() {
+    const active = isFullscreenNow();
+    document.body.classList.toggle('is-fullscreen', active);
+    if (btnFs) btnFs.textContent = active ? '⛶ EXIT' : '⛶ FULL';
+    if (homeFsLabel) homeFsLabel.textContent = active ? 'EXIT' : 'FULL';
+  }
+  function toggleFullscreen() {
+    const target = document.documentElement;
+    if (!isFullscreenNow()) {
+      const req = target.requestFullscreen || target.webkitRequestFullscreen;
+      if (req) Promise.resolve(req.call(target)).catch(() => {});
+    } else {
+      const ex = document.exitFullscreen || document.webkitExitFullscreen;
+      if (ex) Promise.resolve(ex.call(document)).catch(() => {});
+    }
+  }
+  if (btnFs) btnFs.addEventListener('click', toggleFullscreen);
+  if (btnHomeFs) btnHomeFs.addEventListener('click', toggleFullscreen);
+  document.addEventListener('fullscreenchange', () => { syncFullscreenUI(); setTimeout(resizeRenderer, 60); });
+  document.addEventListener('webkitfullscreenchange', () => { syncFullscreenUI(); setTimeout(resizeRenderer, 60); });
+  syncFullscreenUI();
+
   // =========================================================
   // THREE.JS SCENE & ARENA CONSTRUCTION
   // =========================================================
@@ -2277,18 +2435,27 @@
   scene.fog = new THREE.FogExp2(0x0a1630, 0.014);
 
   const BASE_FOV = 66;
+  let currentBaseFov = BASE_FOV;
   const camera = new THREE.PerspectiveCamera(BASE_FOV, W / H, 0.08, 160);
   scene.add(camera);
 
   function resizeRenderer() {
     const r = viewport.getBoundingClientRect();
     if (r.width > 0 && r.height > 0) {
-      renderer.setSize(r.width, r.height, false);
-      camera.aspect = r.width / r.height;
+      W = Math.max(1, Math.round(r.width));
+      H = Math.max(1, Math.round(r.height));
+      if (fxCanvas.width !== W) fxCanvas.width = W;
+      if (fxCanvas.height !== H) fxCanvas.height = H;
+      renderer.setSize(W, H, false);
+      const aspect = W / H;
+      camera.aspect = aspect;
+      currentBaseFov = SHORTS_MODE ? BASE_FOV : (aspect >= 1.25 ? 58 : (aspect >= 0.9 ? 62 : 66));
+      camera.fov = currentBaseFov;
       camera.updateProjectionMatrix();
     }
   }
   window.addEventListener('resize', resizeRenderer);
+  window.addEventListener('orientationchange', () => setTimeout(resizeRenderer, 90));
   resizeRenderer();
 
   const hemiLight = new THREE.HemisphereLight(0xe0f2fe, 0x1e293b, 1.35);
@@ -4859,6 +5026,8 @@
       executePlayerAction('toss_left');
     } else if (e.code === 'KeyR') {
       executePlayerAction('toss_right');
+    } else if (e.code === 'KeyF' && !e.repeat) {
+      toggleFullscreen();
     }
   });
   window.addEventListener('keyup', (e) => { keys[e.code] = false; });
@@ -5056,10 +5225,12 @@
 
   function drawFxCanvas() {
     fxCtx.clearRect(0, 0, W, H);
+    const minDim = Math.min(W, H);
+    const diagR = Math.hypot(W, H) * 0.54;
 
     // Slow-Mo Focus Vignette (cyan/emerald cinema ring when choosing Over/Under or Airborne Spike!)
     if (slowVignetteAlpha > 0.02) {
-      const grad = fxCtx.createRadialGradient(W * 0.5, H * 0.45, 160, W * 0.5, H * 0.45, 520);
+      const grad = fxCtx.createRadialGradient(W * 0.5, H * 0.45, minDim * 0.28, W * 0.5, H * 0.45, diagR);
       grad.addColorStop(0, 'rgba(0, 0, 0, 0)');
       grad.addColorStop(1, recvSlowActive
         ? `rgba(16, 185, 129, ${slowVignetteAlpha * 0.34})`
@@ -5073,11 +5244,11 @@
       fxCtx.save();
       fxCtx.translate(W * 0.5, H * 0.45);
       fxCtx.strokeStyle = `rgba(250, 204, 21, ${speedLinesAlpha * 0.62})`;
-      fxCtx.lineWidth = 3.5;
+      fxCtx.lineWidth = Math.max(2.5, minDim * 0.006);
       for (let i = 0; i < 28; i++) {
         const ang = (i / 28) * Math.PI * 2 + elapsedTotal * 3.5;
-        const r1 = 165 + ((i * 23) % 60);
-        const r2 = 490;
+        const r1 = minDim * 0.30 + ((i * 23) % Math.max(30, Math.round(minDim * 0.11)));
+        const r2 = diagR;
         fxCtx.beginPath();
         fxCtx.moveTo(Math.cos(ang) * r1, Math.sin(ang) * r1);
         fxCtx.lineTo(Math.cos(ang) * r2, Math.sin(ang) * r2);
@@ -5626,7 +5797,7 @@
     // STRONG SMOOTH BALL-LOCK FIRST-PERSON CAMERA + FOV PUNCH!
     // =========================================================
     fovPunch += (0 - fovPunch) * Math.min(1, dtBase * 10);
-    const targetFov = BASE_FOV + fovPunch + (timeScale < 0.8 ? -3.5 : 0);
+    const targetFov = currentBaseFov + fovPunch + (timeScale < 0.8 ? -3.5 : 0);
     if (Math.abs(camera.fov - targetFov) > 0.05) {
       camera.fov += (targetFov - camera.fov) * Math.min(1, dtBase * 14);
       camera.updateProjectionMatrix();
