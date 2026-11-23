@@ -3847,11 +3847,13 @@
         const tx = Math.max(-3.6, Math.min(3.6, player.aimX));
         const tz = -3.4 - Math.random() * 2.0;
         const sx = ball.x, sy = ball.y, sz = ball.z;
-        launchBallTo(tx, 0.22, tz, 0.68, { trailColor: 0x34d399, trailPower: 0.82, feint: true, omegaX: -8 });
+        const sharedFlight = gameMode === 'online' ? 0.78 : 0.68;
+        const sharedTy = gameMode === 'online' ? 0.72 : 0.22;
+        launchBallTo(tx, sharedTy, tz, sharedFlight, { trailColor: 0x34d399, trailPower: 0.82, feint: true, omegaX: -8 });
         if (gameMode === 'online') {
           NetP2P.send({
             type: 'shot_over', kind: 'dump',
-            sx, sy, sz, tx, ty: 0.72, tz, flightTime: 0.78,
+            sx, sy, sz, tx, ty: sharedTy, tz, flightTime: sharedFlight,
             omegaX: -8, knuckle: false, incomingHigh: false, feint: true, just: false, meteor: false
           });
         }
@@ -3985,7 +3987,10 @@
         ball.touches = 0;
         ball.expectedActor = gameMode === 'online' ? 'online_wait' : 'enemy_play';
         const sx = ball.x, sy = ball.y, sz = ball.z;
-        launchBallTo(tx, 0.22, tz, speedT, {
+        const isHighServe = !isJumpServe && !isShort;
+        const sharedFlight = gameMode === 'online' ? Math.max(0.92, speedT + 0.14) : speedT;
+        const sharedTy = gameMode === 'online' ? (isHighServe ? 1.56 : 0.90) : 0.22;
+        launchBallTo(tx, sharedTy, tz, sharedFlight, {
           trailColor: isJumpServe ? (just ? 0xfacc15 : 0xf97316) : 0x38bdf8,
           trailPower: isJumpServe ? (just ? 1.25 : 0.85) : 0.60,
           just,
@@ -3996,11 +4001,11 @@
         if (gameMode === 'online') {
           NetP2P.send({
             type: 'shot_over', kind: 'serve',
-            sx, sy, sz, tx, ty: (!isJumpServe && !isShort) ? 1.56 : 0.90, tz,
-            flightTime: Math.max(0.82, speedT + 0.16),
+            sx, sy, sz, tx, ty: sharedTy, tz,
+            flightTime: sharedFlight,
             omegaX: isJumpServe ? -28 : 0,
             knuckle: !isJumpServe,
-            incomingHigh: !isJumpServe && !isShort,
+            incomingHigh: isHighServe,
             feint: isShort, just, meteor: false
           });
         }
@@ -4142,8 +4147,10 @@
         ball.expectedActor = gameMode === 'online' ? 'online_wait' : 'enemy_play';
         const sx = ball.x, sy = ball.y, sz = ball.z;
         const baseFlight = (isFeint ? 0.88 : (meteor ? 0.29 : (just ? 0.35 : 0.47))) / perks.spikeSpeedMult;
+        const sharedFlight = gameMode === 'online' ? Math.max(isFeint ? 0.88 : 0.72, baseFlight + 0.22) : baseFlight;
+        const sharedTy = gameMode === 'online' ? (isFeint ? 0.72 : 0.88) : 0.16;
         const omega = isFeint ? 4 : (meteor ? -42 : (just ? -32 : -22));
-        launchBallTo(aimX, 0.16, aimZ, baseFlight, {
+        launchBallTo(aimX, sharedTy, aimZ, sharedFlight, {
           trailColor: meteor ? 0xfacc15 : (just ? 0xf97316 : getSelectedSkin().trail),
           trailPower: meteor ? 1.38 : (just ? 1.15 : 0.78),
           feint: isFeint,
@@ -4154,8 +4161,8 @@
         if (gameMode === 'online') {
           NetP2P.send({
             type: 'shot_over', kind: isFeint ? 'feint' : 'spike',
-            sx, sy, sz, tx: aimX, ty: isFeint ? 0.72 : 0.88, tz: aimZ,
-            flightTime: Math.max(isFeint ? 0.84 : 0.62, baseFlight + 0.18),
+            sx, sy, sz, tx: aimX, ty: sharedTy, tz: aimZ,
+            flightTime: sharedFlight,
             omegaX: omega, knuckle: false, incomingHigh: false,
             feint: isFeint, just, meteor
           });
@@ -4604,6 +4611,14 @@
       onlineRivalTarget.y = msg.y || 0;
       onlineRivalTarget.z = -msg.z;
       onlineRivalTarget.pose = msg.pose || 'idle';
+      if (msg.ball && gameMode === 'online' && ball.expectedActor === 'online_wait' && !ball.deadBounce) {
+        onlineRivalTarget.ball = {
+          x: -msg.ball.x,
+          y: msg.ball.y,
+          z: -msg.ball.z,
+          ts: performance.now()
+        };
+      }
       return;
     }
     if (msg.type === 'rematch') {
@@ -4613,6 +4628,7 @@
     if (gameMode !== 'online') return;
 
     if (msg.type === 'shot_over') {
+      onlineRivalTarget.ball = null;
       const sx = -msg.sx;
       const sy = msg.sy;
       const sz = -msg.sz;
@@ -4645,7 +4661,7 @@
         return;
       }
 
-      // Mirror incoming shot cleanly onto OUR court so we get 60fps local physics + slow-mo Over/Under receive!
+      // Mirror incoming shot cleanly onto OUR court with exact shared flightTime!
       ball.x = sx; ball.y = Math.max(1.2, sy); ball.z = sz;
       ball.side = 'us';
       ball.touches = 0;
@@ -4654,8 +4670,8 @@
       recvSlowNotified = false;
       const incomingHigh = !!msg.incomingHigh;
       const ty = typeof msg.ty === 'number' ? msg.ty : (incomingHigh ? 1.56 : 0.88);
-      const fairFlight = Math.max(msg.kind === 'serve' ? 0.78 : (msg.feint ? 0.80 : 0.60), msg.flightTime || 0.85);
-      launchBallTo(tx, ty, tz, fairFlight, {
+      const exactFlight = msg.flightTime || (msg.kind === 'serve' ? 0.92 : 0.72);
+      launchBallTo(tx, ty, tz, exactFlight, {
         trailColor: msg.meteor ? 0xfacc15 : (incomingHigh ? 0x34d399 : 0xf43f5e),
         trailPower: msg.meteor ? 1.25 : 0.88,
         omegaX,
@@ -5159,39 +5175,45 @@
   // =========================================================
   // MAIN SIMULATION STEP
   // =========================================================
-  function stepFrame(rawDt) {
+  function stepFrame(rawDt, skipRender = false) {
     const dtBase = Math.min(0.05, Math.max(0.001, rawDt));
     elapsedTotal += dtBase;
 
     if (hitstopTimer > 0) {
       hitstopTimer = Math.max(0, hitstopTimer - dtBase);
-      renderer.render(scene, camera);
-      drawFxCanvas();
-      return;
+      if (gameMode !== 'online') {
+        if (!skipRender) {
+          renderer.render(scene, camera);
+          drawFxCanvas();
+        }
+        return;
+      }
     }
 
-    // Determine Bullet-Time Slow-Mo (1. Receive Over/Under Choice Slow, 2. Airborne Spike/Serve Aim Slow!)
+    // Determine Bullet-Time Slow-Mo (Single-player keeps 0.36x bullet-time; Online stays 1.0x real-time so both screens stay 100% synced!)
     let timeScale = 1.0;
     recvSlowActive = false;
     if (ball.expectedActor === 'player_recv' && ball.active && !ball.deadBounce) {
       const rem = ball.flightTotal - ball.flightTimer;
       const dTarget = Math.hypot(ball.targetX - player.x, ball.targetZ - player.z);
-      if (rem <= 0.46 && rem >= -0.10 && dTarget <= 3.6) {
+      if (rem <= 0.48 && rem >= -0.10 && dTarget <= 3.6) {
         recvSlowActive = true;
-        timeScale = 0.36; // Smooth slow-mo so player can clearly choose Over or Under!
+        if (gameMode !== 'online') {
+          timeScale = 0.36;
+        }
         if (!recvSlowNotified) {
           recvSlowNotified = true;
           SFX.slowEnter();
         }
       }
-    } else if ((ball.expectedActor === 'player_spike' || ball.expectedActor === 'player_serve_hit') && player.y > 0.60 && ball.active && !ball.deadBounce) {
+    } else if (gameMode !== 'online' && (ball.expectedActor === 'player_spike' || ball.expectedActor === 'player_serve_hit') && player.y > 0.60 && ball.active && !ball.deadBounce) {
       const distXZ = Math.hypot(ball.x - player.x, ball.z - player.z);
       const distY = Math.abs(ball.y - (player.y + 1.65));
       if (distXZ < 2.2 && distY < 1.15 && ball.vy < 2.4) {
         timeScale = 0.35;
       }
     }
-    const targetVig = timeScale < 0.8 ? 1.0 : 0.0;
+    const targetVig = (timeScale < 0.8 || recvSlowActive) ? 1.0 : 0.0;
     slowVignetteAlpha += (targetVig - slowVignetteAlpha) * Math.min(1, dtBase * 10);
 
     const dt = dtBase * timeScale;
@@ -5413,10 +5435,12 @@
           const aimZ = -4.5 - Math.random() * 3.8;
           const sx = ball.x, sy = ball.y, sz = ball.z;
           const ft = ball.isJust ? 0.35 : 0.46;
+          const sharedFlight = gameMode === 'online' ? Math.max(0.72, ft + 0.22) : ft;
+          const sharedTy = gameMode === 'online' ? 0.88 : 0.16;
           ball.side = 'enemy';
           ball.touches = 0;
           ball.expectedActor = gameMode === 'online' ? 'online_wait' : 'enemy_play';
-          launchBallTo(aimX, 0.16, aimZ, ft, {
+          launchBallTo(aimX, sharedTy, aimZ, sharedFlight, {
             trailColor: ball.isJust ? 0xfacc15 : 0x34d399,
             trailPower: ball.isJust ? 1.15 : 0.80,
             just: ball.isJust,
@@ -5425,8 +5449,8 @@
           if (gameMode === 'online') {
             NetP2P.send({
               type: 'shot_over', kind: 'spike',
-              sx, sy, sz, tx: aimX, ty: 0.88, tz: aimZ,
-              flightTime: Math.max(0.62, ft + 0.18),
+              sx, sy, sz, tx: aimX, ty: sharedTy, tz: aimZ,
+              flightTime: sharedFlight,
               omegaX: -30, knuckle: false, incomingHigh: false, feint: false, just: !!ball.isJust, meteor: false
             });
           }
@@ -5554,25 +5578,42 @@
     allies.forEach(a => animateChar(a, dt, elapsedTotal, 6.2));
     if (gameMode === 'online' && NetP2P.connected) {
       onlinePoseTimer += dtBase;
-      if (onlinePoseTimer >= 0.05) {
+      if (onlinePoseTimer >= 0.04) {
         onlinePoseTimer = 0;
+        const ownBall = (ball.side === 'us' || matchState === 'serve_wait') && !ball.deadBounce;
         NetP2P.send({
           type: 'pose',
           x: +player.x.toFixed(2),
           y: +player.y.toFixed(2),
           z: +player.z.toFixed(2),
-          pose: vmAnim.timer > 0 ? vmAnim.name : 'idle'
+          pose: vmAnim.timer > 0 ? vmAnim.name : 'idle',
+          ball: ownBall ? { x: +ball.x.toFixed(2), y: +ball.y.toFixed(2), z: +ball.z.toFixed(2) } : null
         });
       }
       if (enemies[0] && onlineRivalTarget.active) {
         const rv = enemies[0];
-        const rRate = Math.min(1, dtBase * 14);
+        const rRate = Math.min(1, dtBase * 16);
         rv.x += (onlineRivalTarget.x - rv.x) * rRate;
         rv.y += (onlineRivalTarget.y - rv.y) * rRate;
         rv.z += (onlineRivalTarget.z - rv.z) * rRate;
         rv.targetX = rv.x; rv.targetZ = rv.z;
         rv.teleColor = 0x34d399;
         rv.teleAlpha = 0.65;
+      }
+      if (ball.expectedActor === 'online_wait' && !ball.deadBounce && (!ball.active || (ball.z < 0 && ball.flightTimer >= ball.flightTotal)) && onlineRivalTarget.ball && (performance.now() - onlineRivalTarget.ball.ts < 650)) {
+        const rb = onlineRivalTarget.ball;
+        if (!ball.active) {
+          ball.x = rb.x; ball.y = rb.y; ball.z = rb.z;
+        } else {
+          const bRate = Math.min(1, dtBase * 18);
+          ball.x += (rb.x - ball.x) * bRate;
+          ball.y += (rb.y - ball.y) * bRate;
+          ball.z += (rb.z - ball.z) * bRate;
+        }
+        ballMesh.position.set(ball.x, ball.y, ball.z);
+        ballShadow.position.set(ball.x, 0.018, ball.z);
+        const sSc = Math.max(0.32, 1.15 - ball.y * 0.14);
+        ballShadow.scale.set(sSc, sSc, 1);
       }
     }
     enemies.forEach((e, idx) => {
@@ -5696,8 +5737,10 @@
     speedLinesAlpha = Math.max(0, speedLinesAlpha - dtBase * 2.2);
     flashAlpha = Math.max(0, flashAlpha - dtBase * 2.4);
 
-    renderer.render(scene, camera);
-    drawFxCanvas();
+    if (!skipRender) {
+      renderer.render(scene, camera);
+      drawFxCanvas();
+    }
   }
 
   // =========================================================
@@ -5744,11 +5787,34 @@
   let prevTime = performance.now();
   function tick(now) {
     requestAnimationFrame(tick);
-    const rawDt = Math.min(0.05, (now - prevTime) / 1000);
+    const rawDt = Math.min(0.05, Math.max(0.001, (now - prevTime) / 1000));
     prevTime = now;
-    if (!window.__manualStep) stepFrame(rawDt);
+    if (!window.__manualStep) stepFrame(rawDt, false);
   }
   requestAnimationFrame(tick);
+
+  // Background-tab physics-only ticker for Online 1vs1 (prevents rAF freeze when testing in 2 tabs without WebGL overhead!)
+  let bgTickBusy = false;
+  setInterval(() => {
+    if (bgTickBusy || window.__manualStep || gameMode !== 'online') return;
+    const now = performance.now();
+    const threshold = document.hidden ? 0.08 : 0.25;
+    let gap = (now - prevTime) / 1000;
+    if (gap >= threshold) {
+      bgTickBusy = true;
+      try {
+        gap = Math.min(0.24, gap);
+        while (gap > 0.001) {
+          const sub = Math.min(0.04, gap);
+          stepFrame(sub, true);
+          gap -= sub;
+        }
+        prevTime = performance.now();
+      } finally {
+        bgTickBusy = false;
+      }
+    }
+  }, 50);
 
   window.__ACE_SPIKE_DEBUG__ = {
     getState: () => ({
