@@ -96,6 +96,18 @@
       "game_path": "games/day08-ace-spike-3d/index.html",
       "note_path": "notes/day08/note_draft.md",
       "shorts_script": "shorts/day08/generate_shorts.py"
+    },
+    {
+      "day": 9,
+      "date": "2026-11-23",
+      "slug": "day09-time-bullet-3d",
+      "title": "TIME BULLET 3D（時間停止×弾丸回避ガンアクション）",
+      "type": "game",
+      "genre": "Three.js 一人称3D時間操作FPS / ガンアクション",
+      "core_mechanic": "止まれば世界が4%速に凍結・動けば100%加速するSUPERHOT式時間操作FPS！空中に止まった敵弾の隙間から真紅クリスタル暗殺者を3D粉砕ヘッドショット＆飛来する敵弾を撃ち落とすBULLET PARRY＆紙一重MATRIX GRAZE回避＆4種3D武器（PISTOL/SHOTGUN/SMG/RAILGUN）＆時間0%完全停止で全弾を空中に並べて一斉着弾させる必殺TIME BREAKER！全5ステージ（ラスボスCHRONOS ZERO）＋30秒チュートリアル＋無限WICK RUSH搭載",
+      "game_path": "games/day09-time-bullet-3d/index.html",
+      "note_path": "notes/day09/note_draft.md",
+      "shorts_script": "shorts/day09/generate_shorts.py"
     }
   ]
 }
