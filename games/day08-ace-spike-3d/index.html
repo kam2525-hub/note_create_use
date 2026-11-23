@@ -3,6 +3,11 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="ACE SPIKE 3D" />
+<meta name="theme-color" content="#050814" />
 <title>ACE SPIKE 3D｜一人称3Dバレーボール（オーバー/アンダー・トス・スパイク・ジャンプサーブ）</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -23,7 +28,7 @@
   html, body {
     width: 100%;
     height: 100%;
-    height: 100dvh;
+    height: var(--app-h, 100dvh);
     overflow: hidden;
     overscroll-behavior: none;
     background: #060b18;
@@ -35,10 +40,18 @@
     position: relative;
     width: 100%;
     height: 100%;
+    height: var(--app-h, 100dvh);
     display: flex;
     justify-content: center;
     align-items: center;
     background: radial-gradient(circle at 50% 20%, #0f2547 0%, #060b18 75%, #03060e 100%);
+  }
+  body.is-fullscreen #stage-wrap {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: var(--app-h, 100dvh);
+    z-index: 999;
   }
   #viewport {
     position: relative;
@@ -433,7 +446,7 @@
     border-radius: 8px;
     border: 1px solid rgba(255, 255, 255, 0.1);
   }
-  @media (pointer: coarse) {
+  @media (hover: none), (pointer: coarse) {
     .pc-hint { display: none; }
   }
 
@@ -1473,6 +1486,60 @@
   body.is-fullscreen #hud {
     padding-top: max(14px, env(safe-area-inset-top)) !important;
   }
+  body.is-fullscreen .home-topbar {
+    padding-top: max(14px, env(safe-area-inset-top)) !important;
+  }
+
+  .mini-btn, .top-icon-btn, .dock-hero, .dock-tile, .story-card, .drill-btn, .cta-btn, .sec-btn, .back-chip, .mod-card {
+    touch-action: manipulation;
+  }
+
+  #fs-toast {
+    position: absolute;
+    left: 50%;
+    bottom: max(18px, calc(env(safe-area-inset-bottom) + 12px));
+    transform: translate(-50%, 10px);
+    z-index: 95;
+    max-width: min(92%, 380px);
+    padding: 8px 14px;
+    border-radius: 999px;
+    background: rgba(7, 13, 28, 0.92);
+    border: 1px solid rgba(56, 189, 248, 0.55);
+    color: #e0f2fe;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.18s ease, transform 0.18s ease;
+  }
+  #fs-toast.show {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+
+  @media (max-width: 400px) {
+    body:not(.shorts-mode) .home-topbar {
+      padding-left: max(10px, env(safe-area-inset-left));
+      padding-right: max(10px, env(safe-area-inset-right));
+      gap: 6px;
+    }
+    body:not(.shorts-mode) .top-utils { gap: 4px; }
+    body:not(.shorts-mode) .top-icon-btn {
+      height: 30px;
+      padding: 0 7px;
+      font-size: 10px;
+      gap: 4px;
+    }
+    body:not(.shorts-mode) .rank-title { font-size: 13px; }
+    body:not(.shorts-mode) .clear-gem { width: 8px; height: 8px; }
+    body:not(.shorts-mode) .mini-btn { padding: 5px 8px; font-size: 10px; }
+  }
 
   .tut-layout {
     display: flex;
@@ -1650,6 +1717,7 @@
       <div class="speed-unit">KM/H!!</div>
     </div>
     <div class="phase-prompt" id="phase-prompt">READY...</div>
+    <div id="fs-toast" aria-live="polite"></div>
 
     <div class="hud-bottom">
       <div class="left-thumb-zone">
@@ -2397,8 +2465,23 @@
   const btnFs = document.getElementById('btn-fs');
   const btnHomeFs = document.getElementById('btn-home-fs');
   const homeFsLabel = document.getElementById('home-fs-label');
+  const fsToast = document.getElementById('fs-toast');
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  let pseudoFullscreen = false;
+  let fsToastTimer = null;
+
+  function showFsToast(msg) {
+    if (!fsToast) return;
+    fsToast.textContent = msg;
+    fsToast.classList.add('show');
+    clearTimeout(fsToastTimer);
+    fsToastTimer = setTimeout(() => fsToast.classList.remove('show'), 2800);
+  }
+  function isNativeFullscreen() {
+    return !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement);
+  }
   function isFullscreenNow() {
-    return !!(document.fullscreenElement || document.webkitFullscreenElement);
+    return isNativeFullscreen() || pseudoFullscreen;
   }
   function syncFullscreenUI() {
     const active = isFullscreenNow();
@@ -2406,20 +2489,59 @@
     if (btnFs) btnFs.textContent = active ? '⛶ EXIT' : '⛶ FULL';
     if (homeFsLabel) homeFsLabel.textContent = active ? 'EXIT' : 'FULL';
   }
+  function enterPseudoFullscreen() {
+    pseudoFullscreen = true;
+    syncFullscreenUI();
+    try { window.scrollTo(0, 1); } catch (_) {}
+    resizeRenderer();
+    showFsToast(isIOS ? '全画面表示ON（共有→ホーム画面に追加で完全全画面！）' : '全画面表示ON');
+  }
   function toggleFullscreen() {
     const target = document.documentElement;
     if (!isFullscreenNow()) {
-      const req = target.requestFullscreen || target.webkitRequestFullscreen;
-      if (req) Promise.resolve(req.call(target)).catch(() => {});
+      const req = target.requestFullscreen || target.webkitRequestFullscreen || target.mozRequestFullScreen || target.msRequestFullscreen;
+      if (!req) {
+        enterPseudoFullscreen();
+        return;
+      }
+      let ret;
+      try {
+        ret = (req === target.requestFullscreen) ? req.call(target, { navigationUI: 'hide' }) : req.call(target);
+      } catch (_) {
+        try { ret = req.call(target); } catch (__) { ret = null; }
+      }
+      if (ret && typeof ret.then === 'function') {
+        ret.then(() => {
+          pseudoFullscreen = false;
+          syncFullscreenUI();
+          setTimeout(resizeRenderer, 60);
+        }).catch(() => {
+          enterPseudoFullscreen();
+        });
+      } else {
+        setTimeout(() => {
+          if (!isNativeFullscreen() && !pseudoFullscreen) enterPseudoFullscreen();
+        }, 180);
+      }
     } else {
-      const ex = document.exitFullscreen || document.webkitExitFullscreen;
-      if (ex) Promise.resolve(ex.call(document)).catch(() => {});
+      if (isNativeFullscreen()) {
+        const ex = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+        if (ex) Promise.resolve(ex.call(document)).catch(() => {});
+      }
+      pseudoFullscreen = false;
+      syncFullscreenUI();
+      setTimeout(resizeRenderer, 60);
     }
   }
   if (btnFs) btnFs.addEventListener('click', toggleFullscreen);
   if (btnHomeFs) btnHomeFs.addEventListener('click', toggleFullscreen);
-  document.addEventListener('fullscreenchange', () => { syncFullscreenUI(); setTimeout(resizeRenderer, 60); });
-  document.addEventListener('webkitfullscreenchange', () => { syncFullscreenUI(); setTimeout(resizeRenderer, 60); });
+  const onFsChange = () => {
+    if (isNativeFullscreen()) pseudoFullscreen = false;
+    syncFullscreenUI();
+    setTimeout(resizeRenderer, 60);
+  };
+  document.addEventListener('fullscreenchange', onFsChange);
+  document.addEventListener('webkitfullscreenchange', onFsChange);
   syncFullscreenUI();
 
   // =========================================================
@@ -2440,6 +2562,10 @@
   scene.add(camera);
 
   function resizeRenderer() {
+    if (!SHORTS_MODE) {
+      const vvH = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+      if (vvH > 0) document.documentElement.style.setProperty('--app-h', Math.round(vvH) + 'px');
+    }
     const r = viewport.getBoundingClientRect();
     if (r.width > 0 && r.height > 0) {
       W = Math.max(1, Math.round(r.width));
@@ -2456,6 +2582,7 @@
   }
   window.addEventListener('resize', resizeRenderer);
   window.addEventListener('orientationchange', () => setTimeout(resizeRenderer, 90));
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', resizeRenderer);
   resizeRenderer();
 
   const hemiLight = new THREE.HemisphereLight(0xe0f2fe, 0x1e293b, 1.35);
