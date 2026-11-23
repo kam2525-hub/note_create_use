@@ -781,7 +781,7 @@ def draw_shorts_overlay(
     return Image.alpha_composite(img, overlay).convert("RGB")
 
 
-def render_note_thumbnail(browser: str, game_png_path: Path, out_png: Path):
+def render_note_thumbnail(browser: str, game_png_path: Path, out_png: Path, day_num: int = 8):
     b64 = base64.b64encode(game_png_path.read_bytes()).decode("ascii")
     html = f"""<!DOCTYPE html>
 <html lang="ja"><head><meta charset="UTF-8"><style>
@@ -791,25 +791,37 @@ body{{
   background: radial-gradient(circle at 75% 45%, #0369a1 0%, #0f172a 48%, #040814 100%);
   font-family:'Noto Sans JP','Hiragino Kaku Gothic ProN',sans-serif;
   color:#ffffff;display:flex;align-items:center;justify-content:space-between;
-  padding:46px 56px;position:relative;
+  padding:42px 54px;position:relative;
 }}
 body::before{{
   content:'';position:absolute;inset:16px;
   border:2.5px solid rgba(56,189,248,0.45);border-radius:22px;pointer-events:none;
 }}
-.left{{width:725px;z-index:2;}}
+.left{{width:735px;z-index:2;}}
+.top-row{{
+  display:flex;align-items:center;gap:16px;margin-bottom:16px;
+}}
+.day-plate{{
+  display:inline-flex;align-items:center;justify-content:center;
+  padding:8px 28px;border-radius:14px;
+  background:linear-gradient(135deg,#ef4444 0%,#dc2626 55%,#f97316 100%);
+  border:4px solid #ffffff;
+  color:#ffffff;font-weight:900;font-size:48px;line-height:1.0;letter-spacing:0.04em;
+  box-shadow:0 10px 28px rgba(239,68,68,0.58), 0 4px 12px rgba(0,0,0,0.65);
+  transform:skewX(-8deg);
+}}
+.day-plate span{{transform:skewX(8deg);display:inline-block;}}
 .badge{{
-  display:inline-block;padding:8px 22px;border-radius:999px;
-  background:linear-gradient(90deg,#38bdf8,#f97316);color:#ffffff;
-  font-weight:900;font-size:22px;letter-spacing:0.05em;margin-bottom:18px;
-  box-shadow:0 8px 24px rgba(249,115,22,0.45);
+  display:inline-block;padding:10px 22px;border-radius:999px;
+  background:rgba(15,23,42,0.88);border:2px solid rgba(56,189,248,0.75);
+  color:#e2e8f0;font-weight:900;font-size:21px;letter-spacing:0.04em;
 }}
 h1{{
-  font-size:74px;line-height:1.02;font-weight:900;color:#ffffff;margin-bottom:16px;
+  font-size:74px;line-height:1.02;font-weight:900;color:#ffffff;margin-bottom:14px;
   text-shadow:0 8px 24px rgba(0,0,0,0.75);
 }}
 h1 span{{color:#facc15;}}
-.sub{{font-size:30px;font-weight:900;color:#e2e8f0;line-height:1.4;margin-bottom:26px;}}
+.sub{{font-size:29px;font-weight:900;color:#e2e8f0;line-height:1.4;margin-bottom:24px;}}
 .sub strong{{color:#38bdf8;}}
 .chips{{display:flex;gap:12px;flex-wrap:wrap;}}
 .chip{{
@@ -835,7 +847,10 @@ h1 span{{color:#facc15;}}
 }}
 </style></head><body>
   <div class="left">
-    <div class="badge">GAME DAY 08 ｜ Three.js 一人称3Dバレーボール</div>
+    <div class="top-row">
+      <div class="day-plate"><span>DAY {day_num}</span></div>
+      <div class="badge">100日後にバズるゲーム ｜ 一人称3Dバレー</div>
+    </div>
     <h1>ACE <span>SPIKE 3D</span></h1>
     <div class="sub"><strong>チュートリアル完備×全5段階ストーリー!!</strong><br>スローレシーブ＆ドシャットブロック＆必殺スパイク</div>
     <div class="chips">
@@ -846,7 +861,7 @@ h1 span{{color:#facc15;}}
   </div>
   <div class="right">
     <div class="phone"><img src="data:image/png;base64,{b64}" /></div>
-    <div class="stamp">流星スパイク!!</div>
+    <div class="stamp">DAY {day_num} 流星スパイク!!</div>
   </div>
 </body></html>"""
     with tempfile.NamedTemporaryFile("w", suffix=".html", delete=False, encoding="utf-8") as tf:
@@ -867,29 +882,15 @@ h1 span{{color:#facc15;}}
 
 
 def write_youtube_metadata(out_path: Path):
-    txt = """【タイトル案】
-ブラウザで動くガチの3Dバレー作ったらスパイク気持ちよすぎた!!【100日後にバズるゲーム Day 8】#shorts
-
-【概要欄】
-100日後にバズるゲーム、8日目は一人称3Dバレーボール「ACE SPIKE 3D」!!
-初心者でもすぐ打てるチュートリアル完備＆イージーから最難関「鬼」まで全5段階ストーリー搭載！
-
-▶ 今すぐ無料プレイ（ブラウザですぐ遊べます）
-https://kam2525-hub.github.io/note_create_use/games/day08-ace-spike-3d/
-
-🔥 100日後にバズるゲームを見たい人はチャンネル登録よろしく！
-💬 作ってほしいゲームがあったらコメント欄で教えてね！
-
-#100日後にバズるゲーム #インディーゲーム #ゲーム開発 #バレーボール #3Dゲーム #ブラウザゲーム #shorts
-
-【固定コメント案】
-今すぐ無料で遊べます👇
-https://kam2525-hub.github.io/note_create_use/games/day08-ace-spike-3d/
-
-100日後にバズるゲームを見たい人はチャンネル登録よろしく！
-「こんなゲーム作ってほしい！」があればぜひコメント欄へお願いします🔥
-"""
-    out_path.write_text(txt, encoding="utf-8")
+    src = ROOT / "notes" / "day08" / "youtube_metadata.txt"
+    if src.exists():
+        out_path.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+        return
+    out_path.write_text(
+        "[YouTube Shorts タイトル]\n"
+        "【Day 8】ブラウザで動くガチ3Dバレー作ったらスパイク気持ちよすぎた!! #バレー #ハイキュー #Shorts\n",
+        encoding="utf-8",
+    )
 
 
 def main():
