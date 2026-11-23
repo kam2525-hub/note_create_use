@@ -9,6 +9,12 @@
 ## 制作ログ（重複防止カタログ）
 - 一覧表: [CATALOG.md](CATALOG.md) / 機械可読データ: [CATALOG.json](CATALOG.json)
 
+## Day 08: ACE SPIKE 3D（一人称3Dバレーボール・トス×スパイク×レシーブ）
+- ゲーム本体: [games/day08-ace-spike-3d/index.html](games/day08-ace-spike-3d/index.html)
+- 1クリックコピペヘルパー: [notes/day08/copy_helper.html](notes/day08/copy_helper.html)
+- note 記事原稿: [notes/day08/note_draft.md](notes/day08/note_draft.md)
+- ショート動画生成スクリプト（1080×1920・チャンネル登録＆リクエストCTA込み）: [shorts/day08/generate_shorts.py](shorts/day08/generate_shorts.py)
+
 ## Day 07: PHANTOM RUSH 3D（一人称パルクール斬撃×異界ボス決戦）
 - ゲーム本体: [games/day07-phantom-rush-3d/index.html](games/day07-phantom-rush-3d/index.html)
 - 1クリックコピペヘルパー: [notes/day07/copy_helper.html](notes/day07/copy_helper.html)

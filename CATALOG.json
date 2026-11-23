@@ -84,6 +84,18 @@
       "game_path": "games/day07-phantom-rush-3d/index.html",
       "note_path": "notes/day07/note_draft.md",
       "shorts_script": "shorts/day07/generate_shorts.py"
+    },
+    {
+      "day": 8,
+      "date": "2026-11-22",
+      "slug": "day08-ace-spike-3d",
+      "title": "ACE SPIKE 3D（一人称3Dバレーボール・トス×スパイク×レシーブ）",
+      "type": "game",
+      "genre": "Three.js 一人称3Dバレーボール / スポーツアクション",
+      "core_mechanic": "Three.js一人称POV視点＆完全ボール追従カメラ！レシーブ直前のスローモーション中に『オーバー』と『アンダー（ダイブ対応）』を選んでAパスを繋ぎ、レフト/速攻/ライト＆ツーアタックを打ち分ける司令塔トス、大ジャンプ＆空中スローで150km/h級トップスピンを叩き込むスパイク＆軟打フェイント、トスアップ→助走→踏み切りジャンプの本格ジャンプサーブ、ドシャットブロックまで全操作！スマホ親指最適化UI・全国大会4戦＋技別特訓モード搭載",
+      "game_path": "games/day08-ace-spike-3d/index.html",
+      "note_path": "notes/day08/note_draft.md",
+      "shorts_script": "shorts/day08/generate_shorts.py"
     }
   ]
 }

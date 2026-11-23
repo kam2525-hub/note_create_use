@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Day 08 投稿ヘルパー｜ACE SPIKE 3D</title>
+  <style>
+    :root {
+      --bg: #060b18;
+      --card: #0e172c;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --gold: #facc15;
+      --border: #233252;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px 16px 60px;
+      background: radial-gradient(circle at 20% 0%, #102a52 0%, #060b18 65%);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
+      line-height: 1.65;
+    }
+    .wrap { max-width: 760px; margin: 0 auto; }
+    h1 { font-size: 22px; margin: 0 0 8px; }
+    .lead { margin: 0 0 20px; color: var(--muted); font-size: 14px; }
+    .quick-bar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 12px;
+      margin-bottom: 22px;
+    }
+    .action-link {
+      display: block;
+      text-align: center;
+      text-decoration: none;
+      border-radius: 14px;
+      padding: 14px 16px;
+      font-weight: 900;
+      font-size: 14px;
+      background: linear-gradient(90deg, #38bdf8, #f97316);
+      color: #ffffff;
+    }
+    .action-link.secondary { background: #142038; color: var(--text); border: 1px solid var(--border); }
+    .section {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 18px 20px;
+      margin-bottom: 18px;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+    }
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+    .section-title { font-size: 15px; font-weight: 800; color: var(--accent); }
+    .copy-btn {
+      border: none;
+      border-radius: 10px;
+      padding: 8px 14px;
+      background: #f97316;
+      color: #ffffff;
+      font-weight: 800;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .copy-btn.done { background: var(--gold); color: #09090b; }
+    textarea {
+      width: 100%;
+      background: #080f1f;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-family: inherit;
+      font-size: 14px;
+      line-height: 1.6;
+      resize: vertical;
+    }
+    .thumb-preview { width: 100%; border-radius: 12px; display: block; margin-top: 8px; border: 1px solid var(--border); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Day 08 投稿ヘルパー（ゲーム8日目：ACE SPIKE 3D）</h1>
+    <p class="lead">Three.js 一人称3Dバレーボール『ACE SPIKE 3D』のYouTube Shorts・X・note投稿用コピペ画面です。</p>
+
+    <div class="quick-bar">
+      <a class="action-link" id="xIntentBtn" href="#" target="_blank" rel="noopener">X（Twitter）の投稿画面を開く</a>
+      <a class="action-link secondary" href="https://note.com/notes/new" target="_blank" rel="noopener">note 新規記事作成を開く</a>
+      <a class="action-link secondary" href="../../games/day08-ace-spike-3d/">ゲーム本体を開く</a>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">YouTube Shorts タイトル</span>
+        <button class="copy-btn" data-target="ytTitle">コピー</button>
+      </div>
+      <textarea id="ytTitle" rows="2" readonly>一人称3Dバレーが脳汁すぎた!! トス・スパイク・レシーブ全部できる『ACE SPIKE 3D』を作った【8日目】 #Shorts #ゲーム制作 #個人開発</textarea>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">YouTube Shorts 説明文</span>
+        <button class="copy-btn" data-target="ytDesc">コピー</button>
+      </div>
+      <textarea id="ytDesc" rows="12" readonly>スマホ・PCで今すぐ無料で遊べます▼
+https://kam2525-hub.github.io/note_create_use/games/day08-ace-spike-3d/
+
+🔥 100日後にバズるゲームを見たい人、ぜひチャンネル登録よろしく！
+💬 作って欲しいゲームのアイデアがあったらコメント欄で教えてください！
+
+100日後にバズるゲームを作る男【ゲーム8日目】
+『ACE SPIKE 3D（Three.js 一人称3Dバレーボールアクション）』
+
+💥 空中スローで狙い撃つ豪快スパイク＆流星打「METEOR SPIKE!!」！
+🤲 レフト・速攻・ライトを打ち分ける司令塔トス＆ツーアタック！
+🛡 ギリギリの強打を拾うフライング・ダイビングレシーブ！
+🧱 ネット際で叩き落とす「MONSTER BLOCK!!（ドシャット）」！
+
+#Shorts #ゲーム制作 #個人開発 #ThreeJS #バレーボール #一人称3D #無料ゲーム #ブラウザゲーム #100日後にバズるゲームを作る男 #ACESPIKE3D</textarea>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">YouTube 固定コメント案（登録＆コメント率UP用）</span>
+        <button class="copy-btn" data-target="ytPin">コピー</button>
+      </div>
+      <textarea id="ytPin" rows="5" readonly>🔥 100日後にバズるゲームを見たい人、チャンネル登録よろしく！！
+💬 「こんなゲーム作って欲しい！」ってアイデアがあったらぜひコメント欄に書いてね👇
+▼今すぐ無料でプレイ（スマホ・PC対応）
+https://kam2525-hub.github.io/note_create_use/games/day08-ace-spike-3d/</textarea>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">X（Twitter）投稿テキスト</span>
+        <button class="copy-btn" data-target="xText">コピー</button>
+      </div>
+      <textarea id="xText" rows="9" readonly>【100日後にバズるゲームを作る男｜8日目】
+Three.js 一人称3Dバレーボール『ACE SPIKE 3D』を作りました！🏐🔥
+
+✅ 空中スローでコースを狙い撃つ「JUST SPIKE!!」
+✅ レフト・速攻・ライトへ打ち分ける司令塔トス＆ツーアタック
+✅ ダイビングレシーブ＆ドシャットブロック完備！
+
+スマホ・PCで今すぐ無料プレイ▼
+https://kam2525-hub.github.io/note_create_use/games/day08-ace-spike-3d/
+#個人開発 #ゲーム制作 #ThreeJS #100日後にバズるゲームを作る男</textarea>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">note 見出し画像プレビュー</span>
+      </div>
+      <img class="thumb-preview" src="../../shorts/day08/output/note_thumbnail.png" alt="Day 08 Thumbnail" />
+    </div>
+  </div>
+  <script>
+    const xText = document.getElementById('xText').value;
+    document.getElementById('xIntentBtn').href = 'https://twitter.com/intent/tweet?text=' + encodeURIComponent(xText);
+    document.querySelectorAll('.copy-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const el = document.getElementById(btn.dataset.target);
+        try {
+          await navigator.clipboard.writeText(el.value);
+        } catch (_) {
+          el.select();
+          document.execCommand('copy');
+        }
+        const orig = btn.textContent;
+        btn.textContent = 'コピー完了!';
+        btn.classList.add('done');
+        setTimeout(() => { btn.textContent = orig; btn.classList.remove('done'); }, 1400);
+      });
+    });
+  </script>
+</body>
+</html>
