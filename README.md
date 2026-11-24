@@ -9,7 +9,7 @@
 ## 制作ログ（重複防止カタログ）
 - 一覧表: [CATALOG.md](CATALOG.md) / 機械可読データ: [CATALOG.json](CATALOG.json)
 
-## Day 09: OVERCLOCK GUNNER 3D（武器6段階進化×超爽快一人称3Dシューティング）
+## Day 09: OVERCLOCK GUNNER 3D（武器10段階＋無限進化×本格一人称3Dシューティング）
 - ゲーム本体: [games/day09-overclock-gunner-3d/index.html](games/day09-overclock-gunner-3d/index.html)
 - 1クリックコピペヘルパー: [notes/day09/copy_helper.html](notes/day09/copy_helper.html)
 - note 記事原稿: [notes/day09/note_draft.md](notes/day09/note_draft.md)

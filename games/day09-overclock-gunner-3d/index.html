@@ -749,11 +749,15 @@
           <div class="wp-pip"></div>
           <div class="wp-pip"></div>
           <div class="wp-pip"></div>
+          <div class="wp-pip"></div>
+          <div class="wp-pip"></div>
+          <div class="wp-pip"></div>
+          <div class="wp-pip"></div>
         </div>
       </div>
 
       <div class="action-cluster">
-        <button class="tac-btn" id="btn-dodge">DODGE<small>SPACE / 右クリック</small></button>
+        <button class="tac-btn" id="btn-dodge">DODGE<small>EVADE / SPACE</small></button>
         <button class="tac-btn" id="btn-od">OVERDRIVE<small id="od-pct">0%</small></button>
       </div>
     </div>
@@ -765,13 +769,13 @@
       <div class="title-kicker">DAY 09 // FIRST-PERSON 3D WEAPON-EVOLUTION SHOOTER</div>
       <div class="title-logo">OVERCLOCK<br/><span>GUNNER</span> 3D</div>
       <div class="title-sub">
-        指1本で狙って撃ちまくれ！倒すほど銃が<br/>
-        <b>ハンドガン → 二丁拳銃 → 散弾 → SMG → 回転バルカン → 電磁レール砲</b> へ超進化！
+        倒すほど銃が <b>全10段階＋無限OC</b> へ超進化！<br/>
+        <b>二丁バルカン・連鎖電撃砲・黒穴重力砲・衛星軌道レーザー</b> で強敵と巨大ボスを殲滅せよ！
       </div>
       <div class="chips">
-        <span class="chip">🔫 6段階リアルタイム武器進化</span>
-        <span class="chip">💥 連鎖爆破＆装甲粉砕</span>
-        <span class="chip">🤖 巨大ボス部位破壊</span>
+        <span class="chip">🔫 10段階＋無限武器進化</span>
+        <span class="chip">⚡ 雷連鎖・黒穴・軌道砲</span>
+        <span class="chip">🎯 盾兵・スナイパー・特攻機</span>
         <span class="chip">📱 縦＆横画面フル対応</span>
       </div>
       <div class="skin-row" id="skin-picker"></div>
@@ -783,11 +787,11 @@
     </div>
   </div>
 
-  <!-- 3-Choice Cyber MOD Screen (After Boss Kill) -->
+  <!-- 3-Choice Cyber MOD Screen (Mid-sector & After Boss Kill) -->
   <div class="overlay hidden" id="screen-mod">
-    <div class="title-kicker" style="color:#ffd400;">TITAN DESTROYED // OVERCLOCK UPGRADE</div>
+    <div class="title-kicker" id="mod-kicker" style="color:#ffd400;">OVERCLOCK UPGRADE // ABILITY AWAKENED</div>
     <h2 style="font-size:26px;font-weight:900;font-style:italic;margin-bottom:4px;">武装モジュールを1つ覚醒！</h2>
-    <p style="font-size:12px;color:#cbd5e1;">選んだ強化を搭載して次セクターへ突撃します</p>
+    <p style="font-size:12px;color:#cbd5e1;">選んだ特殊兵装を搭載して戦場へ復帰します</p>
     <div class="mod-list" id="mod-list"></div>
   </div>
 
@@ -815,15 +819,19 @@
   'use strict';
 
   // =========================================================
-  // 1. WEAPON TIERS, SKINS, MODS & SAVE DATA
+  // 1. 10-TIER + ENDLESS OVERCLOCK WEAPONS, SKINS & 8 SYNERGY MODS
   // =========================================================
   const WEAPON_TIERS = [
-    { lv: 1, tag: 'SIDEARM',    name: 'MK-9 TACTICAL',     fireRate: 0.21, pellets: 1, spread: 0.005, dmg: 22, color: 0xffd400, hex: '#ffd400', recoil: 0.11, pierce: false, missiles: 0, reqPts: 0 },
-    { lv: 2, tag: 'AKIMBO',     name: 'DUAL STRIKER',      fireRate: 0.125,pellets: 1, spread: 0.012, dmg: 22, color: 0x00e5ff, hex: '#00e5ff', recoil: 0.09, pierce: false, missiles: 0, reqPts: 140 },
-    { lv: 3, tag: 'BREACHER',   name: 'M870 SHOTGUN',      fireRate: 0.36, pellets: 8, spread: 0.068, dmg: 16, color: 0xff6d00, hex: '#ff6d00', recoil: 0.22, pierce: false, missiles: 0, reqPts: 360 },
-    { lv: 4, tag: 'RAPID SMG',  name: 'VECTOR X-99',       fireRate: 0.072,pellets: 1, spread: 0.022, dmg: 20, color: 0x00ffff, hex: '#00ffff', recoil: 0.06, pierce: false, missiles: 0, reqPts: 680 },
-    { lv: 5, tag: 'GATLING',    name: 'M134 VULCAN',       fireRate: 0.052,pellets: 2, spread: 0.030, dmg: 19, color: 0xff3d00, hex: '#ff3d00', recoil: 0.07, pierce: false, missiles: 0, reqPts: 1120 },
-    { lv: 6, tag: 'GOD TIER',   name: 'HYPER RAIL-CANNON', fireRate: 0.22, pellets: 1, spread: 0.002, dmg: 85, color: 0x00e5ff, hex: '#00e5ff', recoil: 0.20, pierce: true,  missiles: 2, reqPts: 1700 }
+    { lv: 1,  tag: 'SIDEARM',      name: 'MK-9 TACTICAL',      fireRate: 0.20, pellets: 1, spread: 0.005, dmg: 22, color: 0xffd400, hex: '#ffd400', recoil: 0.11, pierce: false, special: 'none',    missiles: 0, reqPts: 0 },
+    { lv: 2,  tag: 'AKIMBO',       name: 'DUAL STRIKER',       fireRate: 0.12, pellets: 1, spread: 0.012, dmg: 22, color: 0x00e5ff, hex: '#00e5ff', recoil: 0.09, pierce: false, special: 'dual',    missiles: 0, reqPts: 150 },
+    { lv: 3,  tag: 'BREACHER',     name: 'M870 SHOTGUN',       fireRate: 0.35, pellets: 8, spread: 0.068, dmg: 16, color: 0xff6d00, hex: '#ff6d00', recoil: 0.22, pierce: false, special: 'none',    missiles: 0, reqPts: 360 },
+    { lv: 4,  tag: 'RAPID SMG',    name: 'VECTOR X-99',        fireRate: 0.072,pellets: 1, spread: 0.022, dmg: 20, color: 0x00ffff, hex: '#00ffff', recoil: 0.06, pierce: false, special: 'none',    missiles: 0, reqPts: 660 },
+    { lv: 5,  tag: 'GATLING',      name: 'M134 VULCAN',        fireRate: 0.055,pellets: 2, spread: 0.030, dmg: 19, color: 0xff3d00, hex: '#ff3d00', recoil: 0.07, pierce: false, special: 'none',    missiles: 0, reqPts: 1050 },
+    { lv: 6,  tag: 'RAILGUN',      name: 'HYPER RAIL-CANNON',  fireRate: 0.22, pellets: 1, spread: 0.002, dmg: 88, color: 0x00e5ff, hex: '#00e5ff', recoil: 0.20, pierce: true,  special: 'none',    missiles: 1, reqPts: 1550 },
+    { lv: 7,  tag: 'TWIN GATLING', name: 'DUAL PLASMA VULCAN', fireRate: 0.044,pellets: 2, spread: 0.034, dmg: 22, color: 0xff2255, hex: '#ff2255', recoil: 0.07, pierce: false, special: 'dual',    missiles: 0, reqPts: 2150 },
+    { lv: 8,  tag: 'LIGHTNING',    name: 'TESLA ARC CANNON',   fireRate: 0.16, pellets: 1, spread: 0.006, dmg: 68, color: 0xd500f9, hex: '#d500f9', recoil: 0.13, pierce: true,  special: 'chain',   missiles: 0, reqPts: 2850 },
+    { lv: 9,  tag: 'GRAVITY',      name: 'NOVA SINGULARITY',   fireRate: 0.30, pellets: 1, spread: 0.004, dmg: 105,color: 0x7c4dff, hex: '#7c4dff', recoil: 0.22, pierce: true,  special: 'vortex',  missiles: 1, reqPts: 3650 },
+    { lv: 10, tag: 'GOD TIER',     name: 'OMEGA ORBITAL',      fireRate: 0.24, pellets: 2, spread: 0.008, dmg: 120,color: 0xffd400, hex: '#ffd400', recoil: 0.24, pierce: true,  special: 'orbital', missiles: 2, reqPts: 4550 }
   ];
 
   const GUN_SKINS = [
@@ -833,10 +841,14 @@
   ];
 
   const MOD_POOL = [
-    { id: 'firerate', title: '⚡ OVERCLOCK TRIGGER', desc: '全武器の連射速度が +25% 加速する' },
-    { id: 'explosive',title: '💥 THERMITE ROUNDS',   desc: 'ヘッドショット時に衝撃波爆発が発生し周囲へダメージ' },
-    { id: 'homing',   title: '🚀 MICRO PODS',        desc: '6発ごとに自動追尾マイクロミサイルを同時発射' },
-    { id: 'armor',    title: '🛡 NANO ARMOR',        desc: 'アーマー全回復＆回避無敵時間が延長' }
+    { id: 'chain',    title: '⚡ CHAIN LIGHTNING',   desc: 'すべての射撃から周囲の敵へ紫の連鎖電撃が飛び移る！' },
+    { id: 'vortex',   title: '🕳 GRAVITY VORTEX',    desc: '敵撃破時にミニブラックホール発生！近くの敵弾も吸い込んで消滅' },
+    { id: 'orbital',  title: '☄ ORBITAL STRIKE',    desc: '6キルごとに上空から極太の衛星軌道レーザーが降下爆撃！' },
+    { id: 'firerate', title: '🔥 RAPID OVERCLOCK',   desc: '全武器の連射速度が +25% 加速する' },
+    { id: 'explosive',title: '💥 THERMITE SHELLS',   desc: 'ヘッドショット時に衝撃波爆発が発生し周囲へ連鎖ダメージ' },
+    { id: 'homing',   title: '🚀 SWARM PODS',        desc: '5発ごとに自動追尾マイクロミサイルを同時斉射！' },
+    { id: 'chrono',   title: '⏱ CHRONO DODGE',       desc: '回避するたびに2.2秒間バレットタイム＆攻撃力2倍！' },
+    { id: 'vampiric', title: '🛡 VAMPIRIC ARMOR',    desc: 'アーマー全回復＆さらに10キルごとにアーマーが1回復！' }
   ];
 
   const SAVE_KEY = 'overclock_gunner_3d_v1';
@@ -1346,15 +1358,104 @@
     gunRig.add(w6);
     weaponModels.push(w6);
 
-    // Muzzle flash meshes
-    const flashGeo = new THREE.OctahedronGeometry(0.11, 0);
-    const flashMat = new THREE.MeshBasicMaterial({ color: 0xfff59d, transparent: true, opacity: 0 });
+    // LV.7: DUAL PLASMA VULCAN (Twin 6-Barrel Crimson Gatling!)
+    function makePlasmaVulcan() {
+      const vg = new THREE.Group();
+      const mot = new THREE.Mesh(new THREE.CylinderGeometry(0.088, 0.098, 0.34, 12), mBody);
+      mot.rotation.x = Math.PI / 2; mot.position.set(0, -0.02, 0.02);
+      const bGroup = new THREE.Group();
+      bGroup.position.set(0, -0.01, -0.44);
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        const b = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.68, 8), mTrim);
+        b.rotation.x = Math.PI / 2;
+        b.position.set(Math.cos(a) * 0.048, Math.sin(a) * 0.048, 0);
+        bGroup.add(b);
+      }
+      const plasmaRing = new THREE.Mesh(new THREE.TorusGeometry(0.064, 0.012, 8, 16), mRed);
+      plasmaRing.position.z = -0.30;
+      const plasmaRing2 = plasmaRing.clone(); plasmaRing2.position.z = -0.10;
+      bGroup.add(plasmaRing, plasmaRing2);
+      vg.add(mot, bGroup);
+      return { vg, bGroup };
+    }
+    const pvR = makePlasmaVulcan();
+    pvR.vg.visible = false;
+    gunRig.add(pvR.vg);
+    weaponModels.push(pvR.vg);
+    window.__pvBarrels = [pvR.bGroup];
+
+    const pvL = makePlasmaVulcan();
+    pvL.vg.visible = false;
+    gunRigLeft.add(pvL.vg);
+    window.__leftVulcanModel = pvL.vg;
+    window.__pvBarrels.push(pvL.bGroup);
+
+    // LV.8: TESLA ARC CANNON (Purple Lightning Coils + Floating Arc Orb)
+    const mPurple = new THREE.MeshBasicMaterial({ color: 0xd500f9 });
+    const w8 = new THREE.Group();
+    const tRec = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.13, 0.46), mBody);
+    const tRod = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.024, 0.72, 10), mDark);
+    tRod.rotation.x = Math.PI / 2; tRod.position.set(0, 0.02, -0.32);
+    for (let k = 0; k < 5; k++) {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.072 - k * 0.006, 0.011, 8, 16), mPurple);
+      ring.position.set(0, 0.02, -0.12 - k * 0.13);
+      w8.add(ring);
+    }
+    const tOrb = new THREE.Mesh(new THREE.OctahedronGeometry(0.052, 1), mPurple);
+    tOrb.position.set(0, 0.02, -0.72);
+    w8.add(tRec, tRod, tOrb);
+    w8.visible = false;
+    gunRig.add(w8);
+    weaponModels.push(w8);
+    window.__teslaOrb = tOrb;
+
+    // LV.9: NOVA SINGULARITY (Black Hole Core Chamber + Twin Gravity Fins)
+    const mVoid = new THREE.MeshBasicMaterial({ color: 0x05020d });
+    const mGrav = new THREE.MeshBasicMaterial({ color: 0x7c4dff });
+    const w9 = new THREE.Group();
+    const nBody = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.14, 0.44), mDark);
+    const finL = new THREE.Mesh(new THREE.BoxGeometry(0.022, 0.11, 0.66), mTrim);
+    finL.position.set(-0.085, 0.03, -0.30); finL.rotation.z = 0.25;
+    const finR = finL.clone(); finR.position.x = 0.085; finR.rotation.z = -0.25;
+    const bhCore = new THREE.Mesh(new THREE.SphereGeometry(0.055, 12, 12), mVoid);
+    bhCore.position.set(0, 0.03, -0.45);
+    const bhHalo = new THREE.Mesh(new THREE.TorusGeometry(0.082, 0.012, 8, 20), mGrav);
+    bhHalo.position.set(0, 0.03, -0.45);
+    w9.add(nBody, finL, finR, bhCore, bhHalo);
+    w9.visible = false;
+    gunRig.add(w9);
+    weaponModels.push(w9);
+    window.__gravHalo = bhHalo;
+
+    // LV.10: OMEGA ORBITAL CANNON (Gold & Cyan God-Tier Rail + Targeting Halo)
+    const w10 = new THREE.Group();
+    const oBase = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.15, 0.50), mGold);
+    const oRailT = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.032, 0.86), mTrim);
+    oRailT.position.set(0, 0.095, -0.36);
+    const oRailB = oRailT.clone(); oRailB.position.y = -0.065;
+    const oBeam = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.80, 12), mAccent);
+    oBeam.rotation.x = Math.PI / 2; oBeam.position.set(0, 0.015, -0.34);
+    const oHalo = new THREE.Mesh(new THREE.TorusGeometry(0.11, 0.014, 8, 24), new THREE.MeshBasicMaterial({ color: 0xffd400 }));
+    oHalo.position.set(0, 0.015, -0.76);
+    w10.add(oBase, oRailT, oRailB, oBeam, oHalo);
+    w10.visible = false;
+    gunRig.add(w10);
+    weaponModels.push(w10);
+    window.__omegaHalo = oHalo;
+
+    // Muzzle flash meshes (additive luminous burst!)
+    const flashGeo = new THREE.OctahedronGeometry(0.10, 0);
+    const flashMat = new THREE.MeshBasicMaterial({
+      color: 0xffd400, transparent: true, opacity: 0,
+      blending: THREE.AdditiveBlending, depthWrite: false
+    });
     rightMuzzleFlash = new THREE.Mesh(flashGeo, flashMat);
     rightMuzzleFlash.position.set(0, 0.04, -0.68);
     gunRig.add(rightMuzzleFlash);
 
     leftMuzzleFlash = new THREE.Mesh(flashGeo, flashMat.clone());
-    leftMuzzleFlash.position.set(0, 0.04, -0.45);
+    leftMuzzleFlash.position.set(0, 0.04, -0.68);
     gunRigLeft.add(leftMuzzleFlash);
   }
   rebuildAllWeaponModels();
@@ -1369,14 +1470,16 @@
   function buildCyberTrooper(type) {
     const g = new THREE.Group();
     const isHeavy = (type === 'heavy');
-    const sc = isHeavy ? 1.32 : 1.04;
+    const isShield = (type === 'shield');
+    const isSniper = (type === 'sniper');
+    const sc = isHeavy ? 1.35 : isShield ? 1.18 : 1.04;
 
-    const armorCol = isHeavy ? 0x2a1420 : 0x1e293b;
-    const plateCol = isHeavy ? 0xff3d00 : 0xff2255;
-    const visorCol = isHeavy ? 0xffd400 : 0x00e5ff;
+    const armorCol = isHeavy ? 0x2a1420 : isSniper ? 0x1a0b2e : isShield ? 0x0e1d36 : 0x1e293b;
+    const plateCol = isHeavy ? 0xff3d00 : isSniper ? 0xd500f9 : isShield ? 0x00b0ff : 0xff2255;
+    const visorCol = isHeavy ? 0xffd400 : isSniper ? 0xff1744 : 0x00e5ff;
 
     const mArmor = new THREE.MeshStandardMaterial({ color: armorCol, metalness: 0.72, roughness: 0.3 });
-    const mPlate = new THREE.MeshStandardMaterial({ color: plateCol, emissive: plateCol, emissiveIntensity: 0.25, metalness: 0.45, roughness: 0.28 });
+    const mPlate = new THREE.MeshStandardMaterial({ color: plateCol, emissive: plateCol, emissiveIntensity: 0.28, metalness: 0.45, roughness: 0.28 });
     const mVisor = new THREE.MeshBasicMaterial({ color: visorCol });
     const mDark = new THREE.MeshStandardMaterial({ color: 0x0c111d, metalness: 0.8, roughness: 0.35 });
 
@@ -1410,15 +1513,16 @@
       g.add(sh);
     });
 
-    // Right Arm + Detailed Assault Rifle
+    // Right Arm + Assault/Sniper Rifle
     const armR = new THREE.Group();
     armR.position.set(0.38 * sc, 1.28 * sc, 0);
     const upperR = new THREE.Mesh(new THREE.BoxGeometry(0.15 * sc, 0.42 * sc, 0.15 * sc), mArmor);
     upperR.position.set(0, -0.12 * sc, 0.16 * sc); upperR.rotation.x = -1.25;
-    const rifle = new THREE.Mesh(new THREE.BoxGeometry(0.09 * sc, 0.13 * sc, 0.72 * sc), mDark);
-    rifle.position.set(0, -0.10 * sc, 0.56 * sc);
-    const rifleGlow = new THREE.Mesh(new THREE.BoxGeometry(0.03 * sc, 0.03 * sc, 0.48 * sc), mVisor);
-    rifleGlow.position.set(0, -0.05 * sc, 0.62 * sc);
+    const rifleLen = isSniper ? 1.25 : 0.72;
+    const rifle = new THREE.Mesh(new THREE.BoxGeometry(0.09 * sc, 0.13 * sc, rifleLen * sc), mDark);
+    rifle.position.set(0, -0.10 * sc, (isSniper ? 0.78 : 0.56) * sc);
+    const rifleGlow = new THREE.Mesh(new THREE.BoxGeometry(0.03 * sc, 0.03 * sc, rifleLen * 0.7 * sc), mVisor);
+    rifleGlow.position.set(0, -0.05 * sc, (isSniper ? 0.85 : 0.62) * sc);
     armR.add(upperR, rifle, rifleGlow);
     g.add(armR);
 
@@ -1428,7 +1532,23 @@
     armL.rotation.x = -0.5;
     g.add(armL);
 
-    // Articulated Legs + Knee Guards + Heavy Boots
+    // Energy Shield for SHIELD PHALANX (leaves head exposed for precision headshots!)
+    let shieldMesh = null;
+    if (isShield) {
+      shieldMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(1.18 * sc, 1.15 * sc, 0.10),
+        new THREE.MeshStandardMaterial({ color: 0x00e5ff, emissive: 0x0066aa, transparent: true, opacity: 0.48, roughness: 0.15 })
+      );
+      shieldMesh.position.set(0, 0.92 * sc, 0.58 * sc);
+      const rim = new THREE.LineSegments(
+        new THREE.EdgesGeometry(new THREE.BoxGeometry(1.20 * sc, 1.17 * sc, 0.12)),
+        new THREE.LineBasicMaterial({ color: 0x00ffff })
+      );
+      shieldMesh.add(rim);
+      g.add(shieldMesh);
+    }
+
+    // Articulated Legs
     function makeLeg(side) {
       const lg = new THREE.Group();
       lg.position.set(side * 0.16 * sc, 0.72 * sc, 0);
@@ -1447,21 +1567,21 @@
     const legR = makeLeg(1);
     g.add(legL, legR);
 
-    return { group: g, headPosY: 1.68 * sc, bodyPosY: 1.12 * sc, legL, legR, armR, mPlate, scale: sc };
+    return { group: g, headPosY: 1.68 * sc, bodyPosY: 1.12 * sc, legL, legR, armR, mPlate, shieldMesh, scale: sc };
   }
 
-  function buildAssaultDrone() {
+  function buildAssaultDrone(isKamikaze = false) {
     const g = new THREE.Group();
-    const mHull = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.85, roughness: 0.22 });
-    const mRed = new THREE.MeshStandardMaterial({ color: 0xff2255, emissive: 0x990022, metalness: 0.5, roughness: 0.25 });
-    const mEye = new THREE.MeshBasicMaterial({ color: 0xff1744 });
-    const mCyan = new THREE.MeshBasicMaterial({ color: 0x00e5ff });
+    const mHull = new THREE.MeshStandardMaterial({ color: isKamikaze ? 0x3b0812 : 0x1e293b, metalness: 0.85, roughness: 0.22 });
+    const mRed = new THREE.MeshStandardMaterial({ color: isKamikaze ? 0xff9100 : 0xff2255, emissive: isKamikaze ? 0xff3d00 : 0x990022, metalness: 0.5, roughness: 0.25 });
+    const mEye = new THREE.MeshBasicMaterial({ color: isKamikaze ? 0xffd400 : 0xff1744 });
+    const mCyan = new THREE.MeshBasicMaterial({ color: isKamikaze ? 0xff1744 : 0x00e5ff });
 
-    const body = new THREE.Mesh(new THREE.OctahedronGeometry(0.52, 1), mHull);
+    const body = new THREE.Mesh(new THREE.OctahedronGeometry(isKamikaze ? 0.58 : 0.52, 1), mHull);
     body.scale.set(1.3, 0.72, 1.15);
-    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.18, 10, 10), mEye);
-    eye.position.set(0, -0.02, 0.48);
-    const brow = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.12, 0.42), mRed);
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 10), mEye);
+    eye.position.set(0, -0.02, 0.50);
+    const brow = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.14, 0.44), mRed);
     brow.position.set(0, 0.28, 0.26);
     g.add(body, eye, brow);
 
@@ -1477,7 +1597,6 @@
       g.add(arm, ring, blade);
     });
 
-    // Underbelly twin guns
     [-0.22, 0.22].forEach(gx => {
       const gun = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.55, 8), mHull);
       gun.rotation.x = Math.PI / 2; gun.position.set(gx, -0.34, 0.28);
@@ -1486,41 +1605,53 @@
     return { group: g, rotors, mPlate: mRed };
   }
 
-  function buildTitanBoss() {
+  function buildTitanBoss(sector = 1) {
     const g = new THREE.Group();
-    const mDark = new THREE.MeshStandardMaterial({ color: 0x111726, metalness: 0.85, roughness: 0.25 });
-    const mRed = new THREE.MeshStandardMaterial({ color: 0xff1744, emissive: 0x660015, metalness: 0.5, roughness: 0.25 });
-    const mGold = new THREE.MeshStandardMaterial({ color: 0xffd400, emissive: 0x774400, metalness: 0.8, roughness: 0.2 });
-    const mCore = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+    const isValk = (sector % 3 === 2);
+    const isOverlord = (sector % 3 === 0);
+    const primary = isValk ? 0x7c4dff : isOverlord ? 0xd500f9 : 0xff1744;
+    const coreCol = isValk ? 0xffd400 : isOverlord ? 0xff1744 : 0x00ffff;
 
-    // Massive Mecha Torso
+    const mDark = new THREE.MeshStandardMaterial({ color: 0x111726, metalness: 0.85, roughness: 0.25 });
+    const mRed = new THREE.MeshStandardMaterial({ color: primary, emissive: primary, emissiveIntensity: 0.35, metalness: 0.5, roughness: 0.25 });
+    const mGold = new THREE.MeshStandardMaterial({ color: 0xffd400, emissive: 0x774400, metalness: 0.8, roughness: 0.2 });
+    const mCore = new THREE.MeshBasicMaterial({ color: coreCol });
+
     const torso = new THREE.Mesh(new THREE.BoxGeometry(3.4, 2.8, 2.2), mDark);
     torso.position.y = 4.2;
     const chestArmor = new THREE.Mesh(new THREE.BoxGeometry(2.8, 1.9, 2.45), mRed);
     chestArmor.position.y = 4.35;
-    const coreRing = new THREE.Mesh(new THREE.TorusGeometry(0.68, 0.12, 10, 24), mGold);
+    const coreRing = new THREE.Mesh(new THREE.TorusGeometry(0.72, 0.13, 10, 24), mGold);
     coreRing.position.set(0, 4.35, 1.26);
-    const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.52, 1), mCore);
+    const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.56, 1), mCore);
     core.position.set(0, 4.35, 1.26);
 
-    // Armored Mecha Head + Crimson Mono-Eye
     const head = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.95, 1.2), mDark);
     head.position.set(0, 6.1, 0.2);
-    const horns = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.18, 0.22), mGold);
+    const horns = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.20, 0.24), mGold);
     horns.position.set(0, 6.65, 0.5);
     const eye = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.24, 0.18), new THREE.MeshBasicMaterial({ color: 0xff1744 }));
     eye.position.set(0, 6.12, 0.82);
 
-    // Heavy Legs
-    [-1.15, 1.15].forEach(lx => {
-      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.95, 2.8, 1.1), mDark);
-      leg.position.set(lx, 1.4, 0);
-      const knee = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.55, 1.25), mRed);
-      knee.position.set(lx, 1.8, 0.1);
-      g.add(leg, knee);
-    });
+    if (isValk) {
+      // Swept stealth jet wings for Sector 2 Boss VALKYRIE-ZERO!
+      [-1, 1].forEach(s => {
+        const wing = new THREE.Mesh(new THREE.BoxGeometry(3.8, 0.22, 1.8), mDark);
+        wing.position.set(s * 3.2, 4.6, -0.4); wing.rotation.z = -s * 0.22;
+        const wEdge = new THREE.Mesh(new THREE.BoxGeometry(3.8, 0.08, 0.18), mGold);
+        wEdge.position.set(s * 3.2, 4.6, 0.55); wEdge.rotation.z = -s * 0.22;
+        g.add(wing, wEdge);
+      });
+    } else {
+      [-1.15, 1.15].forEach(lx => {
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.95, 2.8, 1.1), mDark);
+        leg.position.set(lx, 1.4, 0);
+        const knee = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.55, 1.25), mRed);
+        knee.position.set(lx, 1.8, 0.1);
+        g.add(leg, knee);
+      });
+    }
 
-    // Destructible Shoulder Missile Pods!
     function makePod(side) {
       const p = new THREE.Group();
       p.position.set(side * 2.45, 5.4, 0.1);
@@ -1541,8 +1672,16 @@
     const podL = makePod(-1);
     const podR = makePod(1);
 
-    g.add(torso, chestArmor, coreRing, core, head, horns, eye, podL, podR);
-    return { group: g, core, coreRing, podL, podR, mRed };
+    // Boss Charge Beam Telegraph & Blast Mesh
+    const beamMat = new THREE.MeshBasicMaterial({ color: 0xff1744, transparent: true, opacity: 0.0 });
+    const chargeBeam = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 26, 10), beamMat);
+    chargeBeam.rotation.x = Math.PI / 2;
+    chargeBeam.position.set(0, 4.35, 14);
+    chargeBeam.visible = false;
+
+    g.add(torso, chestArmor, coreRing, core, head, horns, eye, podL, podR, chargeBeam);
+    const name = isValk ? 'VALKYRIE-ZERO' : isOverlord ? 'KRONOS OVERLORD' : 'TITAN-IX OMEGA';
+    return { group: g, core, coreRing, podL, podR, mRed, chargeBeam, name, isValk };
   }
 
   // =========================================================
@@ -1561,9 +1700,10 @@
     hp: 5,
     maxHp: 5,
 
-    // Weapon evolution
+    // Weapon evolution (LV.1..10 + Endless Overclock +N!)
     evoPts: 0,
     weaponLv: 1,
+    overclockLv: 0,
     maxWeaponLv: 1,
     fireCooldown: 0,
     shotCounter: 0,
@@ -1572,6 +1712,7 @@
     recoilR: 0,
     recoilL: 0,
     swapAnim: 0,
+    midModGiven: false,
 
     // Overdrive & Dodge
     odGauge: 0,
@@ -1581,6 +1722,7 @@
     dodgeCooldown: 0,
     invulnTimer: 0,
     dodgeDir: 1,
+    chronoBoostTimer: 0,
 
     // Active Mods
     mods: [], // ids
@@ -1608,6 +1750,7 @@
     barrels: [],
     missiles: [], // enemy incoming missiles (can be shot down!)
     homingShots: [], // player homing missiles
+    vortices: [], // active gravity black holes
     particles: [],
     explosions: [],
     tracers: [],
@@ -1620,13 +1763,12 @@
   };
 
   // =========================================================
-  // 7. SPECTACULAR EXPLOSIONS, SHATTER & 2D FX POPUPS
+  // 7. SPECTACULAR EXPLOSIONS, LIGHTNING, BLACK HOLES & ORBITAL BEAMS
   // =========================================================
   function spawnBigExplosion(pos, radius = 6.5, isMega = false) {
     SFX.playExplosion(isMega);
     state.shakeAmt = Math.max(state.shakeAmt, isMega ? 0.65 : 0.42);
 
-    // 1) White-hot expanding core sphere
     const core = new THREE.Mesh(
       new THREE.SphereGeometry(0.6, 12, 12),
       new THREE.MeshBasicMaterial({ color: 0xfff59d, transparent: true, opacity: 0.95 })
@@ -1635,7 +1777,6 @@
     fxGroup.add(core);
     state.explosions.push({ mesh: core, maxScale: isMega ? 6.5 : 4.2, life: 0.34, maxLife: 0.34, isRing: false });
 
-    // 2) Dual expanding shockwave rings
     [0xff6d00, 0x00e5ff].forEach((col, idx) => {
       const ring = new THREE.Mesh(
         new THREE.TorusGeometry(0.5, 0.09, 8, 24),
@@ -1647,9 +1788,95 @@
       state.explosions.push({ mesh: ring, maxScale: isMega ? 10 : 6.8, life: 0.42 + idx * 0.08, maxLife: 0.42 + idx * 0.08, isRing: true });
     });
 
-    // 3) 3D fiery + armor shatter debris
     spawnShatter(pos, 0xff6d00, isMega ? 36 : 22, isMega ? 15 : 11);
     spawnShatter(pos, 0xffd400, isMega ? 20 : 12, isMega ? 12 : 9);
+  }
+
+  function spawnLightningArc(p1, p2, col = 0xd500f9) {
+    const pts = [p1.clone()];
+    const segs = 6;
+    for (let i = 1; i < segs; i++) {
+      const t = i / segs;
+      const mid = new THREE.Vector3().lerpVectors(p1, p2, t);
+      mid.x += (Math.random() - 0.5) * 0.85;
+      mid.y += (Math.random() - 0.5) * 0.85;
+      pts.push(mid);
+    }
+    pts.push(p2.clone());
+    const line = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(pts),
+      new THREE.LineBasicMaterial({ color: col, transparent: true, opacity: 0.98 })
+    );
+    fxGroup.add(line);
+    state.tracers.push({ line, life: 0.22, maxLife: 0.22 });
+  }
+
+  function triggerChainLightning(originPos, excludeEnemy, baseDmg, maxJumps = 4) {
+    let curPos = originPos.clone();
+    const visited = new Set([excludeEnemy]);
+    for (let j = 0; j < maxJumps; j++) {
+      let best = null, bestD = 12;
+      for (const e of state.enemies) {
+        if (!e.alive || visited.has(e)) continue;
+        const d = e.pos.distanceTo(curPos);
+        if (d < bestD) { bestD = d; best = e; }
+      }
+      if (!best) break;
+      visited.add(best);
+      const nextPos = best.pos.clone().add(new THREE.Vector3(0, best.bodyOffY, 0));
+      spawnLightningArc(curPos, nextPos, 0xd500f9);
+      damageEnemy(best, Math.round(baseDmg * 0.72), false, true, true);
+      curPos = nextPos;
+    }
+  }
+
+  function spawnGravityVortex(pos, dmg) {
+    const g = new THREE.Group();
+    const core = new THREE.Mesh(
+      new THREE.SphereGeometry(0.65, 14, 14),
+      new THREE.MeshBasicMaterial({ color: 0x050210 })
+    );
+    const halo = new THREE.Mesh(
+      new THREE.TorusGeometry(1.15, 0.12, 8, 24),
+      new THREE.MeshBasicMaterial({ color: 0x7c4dff, transparent: true, opacity: 0.9 })
+    );
+    const halo2 = new THREE.Mesh(
+      new THREE.TorusGeometry(1.65, 0.06, 8, 24),
+      new THREE.MeshBasicMaterial({ color: 0x00e5ff, transparent: true, opacity: 0.75 })
+    );
+    halo2.rotation.x = Math.PI / 2;
+    g.add(core, halo, halo2);
+    g.position.copy(pos);
+    fxGroup.add(g);
+    state.vortices.push({ group: g, halo, halo2, pos: pos.clone(), life: 1.5, tickCd: 0.15, dmg });
+  }
+
+  function spawnOrbitalLaser(pos, dmg) {
+    SFX.playExplosion(true);
+    state.shakeAmt = Math.max(state.shakeAmt, 0.65);
+    const col = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.95, 1.45, 38, 14),
+      new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.88 })
+    );
+    col.position.set(pos.x, 19, pos.z);
+    const inner = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.42, 0.55, 38, 10),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.98 })
+    );
+    inner.position.set(pos.x, 19, pos.z);
+    fxGroup.add(col, inner);
+    state.explosions.push({ mesh: col, maxScale: 1.6, life: 0.45, maxLife: 0.45, isRing: false });
+    state.explosions.push({ mesh: inner, maxScale: 0.8, life: 0.42, maxLife: 0.42, isRing: false });
+    spawnBigExplosion(new THREE.Vector3(pos.x, 1.2, pos.z), 9.0, true);
+
+    state.enemies.forEach(e => {
+      if (e.alive && Math.hypot(e.pos.x - pos.x, e.pos.z - pos.z) < 7.5) {
+        damageEnemy(e, dmg, false, true, true);
+      }
+    });
+    if (state.boss && state.boss.alive && Math.hypot(state.boss.pos.x - pos.x, state.boss.pos.z - pos.z) < 8.5) {
+      damageBoss('bossCore', Math.round(dmg * 0.9), pos);
+    }
   }
 
   function spawnShatter(origin, colorHex, count = 18, speed = 9.5) {
@@ -1705,7 +1932,7 @@
   }
 
   // =========================================================
-  // 8. SPAWNING ENEMIES, BARRELS, MISSILES & BOSS
+  // 8. TACTICAL ENEMY SPAWNING (TROOPER / SHIELD / SNIPER / KAMIKAZE / HEAVY) & BOSS
   // =========================================================
   function clearEntities() {
     while (entityGroup.children.length) entityGroup.remove(entityGroup.children[0]);
@@ -1714,6 +1941,7 @@
     state.barrels = [];
     state.missiles = [];
     state.homingShots = [];
+    state.vortices = [];
     state.particles = [];
     state.explosions = [];
     state.tracers = [];
@@ -1722,39 +1950,66 @@
   }
 
   function spawnWaveEnemy() {
-    if (state.enemies.length >= 6) return;
-    const r = Math.random();
-    const type = r < 0.48 ? 'trooper' : r < 0.76 ? 'drone' : 'heavy';
-    const x = (Math.random() - 0.5) * 11.5;
-    const z = -34 - Math.random() * 12;
+    const maxConcurrent = Math.min(9, 5 + state.sector);
+    if (state.enemies.length >= maxConcurrent) return;
 
-    if (type === 'drone') {
-      const d = buildAssaultDrone();
-      const y = 3.2 + Math.random() * 2.4;
+    const r = Math.random();
+    let type = 'trooper';
+    if (state.sector === 1 && state.kills < 3) {
+      type = r < 0.65 ? 'trooper' : 'drone';
+    } else {
+      if (r < 0.24) type = 'trooper';
+      else if (r < 0.42) type = 'shield';
+      else if (r < 0.60) type = 'sniper';
+      else if (r < 0.76) type = 'kamikaze';
+      else if (r < 0.88) type = 'drone';
+      else type = 'heavy';
+    }
+
+    const x = (Math.random() - 0.5) * 12.2;
+    const z = -34 - Math.random() * 12;
+    const hpScale = 1 + (state.sector - 1) * 0.45 + state.overclockLv * 0.25;
+
+    if (type === 'drone' || type === 'kamikaze') {
+      const isKami = (type === 'kamikaze');
+      const d = buildAssaultDrone(isKami);
+      const y = isKami ? 2.4 + Math.random() * 1.4 : 3.2 + Math.random() * 2.4;
       d.group.position.set(x, y, z);
       entityGroup.add(d.group);
+      const hp = Math.round((isKami ? 48 : 65) * hpScale);
       state.enemies.push({
-        type: 'drone', group: d.group, rotors: d.rotors, mPlate: d.mPlate,
-        pos: new THREE.Vector3(x, y, z), targetZ: -11 - Math.random() * 6,
-        hp: 45 + state.sector * 12, maxHp: 45 + state.sector * 12,
-        headOffY: 0.0, bodyOffY: 0.0, hitR: 0.95,
-        fireTimer: 1.5 + Math.random() * 1.2, swayPhase: Math.random() * 6, alive: true
+        type, group: d.group, rotors: d.rotors, mPlate: d.mPlate,
+        pos: new THREE.Vector3(x, y, z), targetZ: isKami ? 0 : (-11 - Math.random() * 6),
+        hp, maxHp: hp, headOffY: 0.0, bodyOffY: 0.0, hitR: 0.95,
+        fireTimer: 1.2 + Math.random() * 0.9, swayPhase: Math.random() * 6, alive: true
       });
     } else {
       const t = buildCyberTrooper(type);
       t.group.position.set(x, 0, z);
       entityGroup.add(t.group);
-      const hp = (type === 'heavy' ? 115 : 52) + state.sector * 16;
+      const baseHp = type === 'heavy' ? 165 : type === 'shield' ? 115 : type === 'sniper' ? 75 : 68;
+      const hp = Math.round(baseHp * hpScale);
+
+      let laser = null;
+      if (type === 'sniper') {
+        laser = new THREE.Line(
+          new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 0, 1)]),
+          new THREE.LineBasicMaterial({ color: 0xff1744, transparent: true, opacity: 0.85 })
+        );
+        laser.visible = false;
+        fxGroup.add(laser);
+      }
+
       state.enemies.push({
-        type, group: t.group, legL: t.legL, legR: t.legR, mPlate: t.mPlate,
-        pos: new THREE.Vector3(x, 0, z), targetZ: -9 - Math.random() * 7,
+        type, group: t.group, legL: t.legL, legR: t.legR, mPlate: t.mPlate, shieldMesh: t.shieldMesh, laser,
+        pos: new THREE.Vector3(x, 0, z), targetZ: type === 'sniper' ? (-16 - Math.random() * 5) : (-8.5 - Math.random() * 6.5),
         hp, maxHp: hp, headOffY: t.headPosY, bodyOffY: t.bodyPosY, hitR: 0.72 * t.scale,
-        fireTimer: 1.6 + Math.random() * 1.1, swayPhase: Math.random() * 6, alive: true
+        fireTimer: (type === 'sniper' ? 2.1 : 1.3) + Math.random() * 0.8,
+        swayPhase: Math.random() * 6, alive: true
       });
     }
 
-    // Occasionally spawn Explosive Fuel Pod beside enemies!
-    if (state.barrels.length < 2 && Math.random() < 0.48) {
+    if (state.barrels.length < 2 && Math.random() < 0.45) {
       const bx = Math.max(-6.5, Math.min(6.5, x + (Math.random() < 0.5 ? -2.2 : 2.2)));
       const bg = new THREE.Group();
       const cyl = new THREE.Mesh(
@@ -1771,18 +2026,19 @@
     }
   }
 
-  function spawnEnemyMissile(fromPos) {
+  function spawnEnemyMissile(fromPos, speedBoost = 1.0, offsetAngle = 0) {
     const mg = new THREE.Group();
-    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.52, 8), new THREE.MeshBasicMaterial({ color: 0xff1744 }));
+    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.56, 8), new THREE.MeshBasicMaterial({ color: 0xff1744 }));
     nose.rotation.x = Math.PI / 2;
-    const glow = new THREE.Mesh(new THREE.SphereGeometry(0.24, 8, 8), new THREE.MeshBasicMaterial({ color: 0xffd400, transparent: true, opacity: 0.75 }));
+    const glow = new THREE.Mesh(new THREE.SphereGeometry(0.26, 8, 8), new THREE.MeshBasicMaterial({ color: 0xffd400, transparent: true, opacity: 0.8 }));
     glow.position.z = -0.25;
     mg.add(nose, glow);
     mg.position.copy(fromPos);
     entityGroup.add(mg);
 
-    const dest = new THREE.Vector3((Math.random() - 0.5) * 1.2, 1.55, 0);
-    const vel = dest.sub(fromPos).normalize().multiplyScalar(11.5 + state.sector * 1.1);
+    const dest = new THREE.Vector3(offsetAngle * 2.2 + (Math.random() - 0.5) * 0.9, 1.55, 0);
+    const spd = (13.5 + state.sector * 1.8) * speedBoost;
+    const vel = dest.sub(fromPos).normalize().multiplyScalar(spd);
     mg.lookAt(fromPos.clone().add(vel));
     state.missiles.push({ group: mg, pos: fromPos.clone(), vel, alive: true });
   }
@@ -1790,45 +2046,45 @@
   function spawnPlayerHoming(origin) {
     const target = state.boss && state.boss.alive ? state.boss : state.enemies.find(e => e.alive);
     if (!target) return;
-    const m = new THREE.Mesh(new THREE.OctahedronGeometry(0.14, 0), new THREE.MeshBasicMaterial({ color: 0x00e5ff }));
+    const m = new THREE.Mesh(new THREE.OctahedronGeometry(0.15, 0), new THREE.MeshBasicMaterial({ color: 0x00e5ff }));
     m.position.copy(origin);
     fxGroup.add(m);
     state.homingShots.push({
-      mesh: m,
-      pos: origin.clone(),
-      vel: new THREE.Vector3((Math.random() - 0.5) * 8, 4 + Math.random() * 3, -10),
-      target,
-      life: 1.6
+      mesh: m, pos: origin.clone(),
+      vel: new THREE.Vector3((Math.random() - 0.5) * 9, 4.5 + Math.random() * 3, -12),
+      target, life: 1.6
     });
   }
 
   function enterBossBattle() {
     state.phase = 'boss';
-    // Clear stray trash softly
-    state.enemies.forEach(e => entityGroup.remove(e.group));
+    state.enemies.forEach(e => { entityGroup.remove(e.group); if (e.laser) fxGroup.remove(e.laser); });
     state.enemies = [];
     state.barrels.forEach(b => entityGroup.remove(b.group));
     state.barrels = [];
 
-    const b = buildTitanBoss();
-    b.group.position.set(0, 0, -45);
+    const b = buildTitanBoss(state.sector);
+    b.group.position.set(0, 0, -42);
     entityGroup.add(b.group);
-    const maxHp = 1100 + (state.sector - 1) * 420;
+    const maxHp = Math.round((1500 + (state.sector - 1) * 750) * (1 + state.overclockLv * 0.35));
     state.boss = {
       group: b.group, core: b.core, coreRing: b.coreRing, podL: b.podL, podR: b.podR, mRed: b.mRed,
+      chargeBeam: b.chargeBeam, name: b.name, isValk: b.isValk,
       pos: new THREE.Vector3(0, 0, -42), targetZ: -13.5,
       hp: maxHp, maxHp,
-      podLHp: 220, podRHp: 220, podLAlive: true, podRAlive: true,
-      attackTimer: 2.0, swayPhase: 0, alive: true
+      podLHp: 280 + state.sector * 80, podRHp: 280 + state.sector * 80, podLAlive: true, podRAlive: true,
+      attackTimer: 1.6, laserCharge: 0, laserActive: 0, droneTimer: 4.5,
+      swayPhase: 0, alive: true
     };
+    document.querySelector('#boss-bar .boss-head span').textContent = b.name;
     document.getElementById('wave-shell').classList.add('hidden');
     document.getElementById('boss-bar').classList.remove('hidden');
-    showCallout('WARNING // TITAN-IX', '両肩のミサイルポッド＆胸部コアを破壊せよ！', '#ff2255');
+    showCallout(`WARNING // ${b.name}`, '両肩ポッド破壊＆チャージレーザーをDODGEせよ！', '#ff2255');
     SFX.playExplosion(true);
   }
 
   // =========================================================
-  // 9. SHOOTING, WEAPON EVOLUTION, INTERCEPT & OVERDRIVE
+  // 9. SHOOTING, 10-TIER + INFINITE OVERCLOCK, INTERCEPT & MODS
   // =========================================================
   const raycaster = new THREE.Raycaster();
 
@@ -1839,17 +2095,14 @@
 
   function inspectAimTarget() {
     const ray = getAimRay();
-    // 1) Incoming Missile (Intercept!)
     for (const m of state.missiles) {
       if (!m.alive) continue;
       if (ray.distanceToPoint(m.pos) < 1.15) return { kind: 'missile', obj: m, pt: m.pos.clone() };
     }
-    // 2) Explosive Barrel
     for (const br of state.barrels) {
       if (!br.alive) continue;
       if (ray.distanceToPoint(br.pos) < 1.05) return { kind: 'barrel', obj: br, pt: br.pos.clone() };
     }
-    // 3) Boss Weakpoints (Left/Right Missile Pods + Chest Core + Head)
     if (state.boss && state.boss.alive) {
       const b = state.boss;
       if (b.podLAlive) {
@@ -1865,11 +2118,10 @@
       const bodyPt = b.pos.clone().add(new THREE.Vector3(0, 3.8, 0));
       if (ray.distanceToPoint(bodyPt) < 2.5) return { kind: 'bossBody', obj: b, pt: bodyPt };
     }
-    // 4) Enemies (Head vs Body)
     for (const e of state.enemies) {
       if (!e.alive) continue;
       const headPt = e.pos.clone().add(new THREE.Vector3(0, e.headOffY, 0));
-      if (ray.distanceToPoint(headPt) < (e.type === 'drone' ? 0.9 : 0.62)) {
+      if (ray.distanceToPoint(headPt) < (e.type === 'drone' || e.type === 'kamikaze' ? 0.95 : 0.64)) {
         return { kind: 'head', obj: e, pt: headPt };
       }
       const bodyPt = e.pos.clone().add(new THREE.Vector3(0, e.bodyOffY, 0));
@@ -1880,80 +2132,109 @@
     return { kind: 'none', obj: null, pt: null };
   }
 
-  function addEvoAndScore(scorePts, evoGain, odGain) {
-    const mul = 1 + Math.min(state.combo, 20) * 0.1;
-    state.score += Math.round(scorePts * mul);
-    if (!state.odActive) state.odGauge = Math.min(100, state.odGauge + odGain);
-
-    // Weapon evolution!
-    state.evoPts += evoGain;
+  function syncWeaponTierFromPoints(allowNotify = true) {
     let newLv = 1;
     for (const t of WEAPON_TIERS) {
       if (state.evoPts >= t.reqPts) newLv = t.lv;
     }
+    const maxTierReq = WEAPON_TIERS[WEAPON_TIERS.length - 1].reqPts;
+    const newOC = state.evoPts > maxTierReq ? Math.floor((state.evoPts - maxTierReq) / 900) : 0;
+
     if (newLv > state.weaponLv) {
       state.weaponLv = newLv;
       if (newLv > state.maxWeaponLv) state.maxWeaponLv = newLv;
       applyWeaponModelVisibility();
-      state.swapAnim = 1.0;
-      state.evolveFlash = 0.45;
-      SFX.playEvolve();
-      const wt = WEAPON_TIERS[newLv - 1];
-      showCallout(`EVOLVED // LV.${newLv}`, wt.name, '#ffd400');
+      if (allowNotify) {
+        state.swapAnim = 1.0;
+        state.evolveFlash = 0.45;
+        SFX.playEvolve();
+        const wt = WEAPON_TIERS[newLv - 1];
+        showCallout(`EVOLVED // LV.${newLv}`, wt.name, '#ffd400');
+      }
+    } else if (newLv < state.weaponLv) {
+      state.weaponLv = newLv;
+      applyWeaponModelVisibility();
     }
+
+    if (newOC > state.overclockLv) {
+      state.overclockLv = newOC;
+      state.evolveFlash = 0.4;
+      SFX.playEvolve();
+      showCallout(`OMEGA OVERCLOCK +${newOC}!!`, 'ALL FIREPOWER & EFFECTS AMPLIFIED!', '#ffd400');
+    } else {
+      state.overclockLv = newOC;
+    }
+  }
+
+  function addEvoAndScore(scorePts, evoGain, odGain) {
+    const mul = 1 + Math.min(state.combo, 25) * 0.1;
+    state.score += Math.round(scorePts * mul);
+    if (!state.odActive) state.odGauge = Math.min(100, state.odGauge + odGain);
+    state.evoPts += evoGain;
+    syncWeaponTierFromPoints(true);
   }
 
   function applyWeaponModelVisibility() {
     weaponModels.forEach((m, i) => { m.visible = (i === state.weaponLv - 1); });
-    gunRigLeft.visible = (state.weaponLv === 2);
+    const isDualPistol = (state.weaponLv === 2);
+    const isDualVulcan = (state.weaponLv === 7);
+    gunRigLeft.visible = isDualPistol || isDualVulcan;
+    if (leftAkimboModel) leftAkimboModel.visible = isDualPistol;
+    if (window.__leftVulcanModel) window.__leftVulcanModel.visible = isDualVulcan;
   }
 
   function detonateBarrel(br) {
     if (!br.alive) return;
     br.alive = false;
     entityGroup.remove(br.group);
-    spawnBigExplosion(br.pos, 7.5, true);
+    spawnBigExplosion(br.pos, 8.0, true);
 
     let chain = 0;
     state.enemies.forEach(e => {
       if (!e.alive) return;
-      if (e.pos.distanceTo(br.pos) < 8.0) {
-        damageEnemy(e, 999, false, true);
+      if (e.pos.distanceTo(br.pos) < 8.5) {
+        damageEnemy(e, 999, false, true, true);
         chain++;
       }
     });
-    // Destroy incoming missiles nearby
     state.missiles.forEach(m => {
-      if (m.alive && m.pos.distanceTo(br.pos) < 8.5) {
+      if (m.alive && m.pos.distanceTo(br.pos) < 9.0) {
         m.alive = false; entityGroup.remove(m.group);
       }
     });
     if (chain > 0) showCallout(`CHAIN BLAST ×${chain}!!`, 'EXPLOSIVE WIPEOUT', '#ff9100');
   }
 
-  function damageEnemy(e, dmg, isHead, fromBlast = false) {
+  function damageEnemy(e, dmg, isHead, fromBlast = false, ignoreShield = false) {
     if (!e.alive) return;
+    const pt = e.pos.clone().add(new THREE.Vector3(0, isHead ? e.headOffY : e.bodyOffY, 0));
+
+    // SHIELD PHALANX blocks non-piercing body hits! Must headshot, blast, or pierce!
+    if (e.type === 'shield' && !isHead && !ignoreShield && !fromBlast) {
+      SFX.playHit(false, 1);
+      spawnShatter(pt.clone().add(new THREE.Vector3(0, 0, 0.5)), 0x00e5ff, 6, 5);
+      addPopup3D(pt, 'SHIELD! AIM HEAD', '#00e5ff', false);
+      return;
+    }
+
     e.hp -= dmg;
     state.hitMarkerTimer = 0.12;
     state.hitMarkerCrit = isHead;
 
-    const pt = e.pos.clone().add(new THREE.Vector3(0, isHead ? e.headOffY : e.bodyOffY, 0));
     if (!fromBlast) {
       SFX.playHit(isHead, state.combo);
       addPopup3D(pt, isHead ? `${dmg}!!` : `${dmg}`, isHead ? '#ffd400' : '#ffffff', isHead);
     }
-    // Flash white
     if (e.mPlate) {
       e.mPlate.emissive.setHex(0xffffff);
       setTimeout(() => { if (e.mPlate) e.mPlate.emissive.setHex(0x660015); }, 55);
     }
 
-    // Thermite mod splash on headshot
     if (isHead && state.mods.includes('explosive') && !fromBlast) {
       spawnBigExplosion(pt, 4.5, false);
       state.enemies.forEach(other => {
-        if (other !== e && other.alive && other.pos.distanceTo(e.pos) < 5.0) {
-          damageEnemy(other, 45, false, true);
+        if (other !== e && other.alive && other.pos.distanceTo(e.pos) < 5.5) {
+          damageEnemy(other, 65, false, true, true);
         }
       });
     }
@@ -1961,18 +2242,47 @@
     if (e.hp <= 0) {
       e.alive = false;
       entityGroup.remove(e.group);
+      if (e.laser) fxGroup.remove(e.laser);
       state.kills++;
       state.sectorKills++;
       state.combo++;
-      state.comboTimer = 3.8;
+      state.comboTimer = 4.0;
       if (state.combo > state.maxCombo) state.maxCombo = state.combo;
 
-      const isBig = (e.type === 'heavy' || e.type === 'drone');
-      spawnBigExplosion(pt, 4.0, isBig);
-      addEvoAndScore(isHead ? 220 : 140, isBig ? 95 : 65, isHead ? 12 : 8);
+      const isBig = (e.type === 'heavy' || e.type === 'kamikaze' || e.type === 'shield');
+      spawnBigExplosion(pt, 4.5, isBig);
+
+      // Kamikaze drone chain-explodes nearby enemies!
+      if (e.type === 'kamikaze') {
+        state.enemies.forEach(other => {
+          if (other.alive && other.pos.distanceTo(e.pos) < 6.5) damageEnemy(other, 140, false, true, true);
+        });
+      }
+
+      // Synergy MOD triggers on kill!
+      if (state.mods.includes('vortex')) spawnGravityVortex(pt, 35);
+      if (state.mods.includes('orbital') && state.kills % 6 === 0) {
+        const nextT = state.enemies.find(x => x.alive);
+        spawnOrbitalLaser(nextT ? nextT.pos : pt, 220);
+      }
+      if (state.mods.includes('vampiric') && state.kills % 10 === 0 && state.hp < state.maxHp) {
+        state.hp++;
+        updateHpUI();
+        showCallout('VAMPIRIC REPAIR!!', 'ARMOR +1 RESTORED', '#00e676');
+      }
+
+      addEvoAndScore(isHead ? 240 : 150, isBig ? 105 : 75, isHead ? 13 : 9);
 
       if (isHead && !fromBlast && state.combo >= 3) {
-        showCallout(`HEADSHOT ×${state.combo}!!`, 'ARMOR SHATTERED', '#ffd400');
+        showCallout(`HEADSHOT ×${state.combo}!!`, 'CRITICAL SHATTER', '#ffd400');
+      }
+
+      // Mid-sector Elite MOD Supply Drop (keeps builds evolving continuously!)
+      const midTarget = Math.floor(state.bossKillTarget * 0.5);
+      if (state.phase === 'play' && !state.midModGiven && state.sectorKills >= midTarget) {
+        state.midModGiven = true;
+        openModSelect(false);
+        return;
       }
 
       if (state.phase === 'play' && state.sectorKills >= state.bossKillTarget) {
@@ -1998,8 +2308,8 @@
         b.podLAlive = false;
         b.podL.visible = false;
         spawnBigExplosion(pt, 7, true);
-        addEvoAndScore(600, 180, 25);
-        showCallout('LEFT POD DESTROYED!!', 'PARTS BREAK +600', '#ffd400');
+        addEvoAndScore(650, 220, 25);
+        showCallout('LEFT POD DESTROYED!!', 'PARTS BREAK +650', '#ffd400');
       }
     } else if (part === 'bossPodR' && b.podRAlive) {
       b.podRHp -= dmg;
@@ -2007,8 +2317,8 @@
         b.podRAlive = false;
         b.podR.visible = false;
         spawnBigExplosion(pt, 7, true);
-        addEvoAndScore(600, 180, 25);
-        showCallout('RIGHT POD DESTROYED!!', 'PARTS BREAK +600', '#ffd400');
+        addEvoAndScore(650, 220, 25);
+        showCallout('RIGHT POD DESTROYED!!', 'PARTS BREAK +650', '#ffd400');
       }
     }
 
@@ -2016,16 +2326,16 @@
       b.alive = false;
       entityGroup.remove(b.group);
       state.kills++;
-      addEvoAndScore(2500, 300, 35);
+      addEvoAndScore(2800, 420, 40);
       state.hitstop = 0.12;
       spawnBigExplosion(b.pos.clone().add(new THREE.Vector3(0, 4.2, 0)), 12, true);
       setTimeout(() => spawnBigExplosion(b.pos.clone().add(new THREE.Vector3(-2, 3, 1)), 9, true), 140);
       setTimeout(() => spawnBigExplosion(b.pos.clone().add(new THREE.Vector3(2, 5, 1)), 9, true), 280);
       document.getElementById('boss-bar').classList.add('hidden');
-      showCallout('TITAN-IX ANNIHILATED!!', 'SECTOR CLEARED!!', '#ffd400');
+      showCallout(`${b.name} DESTROYED!!`, 'NEXT SECTOR UNLOCKED!', '#ffd400');
 
       setTimeout(() => {
-        if (state.phase === 'boss') openModSelect();
+        if (state.phase === 'boss') openModSelect(true);
       }, 950);
     }
   }
@@ -2035,11 +2345,12 @@
     if (state.fireCooldown > 0) return;
 
     const wt = WEAPON_TIERS[state.weaponLv - 1];
-    const rateMul = (state.odActive ? 0.52 : 1.0) * (state.mods.includes('firerate') ? 0.78 : 1.0);
+    const rateMul = (state.odActive ? 0.52 : 1.0) * (state.mods.includes('firerate') ? 0.78 : 1.0) * Math.max(0.65, 1 - state.overclockLv * 0.05);
     state.fireCooldown = wt.fireRate * rateMul;
     state.shotCounter++;
 
-    const useLeft = (state.weaponLv === 2) && state.leftHandNext;
+    const isDual = (wt.special === 'dual');
+    const useLeft = isDual && state.leftHandNext;
     state.leftHandNext = !state.leftHandNext;
     if (useLeft) {
       state.recoilL = wt.recoil;
@@ -2050,57 +2361,79 @@
     }
 
     muzzleLight.color.setHex(wt.color);
-    muzzleLight.intensity = state.weaponLv >= 5 ? 5.0 : 3.4;
-    state.shakeAmt = Math.max(state.shakeAmt, wt.recoil * 0.4);
+    muzzleLight.intensity = state.weaponLv >= 5 ? 5.2 : 3.4;
+    state.shakeAmt = Math.max(state.shakeAmt, wt.recoil * 0.42);
     spawnCasing(useLeft);
-    SFX.playGun(state.weaponLv, state.odActive);
+    SFX.playGun(Math.min(6, state.weaponLv), state.odActive);
 
     const muzzlePos = new THREE.Vector3(useLeft ? -0.26 : 0.26, -0.18, -0.82).applyMatrix4(camera.matrixWorld);
     const lock = inspectAimTarget();
     const ray = getAimRay();
 
-    // Auto-homing support on LV.6 or Micro Pods MOD
-    if (wt.missiles > 0 || (state.mods.includes('homing') && state.shotCounter % 6 === 0)) {
-      spawnPlayerHoming(muzzlePos);
+    // Auto-homing support on high-tier weapons or Swarm Pods MOD
+    const extraMissiles = wt.missiles + (state.overclockLv > 0 ? 1 : 0);
+    if (extraMissiles > 0 || (state.mods.includes('homing') && state.shotCounter % 5 === 0)) {
+      const mCount = Math.max(1, extraMissiles);
+      for (let k = 0; k < mCount; k++) spawnPlayerHoming(muzzlePos);
     }
 
-    // Resolve pellets / beam
-    for (let p = 0; p < wt.pellets; p++) {
-      let endPt = ray.origin.clone().add(ray.direction.clone().multiplyScalar(55));
-      if (lock.kind !== 'none' && lock.pt) {
-        endPt = lock.pt.clone().add(new THREE.Vector3(
+    // Tracers / Lightning visuals
+    const defaultEnd = ray.origin.clone().add(ray.direction.clone().multiplyScalar(52));
+    const impactPt = (lock.kind !== 'none' && lock.pt) ? lock.pt.clone() : defaultEnd;
+
+    if (wt.special === 'chain') {
+      spawnLightningArc(muzzlePos, impactPt, 0xd500f9);
+    } else {
+      for (let p = 0; p < wt.pellets; p++) {
+        const endPt = impactPt.clone().add(new THREE.Vector3(
           (Math.random() - 0.5) * wt.spread * 16,
           (Math.random() - 0.5) * wt.spread * 16,
           0
         ));
+        spawnTracer(muzzlePos, endPt, state.odActive ? 0xffd400 : wt.color, wt.pierce ? 0.24 : 0.09);
       }
-      spawnTracer(muzzlePos, endPt, state.odActive ? 0xffd400 : wt.color, wt.pierce ? 0.26 : 0.09);
     }
 
-    // Apply damage cleanly once per trigger pull (scaled by pellets + OD)
-    const totalDmg = Math.round(wt.dmg * (wt.pellets > 1 ? wt.pellets * 0.55 : 1) * (state.odActive ? 1.55 : 1.0));
+    // Compute total damage (includes Overclock +N and Chrono Dodge ×2!)
+    const ocMul = 1 + state.overclockLv * 0.22;
+    const chronoMul = state.chronoBoostTimer > 0 ? 1.85 : 1.0;
+    const totalDmg = Math.round(wt.dmg * (wt.pellets > 1 ? wt.pellets * 0.56 : 1) * (state.odActive ? 1.55 : 1.0) * ocMul * chronoMul);
+    const ignoreShield = wt.pierce || wt.special === 'chain' || wt.special === 'vortex' || wt.special === 'orbital';
+
     if (lock.kind === 'missile') {
       lock.obj.alive = false;
       entityGroup.remove(lock.obj.group);
       spawnBigExplosion(lock.pt, 4.0, false);
-      state.combo++; state.comboTimer = 3.8;
-      addEvoAndScore(250, 80, 18);
-      showCallout('MISSILE INTERCEPT!!', 'PERFECT COUNTER +250', '#00e5ff');
+      state.combo++; state.comboTimer = 4.0;
+      addEvoAndScore(260, 85, 18);
+      showCallout('MISSILE INTERCEPT!!', 'PERFECT COUNTER +260', '#00e5ff');
     } else if (lock.kind === 'barrel') {
       detonateBarrel(lock.obj);
     } else if (lock.kind === 'head') {
-      damageEnemy(lock.obj, Math.round(totalDmg * 1.85), true);
+      damageEnemy(lock.obj, Math.round(totalDmg * 1.85), true, false, true);
     } else if (lock.kind === 'body') {
-      damageEnemy(lock.obj, totalDmg, false);
+      damageEnemy(lock.obj, totalDmg, false, false, ignoreShield);
     } else if (lock.kind.startsWith('boss')) {
       damageBoss(lock.kind, totalDmg, lock.pt);
     }
 
-    // LV.6 Railgun piercing bonus hits any other enemy close to beam!
+    // Special Weapon Tier & MOD Effects!
+    if (lock.kind !== 'none' && lock.pt) {
+      if (wt.special === 'chain' || state.mods.includes('chain')) {
+        triggerChainLightning(lock.pt, lock.obj, totalDmg, wt.special === 'chain' ? 4 + state.overclockLv : 2);
+      }
+      if (wt.special === 'vortex' && state.shotCounter % 2 === 0) {
+        spawnGravityVortex(lock.pt, Math.round(totalDmg * 0.45));
+      }
+      if (wt.special === 'orbital' && state.shotCounter % 3 === 0) {
+        spawnOrbitalLaser(lock.pt, Math.round(totalDmg * 1.15));
+      }
+    }
+
     if (wt.pierce) {
       state.enemies.forEach(e => {
         if (e.alive && e !== lock.obj && ray.distanceToPoint(e.pos.clone().add(new THREE.Vector3(0, e.bodyOffY, 0))) < 1.35) {
-          damageEnemy(e, totalDmg, false);
+          damageEnemy(e, totalDmg, false, false, true);
         }
       });
     }
@@ -2109,20 +2442,29 @@
   function triggerDodge() {
     if (state.phase !== 'play' && state.phase !== 'boss') return;
     if (state.dodgeCooldown > 0) return;
-    state.dodgeTimer = 0.34;
-    state.dodgeCooldown = 0.65;
-    state.invulnTimer = state.mods.includes('armor') ? 0.62 : 0.45;
+    state.dodgeTimer = 0.36;
+    state.dodgeCooldown = 0.62;
+    state.invulnTimer = 0.52;
     state.dodgeDir *= -1;
     SFX.playDodge();
 
-    // Check if dodging an incoming missile -> JUST DODGE slow-mo counter!
-    const closeM = state.missiles.find(m => m.alive && m.pos.z > -10);
-    if (closeM) {
-      closeM.alive = false;
-      entityGroup.remove(closeM.group);
-      state.slowMoTimer = 0.55;
-      addEvoAndScore(300, 90, 22);
-      showCallout('JUST DODGE!!', 'COUNTER OVERCLOCK +300', '#00e5ff');
+    if (state.mods.includes('chrono')) {
+      state.slowMoTimer = 1.6;
+      state.chronoBoostTimer = 2.4;
+      showCallout('CHRONO DODGE!!', 'BULLET TIME × DMG 2X!', '#00e5ff');
+    }
+
+    // Check if dodging an incoming missile OR Sniper Lock OR Boss Charge Beam!
+    const closeM = state.missiles.find(m => m.alive && m.pos.z > -11);
+    const bossBeamThreat = (state.boss && state.boss.alive && state.boss.laserCharge > 0.65);
+    const sniperThreat = state.enemies.find(e => e.alive && e.type === 'sniper' && e.fireTimer < 0.7);
+    if (closeM || bossBeamThreat || sniperThreat) {
+      if (closeM) { closeM.alive = false; entityGroup.remove(closeM.group); }
+      if (sniperThreat) sniperThreat.fireTimer = 2.6;
+      state.slowMoTimer = Math.max(state.slowMoTimer, 0.7);
+      state.chronoBoostTimer = Math.max(state.chronoBoostTimer, 1.4);
+      addEvoAndScore(350, 110, 24);
+      showCallout('JUST DODGE!!', 'COUNTER OVERCLOCK +350', '#00e5ff');
     }
   }
 
@@ -2130,21 +2472,29 @@
     if (state.phase !== 'play' && state.phase !== 'boss') return;
     if (state.odGauge < 100 || state.odActive) return;
     state.odActive = true;
-    state.odTimer = 6.0;
+    state.odTimer = 6.5;
     state.odGauge = 0;
     state.evolveFlash = 0.5;
     SFX.playEvolve();
-    showCallout('OVERDRIVE!!', 'FIREPOWER ×1.5 & RAPID FIRE!', '#ffd400');
+    showCallout('OVERDRIVE!!', 'FIREPOWER ×1.5 & HYPER RAPID!', '#ffd400');
   }
 
   function takePlayerHit() {
     if (state.invulnTimer > 0) return;
     state.hp--;
     state.combo = 0;
-    state.invulnTimer = 0.9;
-    state.damageFlash = 0.38;
-    state.shakeAmt = 0.55;
+    state.invulnTimer = 0.85;
+    state.damageFlash = 0.42;
+    state.shakeAmt = 0.6;
     SFX.playDamage();
+
+    // Real stakes: getting hit knocks back some Weapon Evolution gauge!
+    if (state.weaponLv > 1) {
+      const prevReq = WEAPON_TIERS[Math.max(0, state.weaponLv - 2)].reqPts;
+      state.evoPts = Math.max(prevReq + 30, state.evoPts - 240);
+      syncWeaponTierFromPoints(false);
+    }
+
     updateHpUI();
     if (state.hp <= 0) gameOver();
   }
@@ -2161,17 +2511,20 @@
     state.kills = 0;
     state.sectorKills = 0;
     state.bossKillTarget = 18;
+    state.midModGiven = false;
     state.combo = 0;
     state.maxCombo = 0;
     state.hp = state.maxHp;
-    state.evoPts = bossRush ? 1120 : 0; // Boss Rush starts with LV.5 VULCAN!
-    state.weaponLv = bossRush ? 5 : 1;
+    state.evoPts = bossRush ? 2150 : 0; // Boss Rush starts with LV.7 DUAL PLASMA VULCAN!
+    state.weaponLv = bossRush ? 7 : 1;
+    state.overclockLv = 0;
     state.maxWeaponLv = state.weaponLv;
     state.odGauge = bossRush ? 100 : 20;
     state.odActive = false;
+    state.chronoBoostTimer = 0;
     state.mods = [];
     state.firing = false;
-    state.spawnTimer = 0.4;
+    state.spawnTimer = 0.35;
 
     applyWeaponModelVisibility();
     updateHpUI();
@@ -2188,36 +2541,53 @@
     if (bossRush) {
       enterBossBattle();
     } else {
-      showCallout('SECTOR 01', 'GUN DOWN EVERYTHING!', '#00e5ff');
+      showCallout('SECTOR 01', 'EVOLVE YOUR GUN TO LV.10!', '#00e5ff');
       spawnWaveEnemy();
       spawnWaveEnemy();
     }
   }
 
-  function openModSelect() {
+  function openModSelect(advanceSector = true) {
     state.phase = 'mod';
     state.firing = false;
+    document.getElementById('mod-kicker').textContent = advanceSector
+      ? 'BOSS ANNIHILATED // SECTOR UPGRADE'
+      : 'ELITE SUPPLY DROP // MID-SECTOR UPGRADE';
+
     const list = document.getElementById('mod-list');
     list.innerHTML = '';
-    const shuffled = MOD_POOL.slice().sort(() => Math.random() - 0.5).slice(0, 3);
-    shuffled.forEach(m => {
+    // Prefer unowned mods first so builds keep getting wilder!
+    const unowned = MOD_POOL.filter(m => !state.mods.includes(m.id));
+    const pool = unowned.length >= 3 ? unowned : MOD_POOL;
+    const picks = pool.slice().sort(() => Math.random() - 0.5).slice(0, 3);
+
+    picks.forEach(m => {
       const btn = document.createElement('button');
       btn.className = 'mod-card';
       btn.innerHTML = `<div class="mod-card-title">${m.title}</div><div class="mod-card-desc">${m.desc}</div>`;
       btn.addEventListener('click', () => {
-        if (m.id === 'armor') {
+        if (m.id === 'vampiric') {
           state.hp = state.maxHp;
           updateHpUI();
         }
         if (!state.mods.includes(m.id)) state.mods.push(m.id);
         renderModsUI();
-        state.sector++;
-        state.sectorKills = 0;
-        state.bossKillTarget = 16 + state.sector * 4;
-        state.phase = 'play';
         document.getElementById('screen-mod').classList.add('hidden');
-        document.getElementById('wave-shell').classList.remove('hidden');
-        showCallout(`SECTOR 0${state.sector}`, 'ENEMY THREAT ESCALATED!', '#00e5ff');
+
+        if (advanceSector) {
+          state.sector++;
+          state.sectorKills = 0;
+          state.midModGiven = false;
+          state.bossKillTarget = 18 + state.sector * 4;
+          state.hp = Math.min(state.maxHp, state.hp + 2);
+          updateHpUI();
+          state.phase = 'play';
+          document.getElementById('wave-shell').classList.remove('hidden');
+          showCallout(`SECTOR 0${state.sector}`, 'ENEMIES EVOLVED — WATCH FOR SNIPERS!', '#ff2255');
+        } else {
+          state.phase = 'play';
+          showCallout('MODULE EQUIPPED!!', m.title, '#ffd400');
+        }
       });
       list.appendChild(btn);
     });
@@ -2235,7 +2605,7 @@
 
     document.getElementById('over-best').textContent = isNew ? '🔥 NEW RECORD!!' : `BEST: ${saveData.bestScore.toLocaleString()}`;
     document.getElementById('res-score').textContent = state.score.toLocaleString();
-    document.getElementById('res-wp').textContent = `LV.${state.maxWeaponLv}`;
+    document.getElementById('res-wp').textContent = state.overclockLv > 0 ? `LV.10 +${state.overclockLv}` : `LV.${state.maxWeaponLv}`;
     document.getElementById('res-kills').textContent = String(state.kills);
     document.getElementById('res-rank').textContent = computeStyleRank();
 
@@ -2460,6 +2830,13 @@
       fxCtx.fillStyle = `rgba(255,212,0,${state.evolveFlash * 0.55})`;
       fxCtx.fillRect(0, 0, w, h);
     }
+    if (state.chronoBoostTimer > 0) {
+      const gr = fxCtx.createRadialGradient(w/2, h/2, Math.min(w,h)*0.32, w/2, h/2, Math.max(w,h)*0.72);
+      gr.addColorStop(0, 'rgba(0,229,255,0)');
+      gr.addColorStop(1, 'rgba(0,229,255,0.22)');
+      fxCtx.fillStyle = gr;
+      fxCtx.fillRect(0, 0, w, h);
+    }
 
     // 3) Tactical Reticle (Tracks Aim Position!)
     if (state.phase === 'play' || state.phase === 'boss') {
@@ -2476,6 +2853,10 @@
         col = '#00e5ff'; rad = 24; tag = 'INTERCEPT!';
       } else if (lock.kind === 'barrel') {
         col = '#ff9100'; rad = 22; tag = 'BLAST CORE';
+      } else if (lock.kind === 'body' && lock.obj && lock.obj.type === 'shield') {
+        col = '#00e5ff'; rad = 22; tag = 'SHIELD // AIM HEAD';
+      } else if (lock.kind === 'body' && lock.obj && lock.obj.type === 'kamikaze') {
+        col = '#ff6d00'; rad = 20; tag = 'RUSHER!';
       } else if (lock.kind === 'body' || lock.kind === 'bossBody') {
         col = '#ffd400'; rad = 18;
       }
@@ -2625,6 +3006,7 @@
     if (state.fireCooldown > 0) state.fireCooldown -= rawDt;
     if (state.dodgeCooldown > 0) state.dodgeCooldown -= rawDt;
     if (state.invulnTimer > 0) state.invulnTimer -= rawDt;
+    if (state.chronoBoostTimer > 0) state.chronoBoostTimer = Math.max(0, state.chronoBoostTimer - rawDt);
     if (state.damageFlash > 0) state.damageFlash = Math.max(0, state.damageFlash - rawDt);
     if (state.evolveFlash > 0) state.evolveFlash = Math.max(0, state.evolveFlash - rawDt);
     if (state.hitMarkerTimer > 0) state.hitMarkerTimer -= rawDt;
@@ -2646,8 +3028,8 @@
     let dodgeOffX = 0, dodgeRoll = 0;
     if (state.dodgeTimer > 0) {
       state.dodgeTimer -= rawDt;
-      const prog = Math.sin((state.dodgeTimer / 0.34) * Math.PI);
-      dodgeOffX = state.dodgeDir * prog * 2.4;
+      const prog = Math.sin((state.dodgeTimer / 0.36) * Math.PI);
+      dodgeOffX = state.dodgeDir * prog * 2.5;
       dodgeRoll = -state.dodgeDir * prog * 0.22;
     }
     state.shakeAmt = Math.max(0, state.shakeAmt - rawDt * 2.4);
@@ -2669,16 +3051,28 @@
     gunRig.position.set(gx + state.aimX * 0.06, gy - swapDrop + state.recoilR * 0.1, gz + state.recoilR * 0.36);
     gunRig.rotation.set(state.aimY * 0.24 + state.recoilR * 1.2 + state.swapAnim * 2.2, -state.aimX * 0.35, -dodgeRoll * 0.4);
 
-    if (state.weaponLv === 2) {
+    if (state.weaponLv === 2 || state.weaponLv === 7) {
       gunRigLeft.position.set(-gx + state.aimX * 0.06, gy - swapDrop + state.recoilL * 0.1, gz + state.recoilL * 0.36);
       gunRigLeft.rotation.set(state.aimY * 0.24 + state.recoilL * 1.2, -state.aimX * 0.35, -dodgeRoll * 0.4);
     }
 
-    // Minigun barrel spin!
-    if (vulcanBarrelGroup) {
-      state.vulcanSpin += ((state.firing && state.weaponLv === 5) ? 28 : 2 - state.vulcanSpin) * Math.min(1, rawDt * 8);
-      vulcanBarrelGroup.rotation.z += state.vulcanSpin * rawDt;
+    // Animated high-tier weapon mechanics (Vulcan / Dual Plasma / Tesla / Singularity / Omega)
+    const spinTarget = (state.firing && (state.weaponLv === 5 || state.weaponLv === 7)) ? 30 : 2.5;
+    state.vulcanSpin += (spinTarget - state.vulcanSpin) * Math.min(1, rawDt * 8);
+    if (vulcanBarrelGroup) vulcanBarrelGroup.rotation.z += state.vulcanSpin * rawDt;
+    if (window.__pvBarrels) window.__pvBarrels.forEach(b => { b.rotation.z += state.vulcanSpin * rawDt; });
+    if (window.__teslaOrb) {
+      window.__teslaOrb.rotation.y += rawDt * (state.firing ? 14 : 4);
+      window.__teslaOrb.rotation.x += rawDt * 3;
     }
+    if (window.__gravHalo) {
+      window.__gravHalo.rotation.z += rawDt * (state.firing ? 16 : 5);
+      window.__gravHalo.rotation.x += rawDt * 2.4;
+    }
+    if (window.__omegaHalo) {
+      window.__omegaHalo.rotation.z -= rawDt * (state.firing ? 18 : 6);
+    }
+
     muzzleLight.intensity *= Math.pow(0.0001, rawDt);
     rightMuzzleFlash.material.opacity *= Math.pow(0.0001, rawDt);
     leftMuzzleFlash.material.opacity *= Math.pow(0.0001, rawDt);
@@ -2687,18 +3081,44 @@
     if (state.phase === 'play') {
       state.spawnTimer -= dt;
       if (state.spawnTimer <= 0) {
-        state.spawnTimer = Math.max(0.55, 1.35 - state.sector * 0.12);
+        state.spawnTimer = Math.max(0.45, 1.22 - state.sector * 0.12);
         spawnWaveEnemy();
       }
     }
 
-    // Update Enemies
+    let urgentDodge = false;
+
+    // Update Tactical Enemies
     for (let i = state.enemies.length - 1; i >= 0; i--) {
       const e = state.enemies[i];
-      if (!e.alive) { state.enemies.splice(i, 1); continue; }
-      e.pos.z += (e.targetZ - e.pos.z) * Math.min(1, dt * 2.2);
-      e.swayPhase += dt * (e.type === 'drone' ? 2.4 : 1.5);
-      e.pos.x += Math.sin(e.swayPhase) * dt * (e.type === 'drone' ? 2.4 : 1.4);
+      if (!e.alive) {
+        if (e.laser) fxGroup.remove(e.laser);
+        state.enemies.splice(i, 1);
+        continue;
+      }
+
+      if (e.type === 'kamikaze') {
+        // High-speed suicide rusher charging straight at the player!
+        e.pos.z += (10.5 + state.sector * 1.45) * dt;
+        e.pos.x += (camera.position.x - e.pos.x) * Math.min(1, dt * 1.9);
+        e.pos.y += (1.85 - e.pos.y) * Math.min(1, dt * 1.6);
+        e.group.position.copy(e.pos);
+        e.group.rotation.z = Math.sin(now * 0.025 + i) * 0.25;
+        if (e.rotors) e.rotors.forEach(r => r.rotation.y += rawDt * 32);
+        if (e.pos.z > -9.5) urgentDodge = true;
+        if (e.pos.z >= -1.2) {
+          e.alive = false;
+          entityGroup.remove(e.group);
+          spawnBigExplosion(e.pos, 5.8, false);
+          state.enemies.splice(i, 1);
+          takePlayerHit();
+        }
+        continue;
+      }
+
+      e.pos.z += (e.targetZ - e.pos.z) * Math.min(1, dt * (e.type === 'shield' ? 2.6 : 2.2));
+      e.swayPhase += dt * (e.type === 'drone' ? 2.6 : e.type === 'sniper' ? 0.95 : 1.55);
+      e.pos.x += Math.sin(e.swayPhase) * dt * (e.type === 'drone' ? 2.6 : e.type === 'sniper' ? 0.85 : 1.45);
       e.pos.x = Math.max(-7.2, Math.min(7.2, e.pos.x));
       e.group.position.copy(e.pos);
 
@@ -2709,9 +3129,41 @@
       if (e.rotors) e.rotors.forEach(r => r.rotation.y += rawDt * 24);
 
       e.fireTimer -= dt;
-      if (e.fireTimer <= 0 && e.pos.z > -22) {
-        e.fireTimer = Math.max(1.5, 2.7 - state.sector * 0.18) + Math.random() * 0.9;
-        spawnEnemyMissile(e.pos.clone().add(new THREE.Vector3(0, e.bodyOffY + 0.3, 0.5)));
+
+      if (e.type === 'sniper') {
+        // Sniper locks on with visible red laser sight before instant hitscan snipe!
+        if (e.laser) {
+          const locking = (e.fireTimer < 1.25 && e.pos.z > -28);
+          e.laser.visible = locking;
+          if (locking) {
+            const pArr = e.laser.geometry.attributes.position.array;
+            pArr[0] = e.pos.x + 0.34; pArr[1] = e.pos.y + 1.52; pArr[2] = e.pos.z + 0.35;
+            pArr[3] = camera.position.x; pArr[4] = camera.position.y - 0.3; pArr[5] = camera.position.z - 0.5;
+            e.laser.geometry.attributes.position.needsUpdate = true;
+            e.laser.material.opacity = e.fireTimer < 0.45 ? (Math.floor(now / 60) % 2 ? 1.0 : 0.25) : 0.72;
+            if (e.fireTimer < 0.65) urgentDodge = true;
+          }
+        }
+        if (e.fireTimer <= 0 && e.pos.z > -28) {
+          if (e.laser) e.laser.visible = false;
+          e.fireTimer = Math.max(2.1, 3.1 - state.sector * 0.18) + Math.random() * 0.6;
+          const muzzle = new THREE.Vector3(e.pos.x + 0.34, e.pos.y + 1.52, e.pos.z + 0.35);
+          spawnTracer(muzzle, camera.position.clone().add(new THREE.Vector3(0, -0.2, -0.4)), 0xff1744, 0.32);
+          SFX.playGun(6, false);
+          takePlayerHit();
+        }
+      } else if (e.fireTimer <= 0 && e.pos.z > -24) {
+        const origin = e.pos.clone().add(new THREE.Vector3(0, e.bodyOffY + 0.3, 0.5));
+        if (e.type === 'heavy') {
+          e.fireTimer = Math.max(1.9, 2.9 - state.sector * 0.16) + Math.random() * 0.6;
+          [-0.85, 0, 0.85].forEach(ang => spawnEnemyMissile(origin, 0.95, ang));
+        } else if (e.type === 'shield') {
+          e.fireTimer = Math.max(1.35, 2.2 - state.sector * 0.15) + Math.random() * 0.6;
+          spawnEnemyMissile(origin, 1.15, 0);
+        } else {
+          e.fireTimer = Math.max(1.15, 2.35 - state.sector * 0.18) + Math.random() * 0.75;
+          spawnEnemyMissile(origin, 1.0 + state.sector * 0.08, 0);
+        }
       }
     }
 
@@ -2723,30 +3175,141 @@
       b.group.position.set(b.pos.x, 0, b.pos.z);
     }
 
-    // Update Boss
+    // Update Boss (Multi-Pattern: Pod Salvos + Charge Laser Telegraph + Kamikaze Summons!)
     if (state.boss && state.boss.alive) {
       const b = state.boss;
       b.pos.z += (b.targetZ - b.pos.z) * Math.min(1, dt * 1.8);
-      b.swayPhase += dt * 0.9;
-      b.pos.x = Math.sin(b.swayPhase) * 3.8;
+      b.swayPhase += dt * (b.isValk ? 1.55 : 1.05);
+      b.pos.x = Math.sin(b.swayPhase) * (b.isValk ? 5.2 : 4.0);
+      b.pos.y = b.isValk ? 0.55 + Math.sin(b.swayPhase * 2.1) * 0.6 : 0;
       b.group.position.copy(b.pos);
-      b.coreRing.rotation.z += rawDt * 2.5;
-      b.core.rotation.y += rawDt * 3.0;
+      b.coreRing.rotation.z += rawDt * (b.laserCharge > 0 ? 11.0 : 2.8);
+      b.core.rotation.y += rawDt * (b.laserCharge > 0 ? 12.0 : 3.2);
 
+      // 1) Pod Missile Salvo
       b.attackTimer -= dt;
-      if (b.attackTimer <= 0) {
-        b.attackTimer = (b.podLAlive || b.podRAlive) ? 1.85 : 2.3;
-        if (b.podLAlive) spawnEnemyMissile(b.pos.clone().add(new THREE.Vector3(-2.45, 5.4, 1.0)));
-        if (b.podRAlive) spawnEnemyMissile(b.pos.clone().add(new THREE.Vector3(2.45, 5.4, 1.0)));
-        if (!b.podLAlive && !b.podRAlive) spawnEnemyMissile(b.pos.clone().add(new THREE.Vector3(0, 4.35, 1.4)));
+      if (b.attackTimer <= 0 && b.pos.z > -20) {
+        const rate = Math.max(1.05, ((b.podLAlive || b.podRAlive) ? 1.7 : 2.1) - state.sector * 0.12);
+        b.attackTimer = rate;
+        if (b.podLAlive) {
+          spawnEnemyMissile(b.pos.clone().add(new THREE.Vector3(-2.45, 5.4, 1.0)), 1.05, -0.35);
+          if (state.sector >= 2) spawnEnemyMissile(b.pos.clone().add(new THREE.Vector3(-2.45, 5.4, 1.0)), 1.0, 0.45);
+        }
+        if (b.podRAlive) {
+          spawnEnemyMissile(b.pos.clone().add(new THREE.Vector3(2.45, 5.4, 1.0)), 1.05, 0.35);
+        }
+        if (!b.podLAlive && !b.podRAlive) {
+          [-0.6, 0, 0.6].forEach(ang => spawnEnemyMissile(b.pos.clone().add(new THREE.Vector3(0, 4.35, 1.4)), 1.15, ang));
+        }
       }
+
+      // 2) Boss Charge Laser (forces timely DODGE!)
+      if (b.pos.z > -18 && b.chargeBeam) {
+        if (b.laserActive > 0) {
+          b.laserActive -= dt;
+          b.chargeBeam.visible = true;
+          b.chargeBeam.scale.set(5.8, 1, 5.8);
+          b.chargeBeam.material.color.setHex(Math.floor(now / 45) % 2 ? 0xffffff : 0xff1744);
+          b.chargeBeam.material.opacity = 0.92;
+          if (b.laserActive <= 0) {
+            b.chargeBeam.visible = false;
+            b.laserCharge = -3.8;
+            b.laserNotified = false;
+          }
+        } else if (b.laserCharge < 0) {
+          b.laserCharge += dt;
+          b.chargeBeam.visible = false;
+        } else {
+          b.laserCharge += dt * (0.42 + state.sector * 0.06);
+          b.chargeBeam.visible = true;
+          const thin = 0.35 + b.laserCharge * 1.65;
+          b.chargeBeam.scale.set(thin, 1, thin);
+          b.chargeBeam.material.color.setHex(0xff1744);
+          b.chargeBeam.material.opacity = 0.25 + b.laserCharge * 0.65;
+          if (b.laserCharge > 0.25 && !b.laserNotified) {
+            b.laserNotified = true;
+            showCallout('BOSS LASER CHARGING!!', 'DODGE TIMING READY!', '#ff2255');
+          }
+          if (b.laserCharge > 0.55) urgentDodge = true;
+          if (b.laserCharge >= 1.0) {
+            b.laserActive = 0.52;
+            b.laserCharge = 0;
+            SFX.playExplosion(true);
+            state.shakeAmt = 0.85;
+            takePlayerHit();
+          }
+        }
+      }
+
+      // 3) Boss Kamikaze Escort Summon
+      b.droneTimer -= dt;
+      if (b.droneTimer <= 0 && b.pos.z > -18 && state.enemies.length < 3) {
+        b.droneTimer = Math.max(3.2, 5.2 - state.sector * 0.45);
+        const count = (b.isValk || state.sector >= 2) ? 2 : 1;
+        for (let k = 0; k < count; k++) {
+          const sxPos = b.pos.x + (k === 0 ? -3.4 : 3.4);
+          const d = buildAssaultDrone(true);
+          d.group.position.set(sxPos, 3.4, b.pos.z + 1.5);
+          entityGroup.add(d.group);
+          const dHp = Math.round(45 * (1 + (state.sector - 1) * 0.35));
+          state.enemies.push({
+            type: 'kamikaze', group: d.group, rotors: d.rotors, mPlate: d.mPlate,
+            pos: new THREE.Vector3(sxPos, 3.4, b.pos.z + 1.5), targetZ: 0,
+            hp: dHp, maxHp: dHp, headOffY: 0, bodyOffY: 0, hitR: 0.95,
+            fireTimer: 99, swayPhase: Math.random() * 6, alive: true
+          });
+        }
+      }
+
       const pct = Math.max(0, Math.round((b.hp / b.maxHp) * 100));
       document.getElementById('boss-hp-fill').style.width = `${pct}%`;
       document.getElementById('boss-hp-txt').textContent = `HP ${pct}%`;
     }
 
+    // Update Gravity Vortices (LV.9 Nova Singularity & Gravity Well MOD!)
+    for (let i = state.vortices.length - 1; i >= 0; i--) {
+      const v = state.vortices[i];
+      v.life -= dt;
+      v.tickCd -= dt;
+      v.halo.rotation.z += rawDt * 9.5;
+      v.halo2.rotation.y += rawDt * 12.0;
+
+      // Pull nearby enemies & swallow nearby missiles!
+      state.enemies.forEach(e => {
+        if (!e.alive) return;
+        const d = e.pos.distanceTo(v.pos);
+        if (d < 9.0 && d > 0.4) {
+          e.pos.x += (v.pos.x - e.pos.x) * Math.min(1, dt * 4.5);
+          e.pos.z += (v.pos.z - e.pos.z) * Math.min(1, dt * 2.4);
+        }
+      });
+      state.missiles.forEach(m => {
+        if (m.alive && m.pos.distanceTo(v.pos) < 3.6) {
+          m.alive = false;
+          entityGroup.remove(m.group);
+        }
+      });
+
+      if (v.tickCd <= 0) {
+        v.tickCd = 0.24;
+        state.enemies.forEach(e => {
+          if (e.alive && e.pos.distanceTo(v.pos) < 6.4) {
+            damageEnemy(e, v.dmg, false, true, true);
+          }
+        });
+        if (state.boss && state.boss.alive && state.boss.pos.distanceTo(v.pos) < 7.8) {
+          damageBoss('bossCore', Math.round(v.dmg * 0.75), v.pos);
+        }
+      }
+
+      if (v.life <= 0) {
+        fxGroup.remove(v.group);
+        spawnBigExplosion(v.pos, 4.2, false);
+        state.vortices.splice(i, 1);
+      }
+    }
+
     // Update Incoming Enemy Missiles
-    let urgentDodge = false;
     for (let i = state.missiles.length - 1; i >= 0; i--) {
       const m = state.missiles[i];
       if (!m.alive) { state.missiles.splice(i, 1); continue; }
@@ -2775,7 +3338,7 @@
         h.vel.lerp(desired, Math.min(1, rawDt * 8));
         if (h.pos.distanceTo(h.target === state.boss ? h.target.pos.clone().add(new THREE.Vector3(0, 4.35, 1.0)) : h.target.pos.clone().add(new THREE.Vector3(0, h.target.bodyOffY, 0))) < 1.4) {
           if (h.target === state.boss) damageBoss('bossCore', 65, h.pos);
-          else damageEnemy(h.target, 75, false);
+          else damageEnemy(h.target, 75, false, false, true);
           spawnBigExplosion(h.pos, 3.2, false);
           fxGroup.remove(h.mesh);
           state.homingShots.splice(i, 1);
@@ -2821,25 +3384,34 @@
       if (tr.life <= 0) { fxGroup.remove(tr.line); state.tracers.splice(i, 1); }
     }
 
-    // Update HUD Numbers & Weapon Evolution Bar
+    // Update HUD Numbers & 10-Tier + Endless Overclock Weapon Bar
     document.getElementById('hud-score').textContent = state.score.toLocaleString();
     document.getElementById('hud-kills').textContent = `${state.kills} KILLS`;
     document.getElementById('hud-combo').textContent = `CHAIN ×${Math.max(1, state.combo)}`;
     document.getElementById('hud-rank').textContent = `RANK ${computeStyleRank()}`;
-    document.getElementById('hud-sector').textContent = `SECTOR 0${state.sector} // NEON HIGHWAY`;
+    const zoneName = state.sector % 3 === 2 ? 'VALKYRIE ZONE' : state.sector % 3 === 0 ? 'OVERLORD CORE' : 'NEON HIGHWAY';
+    document.getElementById('hud-sector').textContent = `SECTOR 0${state.sector} // ${zoneName}`;
     document.getElementById('hud-boss-eta').textContent = `BOSS ${Math.max(0, state.bossKillTarget - state.sectorKills)} KILLS`;
     document.getElementById('wave-fill').style.width = `${Math.min(100, (state.sectorKills / state.bossKillTarget) * 100)}%`;
 
     const curW = WEAPON_TIERS[state.weaponLv - 1];
     const nextW = WEAPON_TIERS[state.weaponLv];
-    document.getElementById('wp-lv').textContent = `LV.${curW.lv} // ${curW.tag}`;
-    document.getElementById('wp-name').textContent = curW.name;
-    document.getElementById('wp-next').textContent = nextW ? `NEXT: ${nextW.name}` : 'MAX OVERCLOCK!!';
-    const evoPct = nextW ? ((state.evoPts - curW.reqPts) / (nextW.reqPts - curW.reqPts)) * 100 : 100;
-    document.getElementById('wp-evo-fill').style.width = `${Math.max(0, Math.min(100, evoPct))}%`;
+    if (nextW) {
+      document.getElementById('wp-lv').textContent = `LV.${curW.lv} // ${curW.tag}`;
+      document.getElementById('wp-name').textContent = curW.name;
+      document.getElementById('wp-next').textContent = `NEXT: ${nextW.name}`;
+      const evoPct = ((state.evoPts - curW.reqPts) / (nextW.reqPts - curW.reqPts)) * 100;
+      document.getElementById('wp-evo-fill').style.width = `${Math.max(0, Math.min(100, evoPct))}%`;
+    } else {
+      document.getElementById('wp-lv').textContent = state.overclockLv > 0 ? `LV.10 +${state.overclockLv} // OMEGA` : `LV.10 // ${curW.tag}`;
+      document.getElementById('wp-name').textContent = curW.name;
+      document.getElementById('wp-next').textContent = `NEXT: OVERCLOCK +${state.overclockLv + 1}`;
+      const ocProg = ((Math.max(0, state.evoPts - curW.reqPts) % 900) / 900) * 100;
+      document.getElementById('wp-evo-fill').style.width = `${Math.max(6, Math.min(100, ocProg))}%`;
+    }
     document.querySelectorAll('#wp-pips .wp-pip').forEach((pip, idx) => pip.classList.toggle('lit', idx < state.weaponLv));
 
-    const odPct = state.odActive ? Math.round((state.odTimer / 6.0) * 100) : Math.round(state.odGauge);
+    const odPct = state.odActive ? Math.round((state.odTimer / 6.5) * 100) : Math.round(state.odGauge);
     document.getElementById('od-pct').textContent = state.odActive ? 'ACTIVE!!' : `${odPct}%`;
     btnOD.classList.toggle('ready', state.odGauge >= 100 || state.odActive);
 
@@ -2854,13 +3426,20 @@
     state,
     startRun,
     openTitle,
+    openModSelect,
     triggerDodge,
     triggerOverdrive,
-    setWeaponLv(lv) {
+    setWeaponLv(lv, oc = 0) {
       const t = WEAPON_TIERS[Math.max(0, Math.min(WEAPON_TIERS.length - 1, lv - 1))];
-      state.evoPts = t.reqPts;
+      state.evoPts = t.reqPts + oc * 900;
       state.weaponLv = t.lv;
+      state.overclockLv = oc;
+      if (t.lv > state.maxWeaponLv) state.maxWeaponLv = t.lv;
       applyWeaponModelVisibility();
+    },
+    spawnBossSector(sec) {
+      state.sector = sec;
+      enterBossBattle();
     },
     aimAtEnemy(idx = 0) {
       const e = state.enemies.filter(x => x.alive)[idx];

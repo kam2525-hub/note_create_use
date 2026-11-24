@@ -101,10 +101,10 @@
       "day": 9,
       "date": "2026-11-23",
       "slug": "day09-overclock-gunner-3d",
-      "title": "OVERCLOCK GUNNER 3D（武器6段階進化×超爽快一人称3Dシューティング）",
+      "title": "OVERCLOCK GUNNER 3D（武器10段階＋無限進化×本格一人称3Dシューティング）",
       "type": "game",
       "genre": "Three.js 一人称3Dアーケードシューティング / 武器進化ガンアクション",
-      "core_mechanic": "指1本（マウス1つ）で狙って撃ちまくる本格アーケード一人称3Dシューティング！敵を倒すほど手元の多パーツ3D銃がハンドガン→左右二丁拳銃→8発散弾ショットガン→サイバーSMG→6銃身回転バルカン→貫通電磁レール砲＋自動追尾ミサイルへ6段階リアルタイム進化！燃料コア連鎖爆破・敵ミサイル撃ち落としINTERCEPT・JUST DODGEスローカウンター・巨大メックボス『TITAN-IX OMEGA』両肩ポッド部位破壊＆3択MOD覚醒！縦画面＆横画面フル対応",
+      "core_mechanic": "指1本（マウス1つ）で狙って撃ちまくる本格アーケード一人称3Dシューティング！敵を倒すほど多パーツ3D銃がハンドガン→二丁拳銃→散弾→SMG→6銃身回転バルカン→貫通レール砲→二丁プラズマバルカン→連鎖雷撃テスラ砲→重力ブラックホール砲→衛星軌道レーザー砲（さらに無限OVERCLOCK +N）へ10段階リアルタイム進化！エネルギー盾兵・赤レーザースナイパー・特攻ドローン・3連ミサイル重装兵に加え、チャージレーザー＆ドローン召喚を行う3種巨大ボス（TITAN-IX／VALKYRIE-ZERO／KRONOS）と中盤＆ボス後の全8種シナジーMOD覚醒を搭載！縦画面＆横画面フル対応",
       "game_path": "games/day09-overclock-gunner-3d/index.html",
       "note_path": "notes/day09/note_draft.md",
       "shorts_script": "shorts/day09/generate_shorts.py"
