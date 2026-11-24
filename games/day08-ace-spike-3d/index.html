@@ -2581,14 +2581,14 @@
       setStatus(`ルーム ${code} に接続中…`);
       setupBroadcast(code, false);
 
-      // Start WSS Relay fallback quickly (1.1s) so 4G/5G/Symmetric NAT connects seamlessly even if WebRTC STUN fails
+      // Give direct P2P WebRTC 2.2s to connect for lowest latency; kick WSS Relay immediately on any PeerJS error or after 2.2s for Symmetric NAT
       let relayStarted = false;
       function kickRelay() {
         if (relayStarted || myNonce !== sessionNonce || state.connected) return;
         relayStarted = true;
         setupRelay(code, false, myNonce, 0);
       }
-      relayStartTimer = setTimeout(kickRelay, 1100);
+      relayStartTimer = setTimeout(kickRelay, 2200);
 
       joinTimeoutTimer = setTimeout(() => {
         if (myNonce === sessionNonce && !state.connected) {
@@ -3966,6 +3966,10 @@
     localActSeq: 0,
     localActPendingUntil: 0,
     localActExpectedActor: null,
+    predictedActSeq: 0,
+    guestExtrapTime: 0,
+    smoothedHalfRttMs: 12,
+    ballVisErr: { x: 0, y: 0, z: 0 },
     // Guest server-side mirrored state (only authoritative on Host)
     guest: {
       x: 0, y: 0, z: -5.4, aimX: 0, pose: 'idle',
@@ -4869,27 +4873,34 @@
     if (gameMode === 'title' || gameMode === 'upgrade' || gameMode === 'over') return;
     if (matchState === 'point_pause') return;
 
-    // THIN GUEST CLIENT: keep 0ms local movement/jump/arm anims, forward all ball hits to authoritative Host!
+    // THIN GUEST CLIENT WITH 0ms PREDICTIVE HIT LAUNCH (Authoritatively reconciled by Host!)
     if (gameMode === 'online' && !NetP2P.isHost) {
-      // 1. Guest Serve Toss
+      // 1. Guest Serve Toss (0ms local toss matching Host's exact velocity!)
       if (matchState === 'serve_wait' && ball.expectedActor === 'player_serve_toss') {
         const isFloat = (kind === 'float_serve' || kind === 'feint');
         player.serveType = isFloat ? 'float' : 'jump';
         matchState = 'rally';
+        ball.side = 'us';
+        ball.touches = 0;
+        ball.x = player.x - 0.10;
+        ball.y = 1.55;
+        ball.z = player.z - (isFloat ? 0.42 : 0.60);
         SFX.toss(false, 1);
         triggerArmAnim('serve_toss', 0.34);
         if (isFloat) {
           ball.expectedActor = 'player_serve_hit';
+          launchBallVel(0.14, 4.7, -0.35, { trailColor: 0x38bdf8, trailPower: 0.35, predictHeight: 2.15, omegaX: 0 });
           addCallout('FLOAT TOSS!', '目の前に落ちる瞬間に打て！', '#38bdf8');
         } else {
           ball.expectedActor = 'player_serve_approach';
+          launchBallVel(0.08, 7.6, -2.45, { trailColor: 0xfacc15, trailPower: 0.52, predictHeight: 2.85, omegaX: -9 });
           player.approachTimer = 0.65;
           player.approachVx = 0.05;
           player.approachVz = -2.15;
           SFX.squeak();
           addCallout('HIGH TOSS!!', '助走中 → 踏み切って JUMP!!', '#facc15');
         }
-        sendGuestAction(isFloat ? 'float_serve' : 'jump_serve', dirHint, ball.expectedActor);
+        sendGuestAction(isFloat ? 'float_serve' : 'jump_serve', dirHint, ball.expectedActor, null, true);
         updateHud();
         return;
       }
@@ -4906,27 +4917,120 @@
         triggerArmAnim('approach_jump', 0.28);
         recordEv('jump');
         addCallout('TAKEOFF!!', '最高到達点で叩き込め!!', '#facc15');
-        sendGuestAction('serve_jump', dirHint, 'player_serve_hit');
+        sendGuestAction('serve_jump', dirHint, 'player_serve_hit', null, false);
         return;
       }
 
-      // 2B. Guest Serve Hit
+      // 2B. Guest Serve Hit (0ms predictive hit when in reach!)
       if (ball.expectedActor === 'player_serve_hit') {
-        triggerArmAnim(kind === 'feint' ? 'feint' : 'spike', 0.32);
-        sendGuestAction(kind === 'feint' ? 'serve_feint' : 'serve_hit', dirHint, null);
+        const isShort = kind === 'feint';
+        if (isServeHitInReach()) {
+          const isJumpServe = player.serveType === 'jump' && player.y > 0.30;
+          const just = Math.abs(ball.y - (player.y + 1.65)) < 0.60;
+          const tx = Math.max(-3.9, Math.min(3.9, player.aimX));
+          const tz = isShort ? -3.4 : (isJumpServe ? -6.8 : -6.2);
+          const speedT = isShort ? 1.02 : (isJumpServe ? (just ? 0.62 : 0.72) : (just ? 1.04 : 1.14));
+          const isHighServe = !isJumpServe && !isShort;
+          const sharedFlight = Math.max(0.92, speedT + 0.14);
+          const sharedTy = isHighServe ? 1.56 : 0.90;
+          ball.y = Math.max(isJumpServe ? 2.25 : 1.75, ball.y);
+          ball.side = 'enemy';
+          ball.touches = 0;
+          ball.expectedActor = 'online_wait';
+          launchBallTo(tx, sharedTy, tz, sharedFlight, {
+            trailColor: isJumpServe ? (just ? 0xfacc15 : 0xf97316) : 0x38bdf8,
+            trailPower: isJumpServe ? (just ? 1.25 : 0.85) : 0.60,
+            just, feint: isShort, isServe: true, incomingHigh: isHighServe,
+            omegaX: isJumpServe ? -28 : 0, knuckle: !isJumpServe
+          });
+          bumpCombo(1);
+          SFX.spike(just && isJumpServe, false, comboCount);
+          triggerArmAnim(isShort ? 'feint' : 'spike', 0.36);
+          player.shake = isJumpServe ? (just ? 0.24 : 0.14) : 0.08;
+          spawnBurstParticles(ball.x, ball.y, ball.z, isJumpServe ? 0xfacc15 : 0x38bdf8, isJumpServe ? 26 : 14, isJumpServe ? 1.1 : 0.75);
+          spawnShockwave(ball.x, ball.y, ball.z, isJumpServe ? 0xfacc15 : 0x38bdf8, 2.1, true);
+          if (isJumpServe && just) {
+            addZone(22); fovPunch = -7.5; speedLinesAlpha = 0.82; flashAlpha = 0.26; flashColor = '#facc15';
+            triggerSpeedPop(128, '#facc15'); addCallout('JUST JUMP SERVE!!', '', '#facc15');
+          } else if (!isJumpServe) {
+            triggerSpeedPop(86, '#38bdf8'); addCallout(isShort ? 'SHORT SERVE!' : 'FLOATER SERVE!!', '', '#38bdf8');
+          } else {
+            triggerSpeedPop(112, '#fb923c'); addCallout('JUMP SERVE!', '', '#38bdf8');
+          }
+          sendGuestAction(isShort ? 'serve_feint' : 'serve_hit', dirHint, 'online_wait', { tx: -tx, tz: -tz }, true);
+          updateHud();
+          return;
+        }
+        triggerArmAnim(isShort ? 'feint' : 'spike', 0.30);
+        sendGuestAction(isShort ? 'serve_feint' : 'serve_hit', dirHint, null, null, false);
         return;
       }
 
-      // 3. Guest Receive (Over / Under)
+      // 3. Guest Receive (0ms predictive dig when in reach!)
       if (ball.expectedActor === 'player_recv') {
         const style = (kind === 'recv_over' || kind === 'feint' || kind === 'toss_center') ? 'over' : 'under';
-        triggerArmAnim(style === 'over' ? 'over_ready' : 'receive_ready', 0.26);
-        player.crouchDip = style === 'over' ? 0.08 : 0.16;
-        sendGuestAction(style === 'over' ? 'recv_over' : 'recv_under', dirHint, null);
+        const isOver = style === 'over';
+        const distXZ = Math.hypot(ball.x - player.x, ball.z - player.z);
+        const timeRem = ball.flightTotal - ball.flightTimer;
+        const maxReach = isOver ? 1.85 : 2.65;
+        const heightOk = isOver ? (ball.y >= 0.80 && ball.y <= 2.68) : (ball.y <= 2.25);
+        const timeOk = timeRem <= 0.46 && timeRem >= -0.28;
+        if (ball.active && !ball.deadBounce && distXZ <= maxReach && heightOk && timeOk) {
+          const rec = getRecommendedReceive();
+          const matched = (style === rec);
+          const isDive = !isOver && distXZ > 1.35;
+          const just = Math.abs(timeRem) < 0.28 && (matched || distXZ < 1.55);
+          const dx = ball.x - player.x, dz = ball.z - player.z;
+          const dSafe = Math.max(0.001, distXZ);
+          if (isDive) {
+            const diveStep = Math.min(1.35, distXZ * 0.72);
+            player.diveTimer = 0.42; player.diveDx = dx; player.diveDz = dz;
+            player.x += (dx / dSafe) * diveStep; player.z += (dz / dSafe) * diveStep;
+            player.cameraRoll = dx >= 0 ? -0.30 : 0.30;
+            triggerArmAnim('dive', 0.44, dx >= 0 ? 1 : -1);
+          } else {
+            const step = Math.min(0.45, distXZ * 0.40);
+            player.crouchDip = isOver ? (matched ? 0.10 : 0.26) : 0.24;
+            player.x += (dx / dSafe) * step; player.z += (dz / dSafe) * step;
+            triggerArmAnim(isOver ? 'over_receive' : 'receive', 0.38);
+          }
+          ball.side = 'us';
+          ball.x = ball.x * 0.55 + player.x * 0.45;
+          ball.y = isOver ? Math.max(1.55, Math.min(2.15, ball.y)) : Math.max(0.88, Math.min(1.45, ball.y));
+          ball.z = ball.z * 0.55 + (player.z - 0.24) * 0.45;
+          ball.touches = 1;
+          ball.expectedActor = 'ally_toss';
+          recvSlowActive = false;
+          const sx = 0.5 + (Math.random() - 0.5) * 0.7;
+          const sz = 1.9;
+          const recvFt = isOver && matched ? 0.85 : (just ? 0.96 : 1.15);
+          launchBallTo(sx, 1.92, sz, recvFt, {
+            trailColor: isOver ? 0x34d399 : (just ? 0xfacc15 : 0x38bdf8),
+            trailPower: just ? 0.72 : 0.50,
+            omegaX: -6
+          });
+          matchRecvs++;
+          bumpCombo(1);
+          player.shake = just ? 0.14 : 0.07;
+          if (just) { fovPunch = -4.5; speedLinesAlpha = 0.55; flashAlpha = 0.18; flashColor = isOver ? '#34d399' : '#facc15'; }
+          SFX.receive(just, isOver, comboCount);
+          spawnShockwave(ball.x, isOver ? ball.y : 0.03, ball.z, isOver ? 0x34d399 : (just ? 0xfacc15 : 0x38bdf8), just ? 2.2 : 1.4, isOver);
+          spawnBurstParticles(ball.x, ball.y, ball.z, isOver ? 0x34d399 : 0xfacc15, just ? 20 : 10, just ? 0.95 : 0.65);
+          if (isOver && matched) { addZone(28); addCallout('PERFECT OVER PASS!!', '', '#34d399'); }
+          else if (isOver) { addZone(14); addCallout('OVER RECEIVE!', '', '#38bdf8'); }
+          else if (just) { addZone(24); addCallout(isDive ? 'GOD DIVE DIG!!' : 'JUST UNDER DIG!!', '', '#facc15'); }
+          else { addZone(12); addCallout(isDive ? 'DIVE RECEIVE!!' : 'NICE UNDER!!', '', '#38bdf8'); }
+          sendGuestAction(isOver ? 'recv_over' : 'recv_under', dirHint, 'ally_toss', { tx: -sx, tz: -sz }, true);
+          updateHud();
+          return;
+        }
+        triggerArmAnim(isOver ? 'over_ready' : 'receive_ready', 0.26);
+        player.crouchDip = isOver ? 0.08 : 0.16;
+        sendGuestAction(isOver ? 'recv_over' : 'recv_under', dirHint, null, null, false);
         return;
       }
 
-      // 5. Guest Spike (0ms local jump when on ground, forward hit when airborne)
+      // 5. Guest Spike (0ms local jump when on ground, 0ms predictive spike when airborne in reach!)
       if (ball.side === 'us' && ball.expectedActor === 'player_spike') {
         if (player.y < 0.22) {
           const dxT = ball.targetX - player.x;
@@ -4952,8 +5056,47 @@
           sendGuestState(true);
           return;
         }
-        triggerArmAnim(kind === 'feint' ? 'feint' : 'spike', 0.32);
-        sendGuestAction(kind === 'feint' ? 'spike_feint' : 'spike_hit', dirHint, null);
+        const isFeint = kind === 'feint';
+        if (isSpikeInReach()) {
+          const timingErr = Math.abs(ball.flightTotal - ball.flightTimer);
+          const just = timingErr < 0.30 || (player.y > 0.95 && Math.abs(ball.y - (player.y + 1.65)) < 0.60);
+          const meteor = zoneActiveTimer > 0;
+          const aimX = Math.max(-4.2, Math.min(4.2, player.aimX));
+          const aimZ = isFeint ? (-2.2 - Math.random() * 1.6) : (-4.2 - Math.random() * 4.2);
+          const baseFlight = (isFeint ? 0.88 : (meteor ? 0.29 : (just ? 0.35 : 0.47))) / perks.spikeSpeedMult;
+          const sharedFlight = Math.max(isFeint ? 0.88 : 0.72, baseFlight + 0.22);
+          const sharedTy = isFeint ? 0.72 : 0.88;
+          const omega = isFeint ? 4 : (meteor ? -42 : (just ? -32 : -22));
+          ball.y = Math.max(2.25, ball.y);
+          ball.side = 'enemy';
+          ball.touches = 0;
+          ball.expectedActor = 'online_wait';
+          launchBallTo(aimX, sharedTy, aimZ, sharedFlight, {
+            trailColor: meteor ? 0xfacc15 : (just ? 0xf97316 : getSelectedSkin().trail),
+            trailPower: meteor ? 1.38 : (just ? 1.15 : 0.78),
+            feint: isFeint, just, meteor, omegaX: omega
+          });
+          matchSpikes++;
+          bumpCombo(1);
+          triggerArmAnim(isFeint ? 'feint' : 'spike', 0.36);
+          player.shake = meteor ? 0.38 : (just ? 0.26 : 0.14);
+          fovPunch = meteor ? -11.0 : (just ? -7.5 : -3.5);
+          speedLinesAlpha = meteor ? 1.0 : (just ? 0.85 : 0.42);
+          spawnBurstParticles(ball.x, ball.y, ball.z, meteor ? 0xfacc15 : (isFeint ? 0x34d399 : (just ? 0xf97316 : 0x38bdf8)), meteor ? 36 : (just ? 24 : 14), meteor ? 1.3 : 0.95);
+          spawnShockwave(ball.x, ball.y, ball.z, meteor ? 0xfacc15 : (isFeint ? 0x34d399 : 0xf97316), meteor ? 3.0 : 2.1, true);
+          if (isFeint) { SFX.feint(); addCallout('FEINT!!', '', '#34d399'); }
+          else {
+            SFX.spike(just, meteor, comboCount);
+            if (meteor) { flashAlpha = 0.44; flashColor = '#facc15'; crowdExcitement = 1.0; triggerSpeedPop(156, '#facc15'); addCallout('⚡ METEOR SPIKE!!', '', '#facc15'); }
+            else if (just) { addZone(26); flashAlpha = 0.28; flashColor = '#fb923c'; crowdExcitement = 0.85; triggerSpeedPop(132, '#fb923c'); addCallout('💥 JUST SPIKE!!', '', '#facc15'); }
+            else { addZone(14); triggerSpeedPop(108, '#38bdf8'); addCallout('SPIKE!!', '', '#38bdf8'); }
+          }
+          sendGuestAction(isFeint ? 'spike_feint' : 'spike_hit', dirHint, 'online_wait', { tx: -aimX, tz: -aimZ }, true);
+          updateHud();
+          return;
+        }
+        triggerArmAnim(isFeint ? 'feint' : 'spike', 0.30);
+        sendGuestAction(isFeint ? 'spike_feint' : 'spike_hit', dirHint, null, null, false);
         return;
       }
 
@@ -5481,14 +5624,21 @@
     });
   }
 
-  function sendGuestAction(kind, dirHint = 0, optimisticActor = null) {
+  function sendGuestAction(kind, dirHint = 0, optimisticActor = null, hint = null, predicted = false) {
     if (gameMode !== 'online' || NetP2P.isHost || !NetP2P.connected) return;
     onlineWorld.localActSeq++;
     if (optimisticActor) {
-      onlineWorld.localActPendingUntil = performance.now() + 360;
+      onlineWorld.localActPendingUntil = performance.now() + (predicted ? 420 : 320);
       onlineWorld.localActExpectedActor = optimisticActor;
     }
-    NetP2P.send({
+    if (predicted) {
+      onlineWorld.predictedActSeq = onlineWorld.localActSeq;
+      onlineWorld.guestExtrapTime = 0;
+      onlineWorld.ballVisErr.x = 0;
+      onlineWorld.ballVisErr.y = 0;
+      onlineWorld.ballVisErr.z = 0;
+    }
+    const payload = {
       type: 'guest_act',
       seq: onlineWorld.localActSeq,
       mid: onlineSync.matchId,
@@ -5501,7 +5651,12 @@
       aimX: +(-player.aimX).toFixed(2),
       za: zoneActiveTimer > 0 ? 1 : 0,
       cb: { x: +(-ball.x).toFixed(3), y: +ball.y.toFixed(3), z: +(-ball.z).toFixed(3) }
-    });
+    };
+    if (hint && typeof hint.tx === 'number' && typeof hint.tz === 'number') {
+      payload.htx = +hint.tx.toFixed(2);
+      payload.htz = +hint.tz.toFixed(2);
+    }
+    NetP2P.send(payload);
   }
 
   function broadcastWorldSnap(ev = null) {
@@ -5564,7 +5719,7 @@
   }
 
   // Host Authoritative Guest Resolvers (all in shared World Coordinates; Guest court is z < 0, faces +z)
-  function tryResolveGuestServeHit(isShort, gx, gy, gz, aimX, cb) {
+  function tryResolveGuestServeHit(isShort, gx, gy, gz, aimX, cb, hint = null, actSeq = 0) {
     if (onlineWorld.worldActor !== 'guest_serve_hit' || !ball.active || ball.deadBounce) return false;
     const handX = gx - 0.10;
     const handY = gy + 1.72;
@@ -5586,8 +5741,9 @@
 
     const isJumpServe = onlineWorld.guest.serveType === 'jump' && gy > 0.30;
     const just = Math.abs(by - (gy + 1.65)) < 0.65;
-    const tx = Math.max(-3.9, Math.min(3.9, aimX));
-    const tz = isShort ? 3.4 : (isJumpServe ? 6.8 : 6.2);
+    const tx = Math.max(-3.9, Math.min(3.9, (hint && typeof hint.tx === 'number') ? hint.tx : aimX));
+    const defaultTz = isShort ? 3.4 : (isJumpServe ? 6.8 : 6.2);
+    const tz = (hint && typeof hint.tz === 'number') ? Math.max(2.6, Math.min(7.8, hint.tz)) : defaultTz;
     const speedT = isShort ? 1.02 : (isJumpServe ? (just ? 0.62 : 0.72) : (just ? 1.04 : 1.14));
     const isHighServe = !isJumpServe && !isShort;
     const sharedFlight = Math.max(0.92, speedT + 0.14);
@@ -5616,14 +5772,14 @@
     maxRallyMatch = Math.max(maxRallyMatch, rallyCount);
     onlineWorld.guest.actionBuffer = null;
     broadcastWorldSnap({
-      kind: 'serve_hit', actor: 'g', isJumpServe, isShort, just, kmh,
+      kind: 'serve_hit', actor: 'g', actSeq, isJumpServe, isShort, just, kmh,
       x: ball.x, y: ball.y, z: ball.z
     });
     updateHud();
     return true;
   }
 
-  function tryResolveGuestReceive(style, gx, gy, gz, cb) {
+  function tryResolveGuestReceive(style, gx, gy, gz, cb, hint = null, actSeq = 0) {
     if (onlineWorld.worldActor !== 'guest_recv' || !ball.active || ball.deadBounce) return false;
     const isOver = style === 'over';
     const dNow = Math.hypot(ball.x - gx, ball.z - gz);
@@ -5655,8 +5811,12 @@
     onlineWorld.guestRecvSlow = false;
     if (isOver && matched) onlineWorld.guest.overBoostToss = true;
 
-    const sx = -(0.5 + (Math.random() - 0.5) * 0.7);
-    const sz = -1.9;
+    const sx = (hint && typeof hint.tx === 'number')
+      ? Math.max(-1.2, Math.min(1.2, hint.tx))
+      : -(0.5 + (Math.random() - 0.5) * 0.7);
+    const sz = (hint && typeof hint.tz === 'number')
+      ? Math.max(-2.6, Math.min(-1.3, hint.tz))
+      : -1.9;
     const recvFt = isOver && matched ? 0.85 : (just ? 0.96 : 1.15);
     if (enemies[1]) { enemies[1].targetX = sx; enemies[1].targetZ = sz; }
     if (enemies[0]) { enemies[0].pose = 'receive'; enemies[0].poseTimer = 0.42; }
@@ -5669,7 +5829,7 @@
     spawnShockwave(ball.x, isOver ? ball.y : 0.03, ball.z, isOver ? 0x34d399 : 0x38bdf8, 1.5, isOver);
     onlineWorld.guest.actionBuffer = null;
     broadcastWorldSnap({
-      kind: 'recv', actor: 'g', style, just, matched, isDive,
+      kind: 'recv', actor: 'g', actSeq, style, just, matched, isDive,
       x: ball.x, y: ball.y, z: ball.z
     });
     updateHud();
@@ -5705,7 +5865,7 @@
     });
   }
 
-  function tryResolveGuestSpike(isFeint, gx, gy, gz, aimX, zoneActive, cb) {
+  function tryResolveGuestSpike(isFeint, gx, gy, gz, aimX, zoneActive, cb, hint = null, actSeq = 0) {
     if (onlineWorld.worldActor !== 'guest_spike' || !ball.active || ball.deadBounce) return false;
     if (gy < 0.28) return false;
     const handX = gx - 0.10;
@@ -5729,8 +5889,11 @@
     const timingErr = Math.abs(ball.flightTotal - ball.flightTimer);
     const just = timingErr < 0.32 || (gy > 0.95 && Math.abs(by - (gy + 1.65)) < 0.65);
     const meteor = !!zoneActive;
-    const tx = Math.max(-4.2, Math.min(4.2, aimX));
-    const tz = isFeint ? (2.2 + Math.random() * 1.6) : (4.2 + Math.random() * 4.2);
+    const tx = Math.max(-4.2, Math.min(4.2, (hint && typeof hint.tx === 'number') ? hint.tx : aimX));
+    const defaultTz = isFeint ? (2.2 + Math.random() * 1.6) : (4.2 + Math.random() * 4.2);
+    const tz = (hint && typeof hint.tz === 'number')
+      ? Math.max(isFeint ? 1.8 : 3.5, Math.min(isFeint ? 4.4 : 8.6, hint.tz))
+      : defaultTz;
     const baseFlight = isFeint ? 0.88 : (meteor ? 0.29 : (just ? 0.35 : 0.47));
     const sharedFlight = Math.max(isFeint ? 0.88 : 0.72, baseFlight + 0.22);
     const sharedTy = isFeint ? 0.72 : 0.88;
@@ -5761,7 +5924,7 @@
     maxRallyMatch = Math.max(maxRallyMatch, rallyCount);
     onlineWorld.guest.actionBuffer = null;
     broadcastWorldSnap({
-      kind: isFeint ? 'feint' : 'spike', actor: 'g', just, meteor, kmh,
+      kind: isFeint ? 'feint' : 'spike', actor: 'g', actSeq, just, meteor, kmh,
       x: ball.x, y: ball.y, z: ball.z
     });
     updateHud();
@@ -5779,7 +5942,9 @@
     if (typeof msg.z === 'number') g.z = Math.max(-11.2, Math.min(-0.55, msg.z));
     if (typeof msg.aimX === 'number') g.aimX = Math.max(-4.2, Math.min(4.2, msg.aimX));
     g.zoneActive = !!msg.za;
-    if (typeof msg.seq === 'number') g.lastActSeq = Math.max(g.lastActSeq, msg.seq);
+    const actSeq = typeof msg.seq === 'number' ? msg.seq : 0;
+    if (actSeq > g.lastActSeq) g.lastActSeq = actSeq;
+    const hint = (typeof msg.htx === 'number' && typeof msg.htz === 'number') ? { tx: msg.htx, tz: msg.htz } : null;
 
     const k = msg.kind;
     if ((k === 'float_serve' || k === 'jump_serve') && matchState === 'serve_wait' && onlineWorld.worldActor === 'guest_serve_toss') {
@@ -5801,37 +5966,37 @@
       }
       if (enemies[0]) { enemies[0].pose = 'toss'; enemies[0].poseTimer = 0.35; }
       SFX.toss(false, 1);
-      broadcastWorldSnap({ kind: 'serve_toss', actor: 'g', isFloat });
+      broadcastWorldSnap({ kind: 'serve_toss', actor: 'g', actSeq, isFloat });
       return;
     }
 
     if (k === 'serve_jump' && onlineWorld.worldActor === 'guest_serve_approach') {
       onlineWorld.worldActor = 'guest_serve_hit';
       if (enemies[0]) { enemies[0].pose = 'spike_windup'; enemies[0].poseTimer = 0.35; }
-      broadcastWorldSnap({ kind: 'serve_jump', actor: 'g' });
+      broadcastWorldSnap({ kind: 'serve_jump', actor: 'g', actSeq });
       return;
     }
 
     if (k === 'serve_hit' || k === 'serve_feint') {
       const isShort = k === 'serve_feint';
-      if (!tryResolveGuestServeHit(isShort, g.x, g.y, g.z, g.aimX, msg.cb)) {
-        g.actionBuffer = { kind: k, timer: 0.30, aimX: g.aimX, za: g.zoneActive, cb: msg.cb };
+      if (!tryResolveGuestServeHit(isShort, g.x, g.y, g.z, g.aimX, msg.cb, hint, actSeq)) {
+        g.actionBuffer = { kind: k, timer: 0.30, aimX: g.aimX, za: g.zoneActive, cb: msg.cb, hint, actSeq };
       }
       return;
     }
 
     if (k === 'recv_over' || k === 'recv_under') {
       const style = k === 'recv_over' ? 'over' : 'under';
-      if (!tryResolveGuestReceive(style, g.x, g.y, g.z, msg.cb)) {
-        g.actionBuffer = { kind: k, timer: 0.28, aimX: g.aimX, za: g.zoneActive, cb: msg.cb };
+      if (!tryResolveGuestReceive(style, g.x, g.y, g.z, msg.cb, hint, actSeq)) {
+        g.actionBuffer = { kind: k, timer: 0.28, aimX: g.aimX, za: g.zoneActive, cb: msg.cb, hint, actSeq };
       }
       return;
     }
 
     if (k === 'spike_hit' || k === 'spike_feint') {
       const isFeint = k === 'spike_feint';
-      if (!tryResolveGuestSpike(isFeint, g.x, g.y, g.z, g.aimX, g.zoneActive, msg.cb)) {
-        g.actionBuffer = { kind: k, timer: 0.28, aimX: g.aimX, za: g.zoneActive, cb: msg.cb };
+      if (!tryResolveGuestSpike(isFeint, g.x, g.y, g.z, g.aimX, g.zoneActive, msg.cb, hint, actSeq)) {
+        g.actionBuffer = { kind: k, timer: 0.28, aimX: g.aimX, za: g.zoneActive, cb: msg.cb, hint, actSeq };
       }
       return;
     }
@@ -5868,6 +6033,7 @@
     if (!ev || !ev.id || ev.id <= onlineWorld.lastEventId) return;
     onlineWorld.lastEventId = ev.id;
     const isMe = ev.actor === 'g'; // Called on Guest!
+    const alreadyPredicted = isMe && ev.actSeq && ev.actSeq === onlineWorld.predictedActSeq;
     const fxX = typeof ev.x === 'number' ? -ev.x : ball.x;
     const fxY = typeof ev.y === 'number' ? ev.y : ball.y;
     const fxZ = typeof ev.z === 'number' ? -ev.z : ball.z;
@@ -5880,6 +6046,7 @@
       return;
     }
     if (ev.kind === 'serve_hit') {
+      if (alreadyPredicted) return;
       SFX.spike(!!(ev.just && ev.isJumpServe), false, isMe ? Math.max(1, comboCount + 1) : 1);
       spawnBurstParticles(fxX, fxY, fxZ, ev.isJumpServe ? 0xfacc15 : 0x38bdf8, ev.isJumpServe ? 26 : 14, ev.isJumpServe ? 1.1 : 0.75);
       spawnShockwave(fxX, fxY, fxZ, ev.isJumpServe ? 0xfacc15 : 0x38bdf8, 2.1, true);
@@ -5905,6 +6072,7 @@
       return;
     }
     if (ev.kind === 'recv') {
+      if (alreadyPredicted) return;
       const isOver = ev.style === 'over';
       SFX.receive(!!ev.just, isOver, isMe ? Math.max(1, comboCount + 1) : 1);
       spawnShockwave(fxX, isOver ? fxY : 0.03, fxZ, isOver ? 0x34d399 : (ev.just ? 0xfacc15 : 0x38bdf8), ev.just ? 2.2 : 1.4, isOver);
@@ -5933,6 +6101,7 @@
       return;
     }
     if (ev.kind === 'spike' || ev.kind === 'feint') {
+      if (alreadyPredicted) return;
       const isFeint = ev.kind === 'feint';
       if (isFeint) SFX.feint();
       else SFX.spike(!!ev.just, !!ev.meteor, isMe ? Math.max(1, comboCount + 1) : 1);
@@ -6002,8 +6171,10 @@
     if (typeof snap.seq === 'number' && snap.seq <= onlineWorld.lastAppliedSnapSeq) return;
     onlineWorld.lastAppliedSnapSeq = snap.seq;
 
-    // 1. Authoritative Match Clock (anchored directly to Host's remMs with half-RTT compensation!)
-    const halfRtt = Math.min(180, (onlineSync.rttMs || 14) * 0.5);
+    // 1. Authoritative Match Clock + Jitter-Smoothed Half-RTT
+    const rawHalfRtt = Math.min(140, (onlineSync.rttMs || 14) * 0.5);
+    onlineWorld.smoothedHalfRttMs = onlineWorld.smoothedHalfRttMs * 0.85 + rawHalfRtt * 0.15;
+    const halfRtt = onlineWorld.smoothedHalfRttMs;
     onlineWorld.serverPreMs = Math.max(0, (snap.preMs || 0) - halfRtt);
     onlineWorld.serverRemMs = Math.max(0, (snap.remMs ?? ONLINE_MATCH_DURATION_SEC * 1000) - (snap.preMs > 0 ? 0 : halfRtt));
     onlineWorld.lastSnapLocalMs = performance.now();
@@ -6013,6 +6184,10 @@
     }
 
     // 2. Authoritative Score & Rally Count
+    const hudDirty = (myScore !== snap.gs || enScore !== snap.hs
+      || rallyCount !== (typeof snap.rc === 'number' ? snap.rc : rallyCount)
+      || (snap.b && (ball.touches !== (snap.b.tc || 0)))
+      || (snap.act && snap.act !== onlineWorld.worldActor));
     onlineSync.hostScore = snap.hs;
     onlineSync.guestScore = snap.gs;
     onlineSync.serverIsHost = !!snap.srv;
@@ -6030,6 +6205,10 @@
       onlineSync.pointSeq = snap.pseq;
       onlineWorld.localActPendingUntil = 0;
       onlineWorld.localActExpectedActor = null;
+      onlineWorld.predictedActSeq = 0;
+      onlineWorld.ballVisErr.x = 0;
+      onlineWorld.ballVisErr.y = 0;
+      onlineWorld.ballVisErr.z = 0;
       resetCourtPositions();
       sendGuestState(true);
       newPoint = true;
@@ -6045,7 +6224,10 @@
 
     // 5. Phase / Actor State (respect brief optimistic lock until Host echoes snap.la >= localActSeq)
     const prevWorldActor = onlineWorld.worldActor;
-    const optimisticLocked = performance.now() < onlineWorld.localActPendingUntil && (snap.la || 0) < onlineWorld.localActSeq;
+    const optimisticLocked = !newPoint && snap.ms !== 'point_pause'
+      && performance.now() < onlineWorld.localActPendingUntil
+      && (snap.la || 0) < onlineWorld.localActSeq;
+    const optimisticBallLocked = optimisticLocked && (onlineWorld.predictedActSeq === onlineWorld.localActSeq);
     if (!optimisticLocked) {
       onlineWorld.localActPendingUntil = 0;
       onlineWorld.worldActor = snap.act || 'none';
@@ -6056,9 +6238,9 @@
       ball.onlineBlockWindow = mapped.blockWin ? 0.85 : 0;
     }
 
-    // 6. Single Shared Ball Mirroring (180deg Y-rotation: x'=-x, y'=y, z'=-z)
+    // 6. Single Shared Ball Mirroring with Smooth Visual Error Decay (ZERO mid-flight stutter!)
     const b = snap.b;
-    if (b) {
+    if (b && !optimisticBallLocked) {
       const actChanged = (snap.act !== prevWorldActor) || newPoint || (!!b.a !== ball.active) || (!!b.db !== ball.deadBounce);
       const guestHoldingServe = (snap.ms === 'serve_wait' && snap.act === 'guest_serve_toss');
       if (guestHoldingServe) {
@@ -6068,7 +6250,12 @@
         ball.x = player.x - 0.14;
         ball.y = 1.32 + Math.sin(elapsedTotal * 4.5) * 0.03;
         ball.z = player.z - 0.44;
+        onlineWorld.ballVisErr.x = 0; onlineWorld.ballVisErr.y = 0; onlineWorld.ballVisErr.z = 0;
       } else {
+        const prevVisX = ball.x + onlineWorld.ballVisErr.x;
+        const prevVisY = ball.y + onlineWorld.ballVisErr.y;
+        const prevVisZ = ball.z + onlineWorld.ballVisErr.z;
+
         let gx = -b.x, gy = b.y, gz = -b.z;
         let gvx = -b.vx, gvy = b.vy, gvz = -b.vz;
         const gox = -b.ox;
@@ -6076,9 +6263,9 @@
         let gkp = b.kp || 0;
         let gfm = b.fm || 0;
 
-        // Forward-extrapolate by half-RTT while in flight so both views show the ball at the SAME instant!
+        // Forward-extrapolate by smoothed half-RTT while in flight so both views align in real time
         if (b.a && !b.db && halfRtt > 2) {
-          let rem = Math.min(0.065, (halfRtt / 1000) * onlineWorld.worldTimeScale);
+          let rem = Math.min(0.075, (halfRtt / 1000) * onlineWorld.worldTimeScale);
           while (rem > 0.0005) {
             const h = Math.min(0.015, rem);
             gfm += h; gkp += h;
@@ -6090,16 +6277,8 @@
           if (gy < BALL_R + 0.01) gy = BALL_R + 0.01;
         }
 
-        const err = Math.hypot(gx - ball.x, gy - ball.y, gz - ball.z);
-        if (actChanged || !b.a || err > 0.65) {
-          ball.x = gx; ball.y = gy; ball.z = gz;
-        } else {
-          const blend = 0.85;
-          ball.x += (gx - ball.x) * blend;
-          ball.y += (gy - ball.y) * blend;
-          ball.z += (gz - ball.z) * blend;
-        }
-        onlineWorld.guestExtrapTime = 0;
+        const wasPredictedReconcile = onlineWorld.predictedActSeq > 0 && (snap.la || 0) >= onlineWorld.predictedActSeq;
+        ball.x = gx; ball.y = gy; ball.z = gz;
         ball.vx = gvx; ball.vy = gvy; ball.vz = gvz;
         ball.omegaX = gox; ball.omegaY = 0; ball.omegaZ = 0;
         ball.knuckle = gkn; ball.knucklePhase = gkp;
@@ -6116,6 +6295,22 @@
         ball.isServe = !!b.sv;
         ball.trailColor = b.col || 0x38bdf8;
         ball.trailPower = b.tp || 0.4;
+        onlineWorld.guestExtrapTime = 0;
+
+        const ex = prevVisX - gx;
+        const ey = prevVisY - gy;
+        const ez = prevVisZ - gz;
+        const err = Math.hypot(ex, ey, ez);
+        if (!b.a || newPoint || err > 2.2 || (actChanged && !wasPredictedReconcile)) {
+          onlineWorld.ballVisErr.x = 0;
+          onlineWorld.ballVisErr.y = 0;
+          onlineWorld.ballVisErr.z = 0;
+        } else {
+          // Preserve 100% visual continuity across snapshot arrival; stepFrame smoothly melts err at 60fps!
+          onlineWorld.ballVisErr.x = ex;
+          onlineWorld.ballVisErr.y = ey;
+          onlineWorld.ballVisErr.z = ez;
+        }
       }
     }
 
@@ -6148,9 +6343,9 @@
       }
     }
 
-    // 8. Discrete Event Effects (deduplicated by ev.id)
+    // 8. Discrete Event Effects (deduplicated by ev.id and predictedActSeq)
     if (snap.ev) playWorldEventFx(snap.ev);
-    updateHud();
+    if (hudDirty || newPoint || snap.ev) updateHud();
   }
 
   function finishOnlineMatch(winnerIsHost, reason = '') {
@@ -6449,6 +6644,12 @@
     onlineWorld.localActSeq = 0;
     onlineWorld.localActPendingUntil = 0;
     onlineWorld.localActExpectedActor = null;
+    onlineWorld.predictedActSeq = 0;
+    onlineWorld.guestExtrapTime = 0;
+    onlineWorld.smoothedHalfRttMs = 12;
+    onlineWorld.ballVisErr.x = 0;
+    onlineWorld.ballVisErr.y = 0;
+    onlineWorld.ballVisErr.z = 0;
     onlineWorld.guest.lastActSeq = 0;
     onlineWorld.guest.actionBuffer = null;
     onlineWorld.guest.overBoostToss = false;
@@ -7354,11 +7555,11 @@
       buf.timer -= dtBase;
       let resolved = false;
       if (buf.kind === 'serve_hit' || buf.kind === 'serve_feint') {
-        resolved = tryResolveGuestServeHit(buf.kind === 'serve_feint', g.x, g.y, g.z, buf.aimX, buf.cb);
+        resolved = tryResolveGuestServeHit(buf.kind === 'serve_feint', g.x, g.y, g.z, buf.aimX, buf.cb, buf.hint, buf.actSeq);
       } else if (buf.kind === 'recv_over' || buf.kind === 'recv_under') {
-        resolved = tryResolveGuestReceive(buf.kind === 'recv_over' ? 'over' : 'under', g.x, g.y, g.z, buf.cb);
+        resolved = tryResolveGuestReceive(buf.kind === 'recv_over' ? 'over' : 'under', g.x, g.y, g.z, buf.cb, buf.hint, buf.actSeq);
       } else if (buf.kind === 'spike_hit' || buf.kind === 'spike_feint') {
-        resolved = tryResolveGuestSpike(buf.kind === 'spike_feint', g.x, g.y, g.z, buf.aimX, buf.za, buf.cb);
+        resolved = tryResolveGuestSpike(buf.kind === 'spike_feint', g.x, g.y, g.z, buf.aimX, buf.za, buf.cb, buf.hint, buf.actSeq);
       }
       if (resolved || buf.timer <= 0) {
         g.actionBuffer = null;
@@ -7457,26 +7658,34 @@
     // Ball Physics Update
     const isThinGuest = (gameMode === 'online' && !NetP2P.isHost);
     if (ball.active && activePlay) {
-      let stepBall = true;
+      let ballDt = dt;
       if (isThinGuest && !ball.deadBounce) {
-        onlineWorld.guestExtrapTime = (onlineWorld.guestExtrapTime || 0) + dtBase;
-        if (onlineWorld.guestExtrapTime > 0.085) stepBall = false;
+        // Keep full 60fps motion during normal snapshot interval (0..55ms) and during Guest's own 0ms predicted launch,
+        // then smoothly brake extrapolation between 55ms..145ms if a packet is delayed so ball never freezes OR overshoots!
+        const inPredicted = performance.now() < onlineWorld.localActPendingUntil && onlineWorld.predictedActSeq === onlineWorld.localActSeq;
+        if (!inPredicted) {
+          onlineWorld.guestExtrapTime = (onlineWorld.guestExtrapTime || 0) + dtBase;
+          if (onlineWorld.guestExtrapTime > 0.055) {
+            const extrapScale = Math.max(0, 1 - (onlineWorld.guestExtrapTime - 0.055) / 0.09);
+            ballDt = dt * extrapScale;
+          }
+        }
       }
       const prevZ = ball.z;
-      if (stepBall) {
+      if (ballDt > 0.0001) {
         if (!ball.deadBounce) {
-          rallyGuardTimer += dt;
-          ball.flightTimer += dt;
+          rallyGuardTimer += ballDt;
+          ball.flightTimer += ballDt;
         }
-        ball.knucklePhase += dt;
+        ball.knucklePhase += ballDt;
 
         const acc = computeBallAccel(ball.vx, ball.vy, ball.vz, ball.omegaX, ball.omegaY, ball.omegaZ, ball.knuckle, ball.knucklePhase);
-        ball.vx += acc.ax * dt;
-        ball.vy += acc.ay * dt;
-        ball.vz += acc.az * dt;
-        ball.x += ball.vx * dt;
-        ball.y += ball.vy * dt;
-        ball.z += ball.vz * dt;
+        ball.vx += acc.ax * ballDt;
+        ball.vy += acc.ay * ballDt;
+        ball.vz += acc.az * ballDt;
+        ball.x += ball.vx * ballDt;
+        ball.y += ball.vy * ballDt;
+        ball.z += ball.vz * ballDt;
       }
 
       ballMesh.rotation.x += (ball.omegaX || ball.vz * 1.4) * dt;
@@ -7683,12 +7892,29 @@
       }
     }
 
-    // Ball, Shadow & Trail Visuals
-    ballMesh.position.set(ball.x, ball.y, ball.z);
+    // Ball, Shadow & Trail Visuals (60fps smooth visual error decay eliminates packet-arrival stutter!)
+    if (isThinGuest) {
+      const visDecay = Math.exp(-dtBase * 16);
+      onlineWorld.ballVisErr.x *= visDecay;
+      onlineWorld.ballVisErr.y *= visDecay;
+      onlineWorld.ballVisErr.z *= visDecay;
+      if (Math.abs(onlineWorld.ballVisErr.x) < 0.002) onlineWorld.ballVisErr.x = 0;
+      if (Math.abs(onlineWorld.ballVisErr.y) < 0.002) onlineWorld.ballVisErr.y = 0;
+      if (Math.abs(onlineWorld.ballVisErr.z) < 0.002) onlineWorld.ballVisErr.z = 0;
+    } else {
+      onlineWorld.ballVisErr.x = 0;
+      onlineWorld.ballVisErr.y = 0;
+      onlineWorld.ballVisErr.z = 0;
+    }
+    const visBallX = ball.x + onlineWorld.ballVisErr.x;
+    const visBallY = Math.max(BALL_R, ball.y + onlineWorld.ballVisErr.y);
+    const visBallZ = ball.z + onlineWorld.ballVisErr.z;
+
+    ballMesh.position.set(visBallX, visBallY, visBallZ);
     ballGlow.material.color.setHex(ball.trailColor);
     ballGlow.material.opacity = (ball.active && !ball.deadBounce) ? Math.min(0.28, ball.trailPower * 0.22) : 0;
-    ballShadow.position.set(ball.x, 0.018, ball.z);
-    const shScale = Math.max(0.32, 1.15 - ball.y * 0.14);
+    ballShadow.position.set(visBallX, 0.018, visBallZ);
+    const shScale = Math.max(0.32, 1.15 - visBallY * 0.14);
     ballShadow.scale.set(shScale, shScale, 1);
 
     for (let i = trailDots.length - 1; i > 0; i--) {
@@ -7696,7 +7922,7 @@
       trailDots[i].y = trailDots[i - 1].y;
       trailDots[i].z = trailDots[i - 1].z;
     }
-    trailDots[0].x = ball.x; trailDots[0].y = ball.y; trailDots[0].z = ball.z;
+    trailDots[0].x = visBallX; trailDots[0].y = visBallY; trailDots[0].z = visBallZ;
     for (let i = 0; i < trailDots.length; i++) {
       const td = trailDots[i];
       td.mesh.position.set(td.x, td.y, td.z);
@@ -7740,7 +7966,7 @@
 
     const st = STAGES[stageIdx] || STAGES[0];
     if (gameMode === 'online' && NetP2P.connected) {
-      const netInterval = NetP2P.transport === 'relay' ? 0.045 : 0.033;
+      const netInterval = NetP2P.transport === 'relay' ? 0.033 : 0.022;
       const rRate = Math.min(1, dtBase * 18);
       const mapVmPose = (mp) => {
         if (mp === 'receive' || mp === 'over_receive' || mp === 'dive') return 'receive';
@@ -7930,23 +8156,23 @@
       let targetZ = -3.8;
 
       if (ball.active) {
-        const distToEye = Math.hypot(ball.x - player.x, ball.y - eyeY, ball.z - player.z);
+        const distToEye = Math.hypot(visBallX - player.x, visBallY - eyeY, visBallZ - player.z);
         if (player.y > 0.65 && (ball.expectedActor === 'player_spike' || ball.expectedActor === 'player_serve_hit') && !ball.deadBounce) {
           // Airborne spike/serve: frame BOTH the ball and the enemy court aim spot!
-          targetX = ball.x * 0.45 + player.aimX * 0.55;
-          targetY = Math.max(0.85, ball.y * 0.38 + 0.35);
-          targetZ = Math.min(ball.z - 1.4, -3.8);
+          targetX = visBallX * 0.45 + player.aimX * 0.55;
+          targetY = Math.max(0.85, visBallY * 0.38 + 0.35);
+          targetZ = Math.min(visBallZ - 1.4, -3.8);
         } else if (distToEye > 0.75) {
           // Strong ball-tracking gaze! Follows high tosses, sharp dives, spikes, and post-point bounces!
-          targetX = ball.x;
-          targetY = Math.max(0.35, Math.min(5.5, ball.y));
-          targetZ = ball.z;
+          targetX = visBallX;
+          targetY = Math.max(0.35, Math.min(5.5, visBallY));
+          targetZ = visBallZ;
           // Prevent awkward backward neck-snap if ball drifts behind player's plane
           if (targetZ > player.z - 0.8) targetZ = player.z - 0.8;
         } else {
           // Ball right in front of face -> look smoothly forward at ball's height
-          targetX = ball.x * 0.85;
-          targetY = Math.max(0.6, ball.y);
+          targetX = visBallX * 0.85;
+          targetY = Math.max(0.6, visBallY);
           targetZ = player.z - 2.4;
         }
       }
@@ -8221,6 +8447,7 @@
       camLook: { x: +camLook.x.toFixed(2), y: +camLook.y.toFixed(2), z: +camLook.z.toFixed(2) },
       player: { x: +player.x.toFixed(2), y: +player.y.toFixed(2), z: +player.z.toFixed(2), vy: +player.vy.toFixed(2), aimX: +player.aimX.toFixed(2) },
       ball: { x: +ball.x.toFixed(2), y: +ball.y.toFixed(2), z: +ball.z.toFixed(2), targetX: +ball.targetX.toFixed(2), targetZ: +ball.targetZ.toFixed(2), omegaX: +ball.omegaX.toFixed(1), side: ball.side, touches: ball.touches, expectedActor: ball.expectedActor, incomingHigh: ball.incomingHigh, active: ball.active, deadBounce: ball.deadBounce },
+      visBall: { x: +ballMesh.position.x.toFixed(3), y: +ballMesh.position.y.toFixed(3), z: +ballMesh.position.z.toFixed(3), err: +Math.hypot(onlineWorld.ballVisErr.x, onlineWorld.ballVisErr.y, onlineWorld.ballVisErr.z).toFixed(3) },
       onlineSync: {
         matchId: onlineSync.matchId,
         pointSeq: onlineSync.pointSeq,
