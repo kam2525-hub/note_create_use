@@ -108,6 +108,18 @@
       "game_path": "games/day09-overclock-gunner-3d/index.html",
       "note_path": "notes/day09/note_draft.md",
       "shorts_script": "shorts/day09/generate_shorts.py"
+    },
+    {
+      "day": 10,
+      "date": "2026-11-24",
+      "slug": "day10-onara-long-jump",
+      "title": "おなら立ち幅跳び 999（ONARA LONG JUMP 999）",
+      "type": "game",
+      "genre": "バカ物理×ダダサバイバー風ローグライト立ち幅跳び",
+      "core_mechanic": "1プレイ限りのレベルアップ＆3択スキル進化!! 立ち幅跳びから空中で「おならジェット噴射」し、空を飛ぶ敵群を倒してXPジェムを回収→追尾おなら弾・回転焼き芋・悪臭ガスオーラ・サンダーすかし・ロケット推進屁など全7種スキルをLv.5超進化EVOへ覚醒させながら砂場→富士山→宇宙まで飛距離を競う！別モードのチュートリアル・全16種おなら図鑑・Web Audio屁シンセ搭載",
+      "game_path": "games/day10-onara-long-jump/index.html",
+      "note_path": "notes/day10/note_draft.md",
+      "shorts_script": "shorts/day10/generate_shorts.py"
     }
   ]
 }

@@ -9,6 +9,13 @@
 ## 制作ログ（重複防止カタログ）
 - 一覧表: [CATALOG.md](CATALOG.md) / 機械可読データ: [CATALOG.json](CATALOG.json)
 
+## Day 10: おなら立ち幅跳び 999（ONARA LONG JUMP 999）
+- ゲーム本体: [games/day10-onara-long-jump/index.html](games/day10-onara-long-jump/index.html)
+- 1クリックコピペヘルパー: [notes/day10/copy_helper.html](notes/day10/copy_helper.html)
+- note 記事原稿: [notes/day10/note_draft.md](notes/day10/note_draft.md)
+- YouTube メタデータ: [notes/day10/youtube_metadata.txt](notes/day10/youtube_metadata.txt)
+- ショート動画生成スクリプト（1080×1920・`DAY 10` サムネ＆チャンネル登録＆リクエストCTA込み）: [shorts/day10/generate_shorts.py](shorts/day10/generate_shorts.py)
+
 ## Day 09: OVERCLOCK GUNNER 3D（全20種ランダム武器切替×本格一人称3Dシューティング）
 - ゲーム本体: [games/day09-overclock-gunner-3d/index.html](games/day09-overclock-gunner-3d/index.html)
 - 1クリックコピペヘルパー: [notes/day09/copy_helper.html](notes/day09/copy_helper.html)
