@@ -3945,6 +3945,97 @@
     lastSyncReqAt: 0
   };
 
+  // Single Authoritative Shared-World State (Host = Server, Guest = Thin Client)
+  // World coords: Host court z > 0 (faces -z), Guest court z < 0 (faces +z, 180deg rotated on Guest screen)
+  const onlineWorld = {
+    snapSeq: 0,
+    lastAppliedSnapSeq: 0,
+    snapTimer: 0,
+    guestStateTimer: 0,
+    worldActor: 'none',
+    worldTimeScale: 1.0,
+    hostRecvSlow: false,
+    guestRecvSlow: false,
+    eventSeq: 0,
+    lastEventId: 0,
+    recentEvent: null,
+    recentEventUntil: 0,
+    serverRemMs: ONLINE_MATCH_DURATION_SEC * 1000,
+    serverPreMs: 700,
+    lastSnapLocalMs: 0,
+    localActSeq: 0,
+    localActPendingUntil: 0,
+    localActExpectedActor: null,
+    // Guest server-side mirrored state (only authoritative on Host)
+    guest: {
+      x: 0, y: 0, z: -5.4, aimX: 0, pose: 'idle',
+      serveType: 'jump',
+      overBoostToss: false,
+      zoneActive: false,
+      actionBuffer: null,
+      lastActSeq: 0
+    },
+    // Guest client-side render targets for mirrored characters
+    rivalTarget: { x: 0, y: 0, z: -5.4, pose: 'idle', active: false },
+    hostAlliesTarget: [
+      { x: -0.7, y: 0, z: -2.0, pose: 'idle' },
+      { x: 2.4, y: 0, z: -3.4, pose: 'idle' }
+    ],
+    guestAlliesTarget: [
+      { x: 0.7, y: 0, z: 2.0, pose: 'idle' },
+      { x: -2.4, y: 0, z: 3.4, pose: 'idle' }
+    ]
+  };
+
+  function mapWorldActorToLocal(wAct, isHost) {
+    if (isHost) {
+      if (wAct === 'host_serve_toss') return { expectedActor: 'player_serve_toss', side: 'us', blockWin: false };
+      if (wAct === 'host_serve_approach') return { expectedActor: 'player_serve_approach', side: 'us', blockWin: false };
+      if (wAct === 'host_serve_hit') return { expectedActor: 'player_serve_hit', side: 'us', blockWin: false };
+      if (wAct === 'host_recv') return { expectedActor: 'player_recv', side: 'us', blockWin: false };
+      if (wAct === 'host_ally_toss') return { expectedActor: 'ally_toss', side: 'us', blockWin: false };
+      if (wAct === 'host_spike') return { expectedActor: 'player_spike', side: 'us', blockWin: false };
+      if (wAct === 'guest_spike') return { expectedActor: 'online_wait', side: 'enemy', blockWin: true };
+      if (wAct && wAct.startsWith('guest_')) return { expectedActor: 'online_wait', side: 'enemy', blockWin: false };
+      return { expectedActor: 'none', side: ball.z >= 0 ? 'us' : 'enemy', blockWin: false };
+    } else {
+      if (wAct === 'guest_serve_toss') return { expectedActor: 'player_serve_toss', side: 'us', blockWin: false };
+      if (wAct === 'guest_serve_approach') return { expectedActor: 'player_serve_approach', side: 'us', blockWin: false };
+      if (wAct === 'guest_serve_hit') return { expectedActor: 'player_serve_hit', side: 'us', blockWin: false };
+      if (wAct === 'guest_recv') return { expectedActor: 'player_recv', side: 'us', blockWin: false };
+      if (wAct === 'guest_ally_toss') return { expectedActor: 'ally_toss', side: 'us', blockWin: false };
+      if (wAct === 'guest_spike') return { expectedActor: 'player_spike', side: 'us', blockWin: false };
+      if (wAct === 'host_spike') return { expectedActor: 'online_wait', side: 'enemy', blockWin: true };
+      if (wAct && wAct.startsWith('host_')) return { expectedActor: 'online_wait', side: 'enemy', blockWin: false };
+      return { expectedActor: 'none', side: ball.z >= 0 ? 'us' : 'enemy', blockWin: false };
+    }
+  }
+
+  function getOnlinePreMatchMs() {
+    if (gameMode !== 'online') return 0;
+    if (NetP2P.isHost) {
+      if (!onlineSync.matchStartSyncedMs) return 700;
+      return Math.max(0, onlineSync.matchStartSyncedMs - performance.now());
+    }
+    if (!onlineWorld.lastSnapLocalMs) return 700;
+    const since = Math.max(0, performance.now() - onlineWorld.lastSnapLocalMs);
+    return Math.max(0, onlineWorld.serverPreMs - since);
+  }
+
+  function getOnlineRemainingMs() {
+    if (gameMode !== 'online') return ONLINE_MATCH_DURATION_SEC * 1000;
+    if (NetP2P.isHost) {
+      if (!onlineSync.matchStartSyncedMs) return ONLINE_MATCH_DURATION_SEC * 1000;
+      const now = performance.now();
+      if (now < onlineSync.matchStartSyncedMs) return ONLINE_MATCH_DURATION_SEC * 1000;
+      return Math.max(0, ONLINE_MATCH_DURATION_SEC * 1000 - (now - onlineSync.matchStartSyncedMs));
+    }
+    if (!onlineWorld.lastSnapLocalMs) return ONLINE_MATCH_DURATION_SEC * 1000;
+    const since = Math.max(0, performance.now() - onlineWorld.lastSnapLocalMs);
+    const activeSince = Math.max(0, since - onlineWorld.serverPreMs);
+    return Math.max(0, onlineWorld.serverRemMs - activeSince);
+  }
+
   function getSyncedNowMs() {
     if (gameMode === 'online' && !NetP2P.isHost) {
       return performance.now() + onlineSync.clockOffsetMs;
@@ -4097,17 +4188,13 @@
     }
     hudOnlineMeta.classList.remove('hidden');
     const pingStr = onlineSync.rttMs > 0 ? `${onlineSync.rttMs}ms` : '--ms';
-    const nowSynced = getSyncedNowMs();
-    if (!onlineSync.matchStartSyncedMs || nowSynced < onlineSync.matchStartSyncedMs) {
-      const pre = onlineSync.matchStartSyncedMs
-        ? Math.max(0, (onlineSync.matchStartSyncedMs - nowSynced) / 1000).toFixed(1)
-        : '0.5';
+    const preMs = getOnlinePreMatchMs();
+    if (preMs > 0) {
       hudOnlineMeta.className = 'online-meta-line';
-      hudOnlineMeta.textContent = `SYNC ${pre}s // PING ${pingStr}`;
+      hudOnlineMeta.textContent = `SYNC ${(preMs / 1000).toFixed(1)}s // PING ${pingStr}`;
       return;
     }
-    const elapsedSec = Math.max(0, (nowSynced - onlineSync.matchStartSyncedMs) / 1000);
-    const remSec = Math.max(0, ONLINE_MATCH_DURATION_SEC - elapsedSec);
+    const remSec = getOnlineRemainingMs() / 1000;
     if (remSec <= 0 && myScore === enScore) {
       hudOnlineMeta.className = 'online-meta-line urgent';
       hudOnlineMeta.textContent = `⏱ GOLDEN PT // ${pingStr}`;
@@ -4344,6 +4431,68 @@
       return;
     }
 
+    if (gameMode === 'online') {
+      onlineWorld.worldTimeScale = 1.0;
+      onlineWorld.hostRecvSlow = false;
+      onlineWorld.guestRecvSlow = false;
+      onlineWorld.localActPendingUntil = 0;
+      onlineWorld.localActExpectedActor = null;
+      ball.touches = 0;
+      ball.active = false;
+      ball.deadBounce = false;
+      ball.vx = 0; ball.vy = 0; ball.vz = 0;
+      matchState = 'serve_wait';
+
+      if (NetP2P.isHost) {
+        onlineWorld.guest.actionBuffer = null;
+        onlineWorld.guest.overBoostToss = false;
+        onlineWorld.guest.x = onlineSync.serverIsHost ? 0.0 : -1.2;
+        onlineWorld.guest.y = 0;
+        onlineWorld.guest.z = onlineSync.serverIsHost ? -5.4 : -10.6;
+        onlineWorld.guest.pose = 'idle';
+        if (enemies[0]) {
+          enemies[0].x = onlineWorld.guest.x; enemies[0].z = onlineWorld.guest.z; enemies[0].y = 0;
+          enemies[0].targetX = enemies[0].x; enemies[0].targetZ = enemies[0].z;
+        }
+        if (enemies[1]) {
+          enemies[1].homeX = -0.7; enemies[1].homeZ = -2.0;
+          enemies[1].x = -0.7; enemies[1].z = -2.0; enemies[1].targetX = -0.7; enemies[1].targetZ = -2.0;
+        }
+        if (enemies[2]) {
+          enemies[2].homeX = 2.4; enemies[2].homeZ = -3.4;
+          enemies[2].x = 2.4; enemies[2].z = -3.4; enemies[2].targetX = 2.4; enemies[2].targetZ = -3.4;
+        }
+        if (onlineSync.serverIsHost) {
+          onlineWorld.worldActor = 'host_serve_toss';
+          ball.side = 'us';
+          ball.expectedActor = 'player_serve_toss';
+          ball.x = player.x - 0.14; ball.y = 1.32; ball.z = player.z - 0.44;
+          addCallout('YOUR SERVE!', 'ジャンプサーブ or フローターを選択！', '#38bdf8');
+        } else {
+          onlineWorld.worldActor = 'guest_serve_toss';
+          ball.side = 'enemy';
+          ball.expectedActor = 'online_wait';
+          ball.x = onlineWorld.guest.x + 0.14; ball.y = 1.32; ball.z = onlineWorld.guest.z + 0.44;
+        }
+        broadcastWorldSnap({ kind: 'point_start', srv: onlineSync.serverIsHost ? 'h' : 'g' });
+      } else {
+        if (serverSide === 'us') {
+          onlineWorld.worldActor = 'guest_serve_toss';
+          ball.side = 'us';
+          ball.expectedActor = 'player_serve_toss';
+          ball.x = player.x - 0.14; ball.y = 1.32; ball.z = player.z - 0.44;
+          addCallout('YOUR SERVE!', 'ジャンプサーブ or フローターを選択！', '#38bdf8');
+        } else {
+          onlineWorld.worldActor = 'host_serve_toss';
+          ball.side = 'enemy';
+          ball.expectedActor = 'online_wait';
+          ball.x = -1.06; ball.y = 1.32; ball.z = -10.16;
+        }
+      }
+      updateHud();
+      return;
+    }
+
     if (serverSide === 'us') {
       matchState = 'serve_wait';
       ball.side = 'us';
@@ -4353,14 +4502,6 @@
       ball.expectedActor = 'player_serve_toss';
       ball.x = player.x - 0.14; ball.y = 1.32; ball.z = player.z - 0.44;
       addCallout('YOUR SERVE!', 'ジャンプサーブ or フローターを選択！', '#38bdf8');
-    } else if (gameMode === 'online') {
-      matchState = 'rally';
-      ball.side = 'enemy';
-      ball.touches = 0;
-      ball.active = false;
-      ball.deadBounce = false;
-      ball.expectedActor = 'online_wait';
-      ball.x = 0; ball.y = 1.4; ball.z = -9.6;
     } else {
       matchState = 'rally';
       ball.side = 'us';
@@ -4424,7 +4565,6 @@
     const sz = 1.25 + Math.random() * 0.50;
     const peakContactY = boosted ? 3.12 : 3.02;
     const flightT = boosted ? 1.08 : 1.22;
-    const bx0 = ball.x, by0 = ball.y, bz0 = ball.z;
     launchBallTo(sx, peakContactY, sz, flightT, {
       trailColor: boosted ? 0xfacc15 : 0x38bdf8,
       trailPower: boosted ? 0.90 : 0.55,
@@ -4432,29 +4572,26 @@
       omegaX: -5
     });
     SFX.toss(true, comboCount);
-    if (gameMode === 'online') {
-      NetP2P.send({
-        type: 'rally_update', phase: 'toss',
-        matchId: onlineSync.matchId, pointSeq: onlineSync.pointSeq,
-        sentAt: Math.round(getSyncedNowMs()),
-        bx: bx0, by: by0, bz: bz0,
-        tx: sx, ty: peakContactY, tz: sz, flightTime: flightT
-      });
+    if (gameMode === 'online' && NetP2P.isHost) {
+      onlineWorld.worldActor = 'host_spike';
+      broadcastWorldSnap({ kind: 'toss', actor: 'h', boosted: !!boosted, x: allies[0].x, y: 2.0, z: allies[0].z });
     }
     if (boosted) {
       spawnBurstParticles(allies[0].x, 2.0, allies[0].z, 0xfacc15, 16, 0.8);
       addCallout('GOLDEN QUICK SET!!', 'オーバーパス連携！超極上トス!!', '#facc15');
     }
-    const st = STAGES[stageIdx] || STAGES[0];
-    enemies[0].targetX = Math.max(-3.5, Math.min(3.5, sx - 0.45));
-    enemies[0].targetZ = -0.75;
-    if (st.blockCount >= 2) {
-      enemies[1].targetX = Math.max(-3.5, Math.min(3.5, sx + 0.55));
-      enemies[1].targetZ = -0.75;
-    }
-    if (st.blockCount >= 3) {
-      enemies[2].targetX = -sx * 0.5;
-      enemies[2].targetZ = -5.6;
+    if (gameMode !== 'online') {
+      const st = STAGES[stageIdx] || STAGES[0];
+      enemies[0].targetX = Math.max(-3.5, Math.min(3.5, sx - 0.45));
+      enemies[0].targetZ = -0.75;
+      if (st.blockCount >= 2) {
+        enemies[1].targetX = Math.max(-3.5, Math.min(3.5, sx + 0.55));
+        enemies[1].targetZ = -0.75;
+      }
+      if (st.blockCount >= 3) {
+        enemies[2].targetX = -sx * 0.5;
+        enemies[2].targetZ = -5.6;
+      }
     }
   }
 
@@ -4627,13 +4764,11 @@
           trailPower: just ? 0.72 : 0.50,
           omegaX: -6
         });
-        if (gameMode === 'online') {
-          NetP2P.send({
-            type: 'rally_update', phase: 'recv',
-            matchId: onlineSync.matchId, pointSeq: onlineSync.pointSeq,
-            sentAt: Math.round(getSyncedNowMs()),
-            bx: ball.x, by: ball.y, bz: ball.z,
-            tx: sx, ty: 1.92, tz: sz, flightTime: recvFt
+        if (gameMode === 'online' && NetP2P.isHost) {
+          onlineWorld.worldActor = 'host_ally_toss';
+          broadcastWorldSnap({
+            kind: 'recv', actor: 'h', style, just, matched, isDive,
+            x: ball.x, y: ball.y, z: ball.z
           });
         }
       }
@@ -4666,18 +4801,12 @@
         ball.expectedActor = gameMode === 'online' ? 'online_wait' : 'enemy_play';
         const tx = Math.max(-3.6, Math.min(3.6, player.aimX));
         const tz = -3.4 - Math.random() * 2.0;
-        const sx = ball.x, sy = ball.y, sz = ball.z;
         const sharedFlight = gameMode === 'online' ? 0.78 : 0.68;
         const sharedTy = gameMode === 'online' ? 0.72 : 0.22;
         launchBallTo(tx, sharedTy, tz, sharedFlight, { trailColor: 0x34d399, trailPower: 0.82, feint: true, omegaX: -8 });
-        if (gameMode === 'online') {
-          NetP2P.send({
-            type: 'shot_over', kind: 'dump',
-            matchId: onlineSync.matchId, pointSeq: onlineSync.pointSeq,
-            sentAt: Math.round(getSyncedNowMs()),
-            sx, sy, sz, tx, ty: sharedTy, tz, flightTime: sharedFlight,
-            omegaX: -8, knuckle: false, incomingHigh: false, feint: true, just: false, meteor: false
-          });
+        if (gameMode === 'online' && NetP2P.isHost) {
+          onlineWorld.worldActor = 'guest_recv';
+          broadcastWorldSnap({ kind: 'feint', actor: 'h', x: ball.x, y: ball.y, z: ball.z });
         }
         SFX.feint();
         triggerArmAnim('feint', 0.30);
@@ -4708,22 +4837,12 @@
       matchTosses++;
       allies[1].targetX = targetSpikeX;
       allies[1].targetZ = targetSpikeZ + 0.6;
-      const bx0 = ball.x, by0 = ball.y, bz0 = ball.z;
       launchBallTo(targetSpikeX, 3.0, targetSpikeZ, tossFlight, {
         trailColor: just ? 0xfacc15 : 0x34d399,
         trailPower: just ? 0.86 : 0.56,
         just,
         omegaX: -5
       });
-      if (gameMode === 'online') {
-        NetP2P.send({
-          type: 'rally_update', phase: 'toss',
-          matchId: onlineSync.matchId, pointSeq: onlineSync.pointSeq,
-          sentAt: Math.round(getSyncedNowMs()),
-          bx: bx0, by: by0, bz: bz0,
-          tx: targetSpikeX, ty: 3.0, tz: targetSpikeZ, flightTime: tossFlight
-        });
-      }
       bumpCombo(1);
       SFX.toss(just, comboCount);
       triggerArmAnim('toss', 0.36, dir);
@@ -4749,6 +4868,112 @@
   function executePlayerAction(kind, dirHint = 0) {
     if (gameMode === 'title' || gameMode === 'upgrade' || gameMode === 'over') return;
     if (matchState === 'point_pause') return;
+
+    // THIN GUEST CLIENT: keep 0ms local movement/jump/arm anims, forward all ball hits to authoritative Host!
+    if (gameMode === 'online' && !NetP2P.isHost) {
+      // 1. Guest Serve Toss
+      if (matchState === 'serve_wait' && ball.expectedActor === 'player_serve_toss') {
+        const isFloat = (kind === 'float_serve' || kind === 'feint');
+        player.serveType = isFloat ? 'float' : 'jump';
+        matchState = 'rally';
+        SFX.toss(false, 1);
+        triggerArmAnim('serve_toss', 0.34);
+        if (isFloat) {
+          ball.expectedActor = 'player_serve_hit';
+          addCallout('FLOAT TOSS!', '目の前に落ちる瞬間に打て！', '#38bdf8');
+        } else {
+          ball.expectedActor = 'player_serve_approach';
+          player.approachTimer = 0.65;
+          player.approachVx = 0.05;
+          player.approachVz = -2.15;
+          SFX.squeak();
+          addCallout('HIGH TOSS!!', '助走中 → 踏み切って JUMP!!', '#facc15');
+        }
+        sendGuestAction(isFloat ? 'float_serve' : 'jump_serve', dirHint, ball.expectedActor);
+        updateHud();
+        return;
+      }
+
+      // 2A. Guest Jump Serve Takeoff (0ms local jump + notify Host)
+      if (ball.expectedActor === 'player_serve_approach' && player.y < 0.2) {
+        ball.expectedActor = 'player_serve_hit';
+        player.approachTimer = 0;
+        player.vz = -2.2;
+        player.vx = (ball.targetX - player.x) * 0.9;
+        player.vy = 6.95 * perks.jumpMult;
+        player.crouchDip = 0.22;
+        SFX.jump();
+        triggerArmAnim('approach_jump', 0.28);
+        recordEv('jump');
+        addCallout('TAKEOFF!!', '最高到達点で叩き込め!!', '#facc15');
+        sendGuestAction('serve_jump', dirHint, 'player_serve_hit');
+        return;
+      }
+
+      // 2B. Guest Serve Hit
+      if (ball.expectedActor === 'player_serve_hit') {
+        triggerArmAnim(kind === 'feint' ? 'feint' : 'spike', 0.32);
+        sendGuestAction(kind === 'feint' ? 'serve_feint' : 'serve_hit', dirHint, null);
+        return;
+      }
+
+      // 3. Guest Receive (Over / Under)
+      if (ball.expectedActor === 'player_recv') {
+        const style = (kind === 'recv_over' || kind === 'feint' || kind === 'toss_center') ? 'over' : 'under';
+        triggerArmAnim(style === 'over' ? 'over_ready' : 'receive_ready', 0.26);
+        player.crouchDip = style === 'over' ? 0.08 : 0.16;
+        sendGuestAction(style === 'over' ? 'recv_over' : 'recv_under', dirHint, null);
+        return;
+      }
+
+      // 5. Guest Spike (0ms local jump when on ground, forward hit when airborne)
+      if (ball.side === 'us' && ball.expectedActor === 'player_spike') {
+        if (player.y < 0.22) {
+          const dxT = ball.targetX - player.x;
+          const dzT = ball.targetZ + 0.38 - player.z;
+          const distToTarget = Math.hypot(dxT, dzT);
+          if (distToTarget < 2.8) {
+            let jvx = dxT * 1.15;
+            let jvz = dzT * 1.15;
+            const jSpd = Math.hypot(jvx, jvz);
+            const maxBroadSpd = 2.6;
+            if (jSpd > maxBroadSpd) {
+              jvx = (jvx / jSpd) * maxBroadSpd;
+              jvz = (jvz / jSpd) * maxBroadSpd;
+            }
+            player.vx = jvx;
+            player.vz = jvz;
+          }
+          player.vy = 7.15 * perks.jumpMult;
+          player.crouchDip = 0.24;
+          SFX.jump();
+          triggerArmAnim('approach_jump', 0.26);
+          recordEv('jump');
+          sendGuestState(true);
+          return;
+        }
+        triggerArmAnim(kind === 'feint' ? 'feint' : 'spike', 0.32);
+        sendGuestAction(kind === 'feint' ? 'spike_feint' : 'spike_hit', dirHint, null);
+        return;
+      }
+
+      // 6. Guest Block Jump (0ms local jump + immediate state push so Host checks block!)
+      if (ball.side === 'enemy' && ball.onlineBlockWindow > 0 && player.y < 0.22) {
+        const spk = enemies[0];
+        if (spk && player.z < 2.6 && Math.abs(player.x - spk.x) < 2.2) {
+          player.vx = Math.max(-2.2, Math.min(2.2, (spk.x - player.x) * 1.25));
+          player.vz = Math.max(-2.2, Math.min(0, (0.76 - player.z) * 1.4));
+        }
+        player.vy = 6.95 * perks.jumpMult;
+        player.crouchDip = 0.22;
+        SFX.jump();
+        triggerArmAnim('block', 0.62);
+        recordEv('block_jump');
+        sendGuestState(true);
+        return;
+      }
+      return;
+    }
 
     // 1. SERVE TOSS UP
     if (matchState === 'serve_wait' && ball.expectedActor === 'player_serve_toss') {
@@ -4785,6 +5010,10 @@
         SFX.squeak();
         addCallout('HIGH TOSS!!', '助走中 → 踏み切って JUMP!!', '#facc15');
       }
+      if (gameMode === 'online' && NetP2P.isHost) {
+        onlineWorld.worldActor = isFloat ? 'host_serve_hit' : 'host_serve_approach';
+        broadcastWorldSnap({ kind: 'serve_toss', actor: 'h', isFloat });
+      }
       updateHud();
       return;
     }
@@ -4801,6 +5030,10 @@
       triggerArmAnim('approach_jump', 0.28);
       recordEv('jump');
       addCallout('TAKEOFF!!', '最高到達点で叩き込め!!', '#facc15');
+      if (gameMode === 'online' && NetP2P.isHost) {
+        onlineWorld.worldActor = 'host_serve_hit';
+        broadcastWorldSnap({ kind: 'serve_jump', actor: 'h' });
+      }
       return;
     }
 
@@ -4815,10 +5048,12 @@
         const tz = isShort ? -3.4 : (isJumpServe ? -6.8 : -6.2);
         const speedT = isShort ? 1.02 : (isJumpServe ? (just ? 0.62 : 0.72) : (just ? 1.04 : 1.14));
 
+        if (gameMode === 'online') {
+          ball.y = Math.max(isJumpServe ? 2.25 : 1.75, ball.y);
+        }
         ball.side = 'enemy';
         ball.touches = 0;
         ball.expectedActor = gameMode === 'online' ? 'online_wait' : 'enemy_play';
-        const sx = ball.x, sy = ball.y, sz = ball.z;
         const isHighServe = !isJumpServe && !isShort;
         const sharedFlight = gameMode === 'online' ? Math.max(0.92, speedT + 0.14) : speedT;
         const sharedTy = gameMode === 'online' ? (isHighServe ? 1.56 : 0.90) : 0.22;
@@ -4828,22 +5063,10 @@
           just,
           feint: isShort,
           isServe: true,
+          incomingHigh: isHighServe,
           omegaX: isJumpServe ? -28 : 0,
           knuckle: !isJumpServe
         });
-        if (gameMode === 'online') {
-          NetP2P.send({
-            type: 'shot_over', kind: 'serve',
-            matchId: onlineSync.matchId, pointSeq: onlineSync.pointSeq,
-            sentAt: Math.round(getSyncedNowMs()),
-            sx, sy, sz, tx, ty: sharedTy, tz,
-            flightTime: sharedFlight,
-            omegaX: isJumpServe ? -28 : 0,
-            knuckle: !isJumpServe,
-            incomingHigh: isHighServe,
-            feint: isShort, just, meteor: false
-          });
-        }
 
         bumpCombo(1);
         SFX.spike(just && isJumpServe, false, comboCount);
@@ -4852,6 +5075,7 @@
         spawnBurstParticles(ball.x, ball.y, ball.z, isJumpServe ? 0xfacc15 : 0x38bdf8, isJumpServe ? 28 : 14, isJumpServe ? 1.15 : 0.75);
         spawnShockwave(ball.x, ball.y, ball.z, isJumpServe ? 0xfacc15 : 0x38bdf8, 2.2, true);
 
+        let kmh = 88;
         if (isJumpServe && just) {
           saveData.totalJust++;
           addZone(22);
@@ -4859,18 +5083,28 @@
           fovPunch = -7.5;
           speedLinesAlpha = 0.82;
           flashAlpha = 0.26; flashColor = '#facc15';
-          triggerSpeedPop(124 + Math.random() * 14, '#facc15');
+          kmh = Math.round(124 + Math.random() * 14);
+          triggerSpeedPop(kmh, '#facc15');
           addCallout('JUST JUMP SERVE!!', '超強烈ドライブ回転サーブ!!', '#facc15');
           recordEv('serve_just');
         } else if (!isJumpServe) {
-          triggerSpeedPop(82 + Math.random() * 12, '#38bdf8');
+          kmh = Math.round(82 + Math.random() * 12);
+          triggerSpeedPop(kmh, '#38bdf8');
           addCallout(isShort ? 'SHORT SERVE!' : 'FLOATER SERVE!!', '無回転ブレ球サーブ！', '#38bdf8');
         } else {
-          triggerSpeedPop(108 + Math.random() * 10, '#fb923c');
+          kmh = Math.round(108 + Math.random() * 10);
+          triggerSpeedPop(kmh, '#fb923c');
           addCallout('JUMP SERVE!', '', '#38bdf8');
         }
         rallyCount++;
         maxRallyMatch = Math.max(maxRallyMatch, rallyCount);
+        if (gameMode === 'online' && NetP2P.isHost) {
+          onlineWorld.worldActor = 'guest_recv';
+          broadcastWorldSnap({
+            kind: 'serve_hit', actor: 'h', isJumpServe, isShort, just, kmh,
+            x: ball.x, y: ball.y, z: ball.z
+          });
+        }
         updateHud();
         return;
       }
@@ -4977,10 +5211,12 @@
           return;
         }
 
+        if (gameMode === 'online') {
+          ball.y = Math.max(2.25, ball.y);
+        }
         ball.side = 'enemy';
         ball.touches = 0;
         ball.expectedActor = gameMode === 'online' ? 'online_wait' : 'enemy_play';
-        const sx = ball.x, sy = ball.y, sz = ball.z;
         const baseFlight = (isFeint ? 0.88 : (meteor ? 0.29 : (just ? 0.35 : 0.47))) / perks.spikeSpeedMult;
         const sharedFlight = gameMode === 'online' ? Math.max(isFeint ? 0.88 : 0.72, baseFlight + 0.22) : baseFlight;
         const sharedTy = gameMode === 'online' ? (isFeint ? 0.72 : 0.88) : 0.16;
@@ -4993,22 +5229,12 @@
           meteor,
           omegaX: omega
         });
-        if (gameMode === 'online') {
-          NetP2P.send({
-            type: 'shot_over', kind: isFeint ? 'feint' : 'spike',
-            matchId: onlineSync.matchId, pointSeq: onlineSync.pointSeq,
-            sentAt: Math.round(getSyncedNowMs()),
-            sx, sy, sz, tx: aimX, ty: sharedTy, tz: aimZ,
-            flightTime: sharedFlight,
-            omegaX: omega, knuckle: false, incomingHigh: false,
-            feint: isFeint, just, meteor
-          });
-        }
 
         bumpCombo(1);
         spawnBurstParticles(ball.x, ball.y, ball.z, meteor ? 0xfacc15 : (just ? 0xf97316 : 0x38bdf8), meteor ? 38 : (just ? 26 : 14), meteor ? 1.35 : 1.0);
         spawnShockwave(ball.x, ball.y, ball.z, meteor ? 0xfacc15 : 0xf97316, meteor ? 3.2 : 2.2, true);
 
+        let kmh = 108;
         if (isFeint) {
           SFX.feint();
           addCallout('FEINT!!', 'ブロックの頭上を抜いた！', '#34d399');
@@ -5018,7 +5244,8 @@
           if (meteor) {
             flashAlpha = 0.44; flashColor = '#facc15';
             crowdExcitement = 1.0;
-            triggerSpeedPop(152 + Math.random() * 14, '#facc15');
+            kmh = Math.round(152 + Math.random() * 14);
+            triggerSpeedPop(kmh, '#facc15');
             addCallout('⚡ METEOR SPIKE!!', 'ブロック粉砕・神速流星打!!', '#facc15');
             recordEv('meteor_spike');
           } else if (just) {
@@ -5026,18 +5253,29 @@
             addZone(26);
             flashAlpha = 0.28; flashColor = '#fb923c';
             crowdExcitement = 0.85;
-            triggerSpeedPop(128 + Math.random() * 16, '#fb923c');
+            kmh = Math.round(128 + Math.random() * 16);
+            triggerSpeedPop(kmh, '#fb923c');
             addCallout('💥 JUST SPIKE!!', '超豪快ドライブスパイク!!', '#facc15');
             recordEv('spike_just');
           } else {
             addZone(14);
-            triggerSpeedPop(104 + Math.random() * 14, '#38bdf8');
+            kmh = Math.round(104 + Math.random() * 14);
+            triggerSpeedPop(kmh, '#38bdf8');
             addCallout('SPIKE!!', '', '#38bdf8');
             recordEv('spike');
           }
         }
         rallyCount++;
         maxRallyMatch = Math.max(maxRallyMatch, rallyCount);
+        if (gameMode === 'online' && NetP2P.isHost) {
+          onlineWorld.worldActor = 'guest_recv';
+          ball.onlineBlockPending = (!isFeint && !meteor);
+          ball.onlineBlockChecked = false;
+          broadcastWorldSnap({
+            kind: isFeint ? 'feint' : 'spike', actor: 'h', just, meteor, kmh,
+            x: ball.x, y: ball.y, z: ball.z
+          });
+        }
         updateHud();
         return;
       }
@@ -5195,7 +5433,7 @@
     }
   }
 
-  function applyOnlinePointVisuals(winner, reason, incrementScore = false) {
+  function applyOnlinePointVisuals(winner, reason) {
     matchState = 'point_pause';
     pauseTimer = 1.55;
     ball.expectedActor = 'none';
@@ -5207,14 +5445,12 @@
     player.actionBuffer = null;
 
     if (winner === 'us') {
-      if (incrementScore) myScore++;
       serverSide = 'us';
       SFX.point(true);
       allies.forEach(a => { a.pose = 'celebrate'; a.poseTimer = 1.1; a.vy = 4.2; });
       addCallout('POINT!!', reason, '#facc15');
       recordEv('point_us');
     } else {
-      if (incrementScore) enScore++;
       comboCount = 0;
       comboPill.classList.remove('show');
       serverSide = 'enemy';
@@ -5229,82 +5465,692 @@
     updateHud();
   }
 
-  function applyOnlinePointCommit(data) {
-    onlineSync.committedPointSeq = Math.max(onlineSync.committedPointSeq, data.pointSeq);
-    onlineSync.hostScore = data.hostScore;
-    onlineSync.guestScore = data.guestScore;
-    onlineSync.serverIsHost = !!data.serverIsHost;
-    onlineSync.nextPointAtSyncedMs = data.nextPointAt;
+  function sendGuestState(force = false) {
+    if (gameMode !== 'online' || NetP2P.isHost || !NetP2P.connected) return;
+    if (force) onlineWorld.guestStateTimer = 0;
+    NetP2P.send({
+      type: 'guest_state',
+      mid: onlineSync.matchId,
+      pseq: onlineSync.pointSeq,
+      x: +(-player.x).toFixed(2),
+      y: +player.y.toFixed(2),
+      z: +(-player.z).toFixed(2),
+      aimX: +(-player.aimX).toFixed(2),
+      pose: vmAnim.timer > 0 ? vmAnim.mode : 'idle',
+      za: zoneActiveTimer > 0 ? 1 : 0
+    });
+  }
 
-    myScore = NetP2P.isHost ? data.hostScore : data.guestScore;
-    enScore = NetP2P.isHost ? data.guestScore : data.hostScore;
-    serverSide = (NetP2P.isHost === !!data.serverIsHost) ? 'us' : 'enemy';
+  function sendGuestAction(kind, dirHint = 0, optimisticActor = null) {
+    if (gameMode !== 'online' || NetP2P.isHost || !NetP2P.connected) return;
+    onlineWorld.localActSeq++;
+    if (optimisticActor) {
+      onlineWorld.localActPendingUntil = performance.now() + 360;
+      onlineWorld.localActExpectedActor = optimisticActor;
+    }
+    NetP2P.send({
+      type: 'guest_act',
+      seq: onlineWorld.localActSeq,
+      mid: onlineSync.matchId,
+      pseq: onlineSync.pointSeq,
+      kind,
+      dirHint,
+      x: +(-player.x).toFixed(2),
+      y: +player.y.toFixed(2),
+      z: +(-player.z).toFixed(2),
+      aimX: +(-player.aimX).toFixed(2),
+      za: zoneActiveTimer > 0 ? 1 : 0,
+      cb: { x: +(-ball.x).toFixed(3), y: +ball.y.toFixed(3), z: +(-ball.z).toFixed(3) }
+    });
+  }
 
-    const localWon = NetP2P.isHost ? !data.loserIsHost : !!data.loserIsHost;
-    if (matchState !== 'point_pause') {
-      if (data.isBlock && !localWon) {
-        const bx = data.bx || 0;
-        SFX.block(2);
-        spawnShockwave(bx, NET_H, 0, 0xf43f5e, 2.4, true);
-        spawnBurstParticles(bx, NET_H, 0, 0xf43f5e, 26, 1.0);
-        ball.x = bx; ball.y = NET_H; ball.z = 0.2;
-        ball.deadBounce = true;
-        ball.vx = 0; ball.vy = -4.2; ball.vz = 4.6;
-      } else if (localWon) {
-        spawnShockwave(ball.x, 0.03, Math.min(-1.0, ball.z), 0xfacc15, 2.8);
-        spawnBurstParticles(ball.x, 0.2, Math.min(-1.0, ball.z), 0xfacc15, 24, 1.0);
-        SFX.floorHit(1.0);
-        ball.deadBounce = true;
+  function broadcastWorldSnap(ev = null) {
+    if (gameMode !== 'online' || !NetP2P.isHost || !NetP2P.connected) return;
+    const now = performance.now();
+    if (ev) {
+      ev.id = ++onlineWorld.eventSeq;
+      onlineWorld.recentEvent = ev;
+      onlineWorld.recentEventUntil = now + 180;
+    }
+    const activeEv = ev || (now < onlineWorld.recentEventUntil ? onlineWorld.recentEvent : null);
+    onlineWorld.snapTimer = 0;
+    NetP2P.send({
+      type: 'world_snap',
+      seq: ++onlineWorld.snapSeq,
+      mid: onlineSync.matchId,
+      pseq: onlineSync.pointSeq,
+      la: onlineWorld.guest.lastActSeq,
+      ms: matchState,
+      hs: onlineSync.hostScore,
+      gs: onlineSync.guestScore,
+      srv: onlineSync.serverIsHost ? 1 : 0,
+      rc: rallyCount,
+      remMs: Math.round(getOnlineRemainingMs()),
+      preMs: Math.round(getOnlinePreMatchMs()),
+      ot: onlineSync.overtime ? 1 : 0,
+      ts: +onlineWorld.worldTimeScale.toFixed(2),
+      rs: (onlineWorld.hostRecvSlow ? 1 : 0) | (onlineWorld.guestRecvSlow ? 2 : 0),
+      act: onlineWorld.worldActor,
+      b: {
+        x: +ball.x.toFixed(3), y: +ball.y.toFixed(3), z: +ball.z.toFixed(3),
+        vx: +ball.vx.toFixed(2), vy: +ball.vy.toFixed(2), vz: +ball.vz.toFixed(2),
+        ox: +ball.omegaX.toFixed(1),
+        a: ball.active ? 1 : 0,
+        db: ball.deadBounce ? 1 : 0,
+        kn: ball.knuckle ? 1 : 0,
+        kp: +ball.knucklePhase.toFixed(2),
+        tc: ball.touches,
+        tx: +ball.targetX.toFixed(2), ty: +ball.targetY.toFixed(2), tz: +ball.targetZ.toFixed(2),
+        ft: +ball.flightTotal.toFixed(3), fm: +ball.flightTimer.toFixed(3),
+        ih: ball.incomingHigh ? 1 : 0,
+        fe: ball.isFeint ? 1 : 0,
+        ju: ball.isJust ? 1 : 0,
+        me: ball.isMeteor ? 1 : 0,
+        sv: ball.isServe ? 1 : 0,
+        col: ball.trailColor,
+        tp: +ball.trailPower.toFixed(2)
+      },
+      hp: {
+        x: +player.x.toFixed(2), y: +player.y.toFixed(2), z: +player.z.toFixed(2),
+        p: vmAnim.timer > 0 ? vmAnim.mode : 'idle'
+      },
+      ha: allies.map(a => [+a.x.toFixed(2), +a.y.toFixed(2), +a.z.toFixed(2), a.pose]),
+      ga: [
+        enemies[1] ? [+enemies[1].x.toFixed(2), +enemies[1].y.toFixed(2), +enemies[1].z.toFixed(2), enemies[1].pose] : [-0.7, 0, -2.0, 'idle'],
+        enemies[2] ? [+enemies[2].x.toFixed(2), +enemies[2].y.toFixed(2), +enemies[2].z.toFixed(2), enemies[2].pose] : [2.4, 0, -3.4, 'idle']
+      ],
+      ev: activeEv
+    });
+  }
+
+  // Host Authoritative Guest Resolvers (all in shared World Coordinates; Guest court is z < 0, faces +z)
+  function tryResolveGuestServeHit(isShort, gx, gy, gz, aimX, cb) {
+    if (onlineWorld.worldActor !== 'guest_serve_hit' || !ball.active || ball.deadBounce) return false;
+    const handX = gx - 0.10;
+    const handY = gy + 1.72;
+    const handZ = gz + 0.35;
+    const dNowXZ = Math.hypot(ball.x - handX, ball.z - handZ);
+    const dNowY = Math.abs(ball.y - handY);
+    const dNow3D = Math.hypot(ball.x - handX, ball.y - handY, ball.z - handZ);
+    let distXZ = dNowXZ, distY = dNowY, dist3D = dNow3D, by = ball.y;
+    if (cb && typeof cb.x === 'number') {
+      const dc3D = Math.hypot(cb.x - handX, cb.y - handY, cb.z - handZ);
+      if (dc3D < dist3D) {
+        distXZ = Math.hypot(cb.x - handX, cb.z - handZ);
+        distY = Math.abs(cb.y - handY);
+        dist3D = dc3D;
+        by = cb.y;
       }
-      applyOnlinePointVisuals(localWon ? 'us' : 'enemy', data.reason || 'ONLINE POINT!!', false);
-    } else {
-      updateHud();
+    }
+    if (!(distXZ <= 2.15 && distY <= 1.38 && dist3D <= 2.40 && by >= 1.15)) return false;
+
+    const isJumpServe = onlineWorld.guest.serveType === 'jump' && gy > 0.30;
+    const just = Math.abs(by - (gy + 1.65)) < 0.65;
+    const tx = Math.max(-3.9, Math.min(3.9, aimX));
+    const tz = isShort ? 3.4 : (isJumpServe ? 6.8 : 6.2);
+    const speedT = isShort ? 1.02 : (isJumpServe ? (just ? 0.62 : 0.72) : (just ? 1.04 : 1.14));
+    const isHighServe = !isJumpServe && !isShort;
+    const sharedFlight = Math.max(0.92, speedT + 0.14);
+    const sharedTy = isHighServe ? 1.56 : 0.90;
+
+    ball.y = Math.max(isJumpServe ? 2.25 : 1.75, ball.y);
+    ball.side = 'us';
+    ball.touches = 0;
+    ball.expectedActor = 'player_recv';
+    onlineWorld.worldActor = 'host_recv';
+    launchBallTo(tx, sharedTy, tz, sharedFlight, {
+      trailColor: isJumpServe ? (just ? 0xfacc15 : 0xf97316) : 0x38bdf8,
+      trailPower: isJumpServe ? (just ? 1.25 : 0.85) : 0.60,
+      just,
+      feint: isShort,
+      isServe: true,
+      incomingHigh: isHighServe,
+      omegaX: isJumpServe ? 28 : 0, // +omegaX = topspin dip for +z trajectory!
+      knuckle: !isJumpServe
+    });
+    if (enemies[0]) { enemies[0].pose = 'spike_hit'; enemies[0].poseTimer = 0.42; }
+    SFX.spike(just && isJumpServe, false, 1);
+    spawnBurstParticles(ball.x, ball.y, ball.z, isJumpServe ? 0xfacc15 : 0x38bdf8, isJumpServe ? 22 : 12, 0.85);
+    const kmh = isJumpServe && just ? Math.round(124 + Math.random() * 14) : (!isJumpServe ? Math.round(82 + Math.random() * 12) : Math.round(108 + Math.random() * 10));
+    rallyCount++;
+    maxRallyMatch = Math.max(maxRallyMatch, rallyCount);
+    onlineWorld.guest.actionBuffer = null;
+    broadcastWorldSnap({
+      kind: 'serve_hit', actor: 'g', isJumpServe, isShort, just, kmh,
+      x: ball.x, y: ball.y, z: ball.z
+    });
+    updateHud();
+    return true;
+  }
+
+  function tryResolveGuestReceive(style, gx, gy, gz, cb) {
+    if (onlineWorld.worldActor !== 'guest_recv' || !ball.active || ball.deadBounce) return false;
+    const isOver = style === 'over';
+    const dNow = Math.hypot(ball.x - gx, ball.z - gz);
+    let distXZ = dNow;
+    let by = ball.y;
+    if (cb && typeof cb.x === 'number') {
+      const dc = Math.hypot(cb.x - gx, cb.z - gz);
+      if (dc < distXZ) { distXZ = dc; by = cb.y; }
+    }
+    const timeRem = ball.flightTotal - ball.flightTimer;
+    const maxReach = isOver ? 2.05 : 2.85;
+    const heightOk = isOver ? (by >= 0.72 && by <= 2.75) : (by <= 2.35);
+    const timeOk = timeRem <= 0.54 && timeRem >= -0.34;
+    if (!(distXZ <= maxReach && heightOk && timeOk)) return false;
+
+    const dTargetXZ = Math.hypot(ball.targetX - gx, ball.targetZ - gz);
+    const rec = dTargetXZ > 1.85 ? 'under' : ((ball.incomingHigh || ball.targetY >= 1.32) ? 'over' : 'under');
+    const matched = (style === rec);
+    const isDive = !isOver && distXZ > 1.35;
+    const just = Math.abs(timeRem) < 0.30 && (matched || distXZ < 1.6);
+
+    ball.side = 'enemy';
+    ball.x = ball.x * 0.55 + gx * 0.45;
+    ball.y = isOver ? Math.max(1.55, Math.min(2.15, ball.y)) : Math.max(0.88, Math.min(1.45, ball.y));
+    ball.z = ball.z * 0.55 + (gz + 0.24) * 0.45;
+    ball.touches = 1;
+    ball.expectedActor = 'online_wait';
+    onlineWorld.worldActor = 'guest_ally_toss';
+    onlineWorld.guestRecvSlow = false;
+    if (isOver && matched) onlineWorld.guest.overBoostToss = true;
+
+    const sx = -(0.5 + (Math.random() - 0.5) * 0.7);
+    const sz = -1.9;
+    const recvFt = isOver && matched ? 0.85 : (just ? 0.96 : 1.15);
+    if (enemies[1]) { enemies[1].targetX = sx; enemies[1].targetZ = sz; }
+    if (enemies[0]) { enemies[0].pose = 'receive'; enemies[0].poseTimer = 0.42; }
+    launchBallTo(sx, 1.92, sz, recvFt, {
+      trailColor: isOver ? 0x34d399 : (just ? 0xfacc15 : 0x38bdf8),
+      trailPower: just ? 0.72 : 0.50,
+      omegaX: 6
+    });
+    SFX.receive(false, isOver, 1);
+    spawnShockwave(ball.x, isOver ? ball.y : 0.03, ball.z, isOver ? 0x34d399 : 0x38bdf8, 1.5, isOver);
+    onlineWorld.guest.actionBuffer = null;
+    broadcastWorldSnap({
+      kind: 'recv', actor: 'g', style, just, matched, isDive,
+      x: ball.x, y: ball.y, z: ball.z
+    });
+    updateHud();
+    return true;
+  }
+
+  function spawnGuestAllyToss() {
+    ball.side = 'enemy';
+    ball.touches = 2;
+    ball.expectedActor = 'online_wait';
+    onlineWorld.worldActor = 'guest_spike';
+    if (enemies[1]) { enemies[1].pose = 'toss'; enemies[1].poseTimer = 0.5; }
+    const boosted = onlineWorld.guest.overBoostToss;
+    onlineWorld.guest.overBoostToss = false;
+    const sx = Math.max(-2.9, Math.min(2.9, onlineWorld.guest.x * 0.55 + (Math.random() - 0.5) * 1.0));
+    const sz = -(1.25 + Math.random() * 0.50);
+    const peakContactY = boosted ? 3.12 : 3.02;
+    const flightT = boosted ? 1.08 : 1.22;
+    launchBallTo(sx, peakContactY, sz, flightT, {
+      trailColor: boosted ? 0xfacc15 : 0x38bdf8,
+      trailPower: boosted ? 0.90 : 0.55,
+      just: boosted,
+      omegaX: 5
+    });
+    ball.onlineBlockWindow = flightT + 0.65;
+    SFX.toss(false, 1);
+    if (boosted && enemies[1]) {
+      spawnBurstParticles(enemies[1].x, 2.0, enemies[1].z, 0xfacc15, 14, 0.75);
+    }
+    broadcastWorldSnap({
+      kind: 'toss', actor: 'g', boosted: !!boosted,
+      x: enemies[1] ? enemies[1].x : -0.7, y: 2.0, z: enemies[1] ? enemies[1].z : -2.0
+    });
+  }
+
+  function tryResolveGuestSpike(isFeint, gx, gy, gz, aimX, zoneActive, cb) {
+    if (onlineWorld.worldActor !== 'guest_spike' || !ball.active || ball.deadBounce) return false;
+    if (gy < 0.28) return false;
+    const handX = gx - 0.10;
+    const handY = gy + 1.65;
+    const handZ = gz + 0.35;
+    const dNowXZ = Math.hypot(ball.x - handX, ball.z - handZ);
+    const dNowY = Math.abs(ball.y - handY);
+    const dNow3D = Math.hypot(ball.x - handX, ball.y - handY, ball.z - handZ);
+    let distXZ = dNowXZ, distY = dNowY, dist3D = dNow3D, by = ball.y;
+    if (cb && typeof cb.x === 'number') {
+      const dc3D = Math.hypot(cb.x - handX, cb.y - handY, cb.z - handZ);
+      if (dc3D < dist3D) {
+        distXZ = Math.hypot(cb.x - handX, cb.z - handZ);
+        distY = Math.abs(cb.y - handY);
+        dist3D = dc3D;
+        by = cb.y;
+      }
+    }
+    if (!(distXZ <= 2.05 && distY <= 1.38 && dist3D <= 2.25 && by >= 1.30)) return false;
+
+    const timingErr = Math.abs(ball.flightTotal - ball.flightTimer);
+    const just = timingErr < 0.32 || (gy > 0.95 && Math.abs(by - (gy + 1.65)) < 0.65);
+    const meteor = !!zoneActive;
+    const tx = Math.max(-4.2, Math.min(4.2, aimX));
+    const tz = isFeint ? (2.2 + Math.random() * 1.6) : (4.2 + Math.random() * 4.2);
+    const baseFlight = isFeint ? 0.88 : (meteor ? 0.29 : (just ? 0.35 : 0.47));
+    const sharedFlight = Math.max(isFeint ? 0.88 : 0.72, baseFlight + 0.22);
+    const sharedTy = isFeint ? 0.72 : 0.88;
+    const omega = isFeint ? -4 : (meteor ? 42 : (just ? 32 : 22)); // +omegaX = topspin dip for +z trajectory!
+
+    ball.y = Math.max(2.25, ball.y);
+    ball.side = 'us';
+    ball.touches = 0;
+    ball.expectedActor = 'player_recv';
+    onlineWorld.worldActor = 'host_recv';
+    ball.onlineBlockWindow = 0;
+    launchBallTo(tx, sharedTy, tz, sharedFlight, {
+      trailColor: meteor ? 0xfacc15 : (just ? 0xf97316 : 0xf43f5e),
+      trailPower: meteor ? 1.38 : (just ? 1.15 : 0.85),
+      feint: isFeint,
+      just,
+      meteor,
+      omegaX: omega,
+      incomingHigh: false
+    });
+    ball.onlineBlockPending = (!isFeint && !meteor);
+    ball.onlineBlockChecked = false;
+    if (enemies[0]) { enemies[0].pose = 'spike_hit'; enemies[0].poseTimer = 0.42; }
+    SFX.spike(just, meteor, 1);
+    spawnBurstParticles(ball.x, ball.y, ball.z, meteor ? 0xfacc15 : (just ? 0xf97316 : 0xf43f5e), meteor ? 30 : 18, 0.95);
+    const kmh = isFeint ? 68 : (meteor ? Math.round(152 + Math.random() * 14) : (just ? Math.round(128 + Math.random() * 16) : Math.round(104 + Math.random() * 14)));
+    rallyCount++;
+    maxRallyMatch = Math.max(maxRallyMatch, rallyCount);
+    onlineWorld.guest.actionBuffer = null;
+    broadcastWorldSnap({
+      kind: isFeint ? 'feint' : 'spike', actor: 'g', just, meteor, kmh,
+      x: ball.x, y: ball.y, z: ball.z
+    });
+    updateHud();
+    return true;
+  }
+
+  function handleGuestAction(msg) {
+    if (!NetP2P.isHost || gameMode !== 'online' || matchState === 'point_pause') return;
+    if (msg.mid && msg.mid !== onlineSync.matchId) return;
+    if (typeof msg.pseq === 'number' && msg.pseq !== onlineSync.pointSeq) return;
+
+    const g = onlineWorld.guest;
+    if (typeof msg.x === 'number') g.x = Math.max(-4.6, Math.min(4.6, msg.x));
+    if (typeof msg.y === 'number') g.y = Math.max(0, msg.y);
+    if (typeof msg.z === 'number') g.z = Math.max(-11.2, Math.min(-0.55, msg.z));
+    if (typeof msg.aimX === 'number') g.aimX = Math.max(-4.2, Math.min(4.2, msg.aimX));
+    g.zoneActive = !!msg.za;
+    if (typeof msg.seq === 'number') g.lastActSeq = Math.max(g.lastActSeq, msg.seq);
+
+    const k = msg.kind;
+    if ((k === 'float_serve' || k === 'jump_serve') && matchState === 'serve_wait' && onlineWorld.worldActor === 'guest_serve_toss') {
+      const isFloat = k === 'float_serve';
+      g.serveType = isFloat ? 'float' : 'jump';
+      matchState = 'rally';
+      ball.side = 'enemy';
+      ball.touches = 0;
+      ball.expectedActor = 'online_wait';
+      ball.x = g.x + 0.10;
+      ball.y = 1.55;
+      ball.z = g.z + (isFloat ? 0.42 : 0.60);
+      if (isFloat) {
+        onlineWorld.worldActor = 'guest_serve_hit';
+        launchBallVel(-0.14, 4.7, 0.35, { trailColor: 0x38bdf8, trailPower: 0.35, predictHeight: 2.15, omegaX: 0 });
+      } else {
+        onlineWorld.worldActor = 'guest_serve_approach';
+        launchBallVel(-0.08, 7.6, 2.45, { trailColor: 0xfacc15, trailPower: 0.52, predictHeight: 2.85, omegaX: 9 });
+      }
+      if (enemies[0]) { enemies[0].pose = 'toss'; enemies[0].poseTimer = 0.35; }
+      SFX.toss(false, 1);
+      broadcastWorldSnap({ kind: 'serve_toss', actor: 'g', isFloat });
+      return;
+    }
+
+    if (k === 'serve_jump' && onlineWorld.worldActor === 'guest_serve_approach') {
+      onlineWorld.worldActor = 'guest_serve_hit';
+      if (enemies[0]) { enemies[0].pose = 'spike_windup'; enemies[0].poseTimer = 0.35; }
+      broadcastWorldSnap({ kind: 'serve_jump', actor: 'g' });
+      return;
+    }
+
+    if (k === 'serve_hit' || k === 'serve_feint') {
+      const isShort = k === 'serve_feint';
+      if (!tryResolveGuestServeHit(isShort, g.x, g.y, g.z, g.aimX, msg.cb)) {
+        g.actionBuffer = { kind: k, timer: 0.30, aimX: g.aimX, za: g.zoneActive, cb: msg.cb };
+      }
+      return;
+    }
+
+    if (k === 'recv_over' || k === 'recv_under') {
+      const style = k === 'recv_over' ? 'over' : 'under';
+      if (!tryResolveGuestReceive(style, g.x, g.y, g.z, msg.cb)) {
+        g.actionBuffer = { kind: k, timer: 0.28, aimX: g.aimX, za: g.zoneActive, cb: msg.cb };
+      }
+      return;
+    }
+
+    if (k === 'spike_hit' || k === 'spike_feint') {
+      const isFeint = k === 'spike_feint';
+      if (!tryResolveGuestSpike(isFeint, g.x, g.y, g.z, g.aimX, g.zoneActive, msg.cb)) {
+        g.actionBuffer = { kind: k, timer: 0.28, aimX: g.aimX, za: g.zoneActive, cb: msg.cb };
+      }
+      return;
     }
   }
 
-  function claimOnlinePoint(loserIsHost, reason, extra = {}) {
-    if (gameMode !== 'online' || onlineSync.matchEnded) return;
+  function commitAuthoritativePoint(loserIsHost, reason, extra = {}) {
+    if (gameMode !== 'online' || !NetP2P.isHost || onlineSync.matchEnded) return;
     const seq = onlineSync.pointSeq;
     if (onlineSync.committedPointSeq >= seq) return;
 
-    const nextPointAt = Math.round(getSyncedNowMs() + 1550);
-    if (NetP2P.isHost) {
-      if (loserIsHost) onlineSync.guestScore++;
-      else onlineSync.hostScore++;
-      onlineSync.serverIsHost = !loserIsHost;
-      const commitPayload = {
-        type: 'point_commit',
-        matchId: onlineSync.matchId,
-        pointSeq: seq,
-        hostScore: onlineSync.hostScore,
-        guestScore: onlineSync.guestScore,
-        serverIsHost: onlineSync.serverIsHost,
-        loserIsHost: !!loserIsHost,
-        reason: reason || 'ONLINE POINT!!',
-        nextPointAt,
-        isBlock: !!extra.isBlock,
-        bx: extra.bx || 0,
-        sentAt: Math.round(getSyncedNowMs())
-      };
-      NetP2P.send(commitPayload);
-      applyOnlinePointCommit(commitPayload);
-    } else {
-      if (matchState === 'point_pause') return;
-      onlineSync.nextPointAtSyncedMs = nextPointAt;
-      const localWon = !!loserIsHost;
-      applyOnlinePointVisuals(localWon ? 'us' : 'enemy', reason || 'ONLINE POINT!!', true);
-      NetP2P.send({
-        type: 'point_claim',
-        matchId: onlineSync.matchId,
-        pointSeq: seq,
-        loserIsHost: !!loserIsHost,
-        reason: reason || 'ONLINE POINT!!',
-        isBlock: !!extra.isBlock,
-        bx: extra.bx || 0,
-        nextPointAt,
-        sentAt: Math.round(getSyncedNowMs())
+    onlineSync.committedPointSeq = seq;
+    if (loserIsHost) onlineSync.guestScore++;
+    else onlineSync.hostScore++;
+    onlineSync.serverIsHost = !loserIsHost;
+    onlineSync.nextPointAtSyncedMs = Math.round(performance.now() + 1550);
+
+    myScore = onlineSync.hostScore;
+    enScore = onlineSync.guestScore;
+    serverSide = onlineSync.serverIsHost ? 'us' : 'enemy';
+    onlineWorld.worldActor = 'none';
+    onlineWorld.guest.actionBuffer = null;
+
+    applyOnlinePointVisuals(loserIsHost ? 'enemy' : 'us', reason || 'ONLINE POINT!!');
+    broadcastWorldSnap({
+      kind: 'point',
+      loserIsHost: !!loserIsHost,
+      reason: reason || 'ONLINE POINT!!',
+      isBlock: !!extra.isBlock,
+      bx: extra.bx || 0
+    });
+  }
+
+  function playWorldEventFx(ev) {
+    if (!ev || !ev.id || ev.id <= onlineWorld.lastEventId) return;
+    onlineWorld.lastEventId = ev.id;
+    const isMe = ev.actor === 'g'; // Called on Guest!
+    const fxX = typeof ev.x === 'number' ? -ev.x : ball.x;
+    const fxY = typeof ev.y === 'number' ? ev.y : ball.y;
+    const fxZ = typeof ev.z === 'number' ? -ev.z : ball.z;
+
+    if (ev.kind === 'serve_toss') {
+      if (!isMe) {
+        SFX.toss(false, 1);
+        if (enemies[0]) { enemies[0].pose = 'toss'; enemies[0].poseTimer = 0.35; }
+      }
+      return;
+    }
+    if (ev.kind === 'serve_hit') {
+      SFX.spike(!!(ev.just && ev.isJumpServe), false, isMe ? Math.max(1, comboCount + 1) : 1);
+      spawnBurstParticles(fxX, fxY, fxZ, ev.isJumpServe ? 0xfacc15 : 0x38bdf8, ev.isJumpServe ? 26 : 14, ev.isJumpServe ? 1.1 : 0.75);
+      spawnShockwave(fxX, fxY, fxZ, ev.isJumpServe ? 0xfacc15 : 0x38bdf8, 2.1, true);
+      if (isMe) {
+        bumpCombo(1);
+        player.shake = ev.isJumpServe ? (ev.just ? 0.24 : 0.14) : 0.08;
+        if (ev.isJumpServe && ev.just) {
+          saveData.totalJust++;
+          addZone(22);
+          fovPunch = -7.5; speedLinesAlpha = 0.82; flashAlpha = 0.26; flashColor = '#facc15';
+          triggerSpeedPop(ev.kmh || 128, '#facc15');
+          addCallout('JUST JUMP SERVE!!', '超強烈ドライブ回転サーブ!!', '#facc15');
+        } else if (!ev.isJumpServe) {
+          triggerSpeedPop(ev.kmh || 86, '#38bdf8');
+          addCallout(ev.isShort ? 'SHORT SERVE!' : 'FLOATER SERVE!!', '無回転ブレ球サーブ！', '#38bdf8');
+        } else {
+          triggerSpeedPop(ev.kmh || 112, '#fb923c');
+          addCallout('JUMP SERVE!', '', '#38bdf8');
+        }
+      } else if (enemies[0]) {
+        enemies[0].pose = 'spike_hit'; enemies[0].poseTimer = 0.42;
+      }
+      return;
+    }
+    if (ev.kind === 'recv') {
+      const isOver = ev.style === 'over';
+      SFX.receive(!!ev.just, isOver, isMe ? Math.max(1, comboCount + 1) : 1);
+      spawnShockwave(fxX, isOver ? fxY : 0.03, fxZ, isOver ? 0x34d399 : (ev.just ? 0xfacc15 : 0x38bdf8), ev.just ? 2.2 : 1.4, isOver);
+      spawnBurstParticles(fxX, fxY, fxZ, isOver ? 0x34d399 : 0xfacc15, ev.just ? 20 : 10, ev.just ? 0.95 : 0.65);
+      if (isMe) {
+        matchRecvs++;
+        bumpCombo(1);
+        triggerArmAnim(ev.isDive ? 'dive' : (isOver ? 'over_receive' : 'receive'), 0.38);
+        player.shake = ev.just ? 0.14 : 0.07;
+        if (ev.just) { fovPunch = -4.5; speedLinesAlpha = 0.55; flashAlpha = 0.18; flashColor = isOver ? '#34d399' : '#facc15'; }
+        if (isOver && ev.matched) { addZone(28); addCallout('PERFECT OVER PASS!!', '超正確Aパス!! 黄金トスへ連携!!', '#34d399'); }
+        else if (isOver) { addZone(14); addCallout('OVER RECEIVE!', '', '#38bdf8'); }
+        else if (ev.just) { addZone(24); addCallout(ev.isDive ? 'GOD DIVE DIG!!' : 'JUST UNDER DIG!!', '', '#facc15'); }
+        else { addZone(12); addCallout(ev.isDive ? 'DIVE RECEIVE!!' : 'NICE UNDER!!', '', '#38bdf8'); }
+      } else if (enemies[0]) {
+        enemies[0].pose = 'receive'; enemies[0].poseTimer = 0.38;
+      }
+      return;
+    }
+    if (ev.kind === 'toss') {
+      SFX.toss(isMe, isMe ? comboCount : 1);
+      if (ev.boosted) {
+        spawnBurstParticles(fxX, 2.0, fxZ, 0xfacc15, 16, 0.8);
+        if (isMe) addCallout('GOLDEN QUICK SET!!', 'オーバーパス連携！超極上トス!!', '#facc15');
+      }
+      return;
+    }
+    if (ev.kind === 'spike' || ev.kind === 'feint') {
+      const isFeint = ev.kind === 'feint';
+      if (isFeint) SFX.feint();
+      else SFX.spike(!!ev.just, !!ev.meteor, isMe ? Math.max(1, comboCount + 1) : 1);
+      spawnBurstParticles(fxX, fxY, fxZ, ev.meteor ? 0xfacc15 : (isFeint ? 0x34d399 : (ev.just ? 0xf97316 : 0x38bdf8)), ev.meteor ? 36 : (ev.just ? 24 : 14), ev.meteor ? 1.3 : 0.95);
+      spawnShockwave(fxX, fxY, fxZ, ev.meteor ? 0xfacc15 : (isFeint ? 0x34d399 : 0xf97316), ev.meteor ? 3.0 : 2.1, true);
+      if (isMe) {
+        matchSpikes++;
+        bumpCombo(1);
+        player.shake = ev.meteor ? 0.38 : (ev.just ? 0.26 : 0.14);
+        fovPunch = ev.meteor ? -11.0 : (ev.just ? -7.5 : -3.5);
+        speedLinesAlpha = ev.meteor ? 1.0 : (ev.just ? 0.85 : 0.42);
+        if (isFeint) {
+          addCallout('FEINT!!', 'ブロックの頭上を抜いた！', '#34d399');
+        } else if (ev.meteor) {
+          flashAlpha = 0.44; flashColor = '#facc15'; crowdExcitement = 1.0;
+          triggerSpeedPop(ev.kmh || 156, '#facc15');
+          addCallout('⚡ METEOR SPIKE!!', 'ブロック粉砕・神速流星打!!', '#facc15');
+        } else if (ev.just) {
+          saveData.totalJust++; addZone(26);
+          flashAlpha = 0.28; flashColor = '#fb923c'; crowdExcitement = 0.85;
+          triggerSpeedPop(ev.kmh || 132, '#fb923c');
+          addCallout('💥 JUST SPIKE!!', '超豪快ドライブスパイク!!', '#facc15');
+        } else {
+          addZone(14);
+          triggerSpeedPop(ev.kmh || 108, '#38bdf8');
+          addCallout('SPIKE!!', '', '#38bdf8');
+        }
+      } else if (enemies[0]) {
+        enemies[0].pose = 'spike_hit'; enemies[0].poseTimer = 0.42;
+      }
+      return;
+    }
+    if (ev.kind === 'point') {
+      const guestWon = !!ev.loserIsHost;
+      if (ev.isBlock) {
+        const bx = -(ev.bx || 0);
+        SFX.block(2);
+        spawnShockwave(bx, NET_H, 0, guestWon ? 0x38bdf8 : 0xf43f5e, 2.6, true);
+        spawnBurstParticles(bx, NET_H, 0, guestWon ? 0x38bdf8 : 0xf43f5e, 28, 1.05);
+        if (guestWon) {
+          bumpCombo(2); addZone(28); fovPunch = -9.0; player.shake = 0.30;
+          speedLinesAlpha = 0.92; flashAlpha = 0.30; flashColor = '#38bdf8'; crowdExcitement = 1.0;
+          addCallout('MONSTER BLOCK!!', '', '#38bdf8');
+        }
+      } else {
+        SFX.floorHit(1.0);
+        spawnShockwave(ball.x, 0.03, ball.z, guestWon ? 0xfacc15 : 0xf43f5e, guestWon ? 2.6 : 1.8);
+        if (guestWon) spawnBurstParticles(ball.x, 0.2, ball.z, 0xfacc15, 22, 1.0);
+      }
+      applyOnlinePointVisuals(guestWon ? 'us' : 'enemy', ev.reason || 'ONLINE POINT!!');
+    }
+  }
+
+  function applyWorldSnap(snap) {
+    if (NetP2P.isHost) return;
+    if (snap.mid && onlineSync.matchId !== snap.mid) {
+      applyOnlineMatchInit({
+        matchId: snap.mid,
+        pointSeq: snap.pseq || 1,
+        hostScore: snap.hs || 0,
+        guestScore: snap.gs || 0,
+        serverIsHost: !!snap.srv,
+        targetPts: 7
       });
     }
+    if (gameMode !== 'online') return;
+    if (typeof snap.seq === 'number' && snap.seq <= onlineWorld.lastAppliedSnapSeq) return;
+    onlineWorld.lastAppliedSnapSeq = snap.seq;
+
+    // 1. Authoritative Match Clock (anchored directly to Host's remMs with half-RTT compensation!)
+    const halfRtt = Math.min(180, (onlineSync.rttMs || 14) * 0.5);
+    onlineWorld.serverPreMs = Math.max(0, (snap.preMs || 0) - halfRtt);
+    onlineWorld.serverRemMs = Math.max(0, (snap.remMs ?? ONLINE_MATCH_DURATION_SEC * 1000) - (snap.preMs > 0 ? 0 : halfRtt));
+    onlineWorld.lastSnapLocalMs = performance.now();
+    if (snap.ot && !onlineSync.overtime) {
+      onlineSync.overtime = true;
+      addCallout('OVERTIME!!', '同点！次の1点を取った方が勝利!!', '#facc15');
+    }
+
+    // 2. Authoritative Score & Rally Count
+    onlineSync.hostScore = snap.hs;
+    onlineSync.guestScore = snap.gs;
+    onlineSync.serverIsHost = !!snap.srv;
+    myScore = snap.gs;
+    enScore = snap.hs;
+    serverSide = snap.srv ? 'enemy' : 'us';
+    if (typeof snap.rc === 'number') {
+      rallyCount = snap.rc;
+      maxRallyMatch = Math.max(maxRallyMatch, rallyCount);
+    }
+
+    // 3. New Point Transition (Authoritative from Host)
+    let newPoint = false;
+    if (typeof snap.pseq === 'number' && snap.pseq > onlineSync.pointSeq) {
+      onlineSync.pointSeq = snap.pseq;
+      onlineWorld.localActPendingUntil = 0;
+      onlineWorld.localActExpectedActor = null;
+      resetCourtPositions();
+      sendGuestState(true);
+      newPoint = true;
+    }
+
+    // 4. Shared World TimeScale & Guest Proximity Slow-Mo Feedback
+    onlineWorld.worldTimeScale = typeof snap.ts === 'number' ? snap.ts : 1.0;
+    const prevSlow = recvSlowActive;
+    recvSlowActive = !!(snap.rs & 2);
+    if (recvSlowActive && !prevSlow) {
+      SFX.slowEnter();
+    }
+
+    // 5. Phase / Actor State (respect brief optimistic lock until Host echoes snap.la >= localActSeq)
+    const prevWorldActor = onlineWorld.worldActor;
+    const optimisticLocked = performance.now() < onlineWorld.localActPendingUntil && (snap.la || 0) < onlineWorld.localActSeq;
+    if (!optimisticLocked) {
+      onlineWorld.localActPendingUntil = 0;
+      onlineWorld.worldActor = snap.act || 'none';
+      matchState = snap.ms || matchState;
+      const mapped = mapWorldActorToLocal(onlineWorld.worldActor, false);
+      ball.expectedActor = mapped.expectedActor;
+      ball.side = mapped.side;
+      ball.onlineBlockWindow = mapped.blockWin ? 0.85 : 0;
+    }
+
+    // 6. Single Shared Ball Mirroring (180deg Y-rotation: x'=-x, y'=y, z'=-z)
+    const b = snap.b;
+    if (b) {
+      const actChanged = (snap.act !== prevWorldActor) || newPoint || (!!b.a !== ball.active) || (!!b.db !== ball.deadBounce);
+      const guestHoldingServe = (snap.ms === 'serve_wait' && snap.act === 'guest_serve_toss');
+      if (guestHoldingServe) {
+        ball.active = false;
+        ball.deadBounce = false;
+        ball.vx = 0; ball.vy = 0; ball.vz = 0;
+        ball.x = player.x - 0.14;
+        ball.y = 1.32 + Math.sin(elapsedTotal * 4.5) * 0.03;
+        ball.z = player.z - 0.44;
+      } else {
+        let gx = -b.x, gy = b.y, gz = -b.z;
+        let gvx = -b.vx, gvy = b.vy, gvz = -b.vz;
+        const gox = -b.ox;
+        const gkn = !!b.kn;
+        let gkp = b.kp || 0;
+        let gfm = b.fm || 0;
+
+        // Forward-extrapolate by half-RTT while in flight so both views show the ball at the SAME instant!
+        if (b.a && !b.db && halfRtt > 2) {
+          let rem = Math.min(0.065, (halfRtt / 1000) * onlineWorld.worldTimeScale);
+          while (rem > 0.0005) {
+            const h = Math.min(0.015, rem);
+            gfm += h; gkp += h;
+            const acc = computeBallAccel(gvx, gvy, gvz, gox, 0, 0, gkn, gkp);
+            gvx += acc.ax * h; gvy += acc.ay * h; gvz += acc.az * h;
+            gx += gvx * h; gy += gvy * h; gz += gvz * h;
+            rem -= h;
+          }
+          if (gy < BALL_R + 0.01) gy = BALL_R + 0.01;
+        }
+
+        const err = Math.hypot(gx - ball.x, gy - ball.y, gz - ball.z);
+        if (actChanged || !b.a || err > 0.65) {
+          ball.x = gx; ball.y = gy; ball.z = gz;
+        } else {
+          const blend = 0.85;
+          ball.x += (gx - ball.x) * blend;
+          ball.y += (gy - ball.y) * blend;
+          ball.z += (gz - ball.z) * blend;
+        }
+        onlineWorld.guestExtrapTime = 0;
+        ball.vx = gvx; ball.vy = gvy; ball.vz = gvz;
+        ball.omegaX = gox; ball.omegaY = 0; ball.omegaZ = 0;
+        ball.knuckle = gkn; ball.knucklePhase = gkp;
+        ball.active = !!b.a;
+        ball.deadBounce = !!b.db;
+        ball.touches = b.tc || 0;
+        ball.targetX = -b.tx; ball.targetY = b.ty; ball.targetZ = -b.tz;
+        ball.flightTotal = Math.max(0.20, b.ft || 1.0);
+        ball.flightTimer = gfm;
+        ball.incomingHigh = !!b.ih;
+        ball.isFeint = !!b.fe;
+        ball.isJust = !!b.ju;
+        ball.isMeteor = !!b.me;
+        ball.isServe = !!b.sv;
+        ball.trailColor = b.col || 0x38bdf8;
+        ball.trailPower = b.tp || 0.4;
+      }
+    }
+
+    // 7. Mirror Host Player & All 4 Allies in Exact Shared World Coords
+    if (snap.hp) {
+      onlineWorld.rivalTarget.active = true;
+      onlineWorld.rivalTarget.x = -snap.hp.x;
+      onlineWorld.rivalTarget.y = snap.hp.y || 0;
+      onlineWorld.rivalTarget.z = -snap.hp.z;
+      onlineWorld.rivalTarget.pose = snap.hp.p || 'idle';
+    }
+    if (Array.isArray(snap.ha)) {
+      for (let i = 0; i < 2; i++) {
+        if (snap.ha[i]) {
+          onlineWorld.hostAlliesTarget[i].x = -snap.ha[i][0];
+          onlineWorld.hostAlliesTarget[i].y = snap.ha[i][1] || 0;
+          onlineWorld.hostAlliesTarget[i].z = -snap.ha[i][2];
+          onlineWorld.hostAlliesTarget[i].pose = snap.ha[i][3] || 'idle';
+        }
+      }
+    }
+    if (Array.isArray(snap.ga)) {
+      for (let i = 0; i < 2; i++) {
+        if (snap.ga[i]) {
+          onlineWorld.guestAlliesTarget[i].x = -snap.ga[i][0];
+          onlineWorld.guestAlliesTarget[i].y = snap.ga[i][1] || 0;
+          onlineWorld.guestAlliesTarget[i].z = -snap.ga[i][2];
+          onlineWorld.guestAlliesTarget[i].pose = snap.ga[i][3] || 'idle';
+        }
+      }
+    }
+
+    // 8. Discrete Event Effects (deduplicated by ev.id)
+    if (snap.ev) playWorldEventFx(snap.ev);
+    updateHud();
   }
 
   function finishOnlineMatch(winnerIsHost, reason = '') {
@@ -5331,15 +6177,16 @@
       guestScore: onlineSync.guestScore,
       winnerIsHost: !!winnerIsHost,
       reason,
-      sentAt: Math.round(getSyncedNowMs())
+      sentAt: Math.round(performance.now())
     });
     finishOnlineMatch(winnerIsHost, reason);
   }
 
   function awardPoint(winner, reason, fromRemote = false) {
-    if (gameMode === 'online' && !fromRemote) {
-      const loserIsHost = (winner === 'enemy') ? NetP2P.isHost : !NetP2P.isHost;
-      claimOnlinePoint(loserIsHost, reason);
+    if (gameMode === 'online') {
+      if (NetP2P.isHost && !fromRemote) {
+        commitAuthoritativePoint(winner === 'enemy', reason);
+      }
       return;
     }
     if (matchState === 'point_pause') return;
@@ -5461,12 +6308,9 @@
         commitOnlineMatchEnd(false, '');
         return true;
       }
-      if (onlineSync.matchStartSyncedMs > 0) {
-        const remSec = ONLINE_MATCH_DURATION_SEC - Math.max(0, (getSyncedNowMs() - onlineSync.matchStartSyncedMs) / 1000);
-        if (remSec <= 0 && hs !== gs) {
-          commitOnlineMatchEnd(hs > gs, 'TIME UP!!');
-          return true;
-        }
+      if (getOnlineRemainingMs() <= 0 && hs !== gs) {
+        commitOnlineMatchEnd(hs > gs, 'TIME UP!!');
+        return true;
       }
       return false;
     }
@@ -5555,10 +6399,6 @@
     screenOver.classList.remove('hidden');
   }
 
-  // Online Rival Live Pose State
-  const onlineRivalTarget = { x: 0, y: 0, z: -5.2, pose: 'idle', active: false, ball: null };
-  let onlinePoseTimer = 0;
-
   function setOnlineStatus(msg, kind = '') {
     const el = document.getElementById('online-status');
     if (!el) return;
@@ -5584,13 +6424,35 @@
     onlineSync.hostScore = initMsg.hostScore || 0;
     onlineSync.guestScore = initMsg.guestScore || 0;
     onlineSync.serverIsHost = initMsg.serverIsHost !== false;
-    onlineSync.matchStartSyncedMs = initMsg.matchStartSyncedMs || Math.round(getSyncedNowMs() + 600);
+    onlineSync.matchStartSyncedMs = initMsg.matchStartSyncedMs || Math.round(performance.now() + 700);
     onlineSync.nextPointAtSyncedMs = 0;
     onlineSync.matchEnded = false;
     onlineSync.overtime = false;
     onlineSync.rematchLocalReady = false;
     onlineSync.rematchRemoteReady = false;
     onlineSync.lastHudSec = -1;
+
+    onlineWorld.snapSeq = 0;
+    onlineWorld.lastAppliedSnapSeq = 0;
+    onlineWorld.snapTimer = 0;
+    onlineWorld.guestStateTimer = 0;
+    onlineWorld.eventSeq = 0;
+    onlineWorld.lastEventId = 0;
+    onlineWorld.recentEvent = null;
+    onlineWorld.recentEventUntil = 0;
+    onlineWorld.worldTimeScale = 1.0;
+    onlineWorld.hostRecvSlow = false;
+    onlineWorld.guestRecvSlow = false;
+    onlineWorld.serverRemMs = ONLINE_MATCH_DURATION_SEC * 1000;
+    onlineWorld.serverPreMs = 700;
+    onlineWorld.lastSnapLocalMs = performance.now();
+    onlineWorld.localActSeq = 0;
+    onlineWorld.localActPendingUntil = 0;
+    onlineWorld.localActExpectedActor = null;
+    onlineWorld.guest.lastActSeq = 0;
+    onlineWorld.guest.actionBuffer = null;
+    onlineWorld.guest.overBoostToss = false;
+    onlineWorld.guest.zoneActive = false;
 
     myScore = NetP2P.isHost ? onlineSync.hostScore : onlineSync.guestScore;
     enScore = NetP2P.isHost ? onlineSync.guestScore : onlineSync.hostScore;
@@ -5599,14 +6461,17 @@
     zone = 0; zoneActiveTimer = 0;
     targetPts = initMsg.targetPts || 7;
     serverSide = (NetP2P.isHost === onlineSync.serverIsHost) ? 'us' : 'enemy';
-    onlineRivalTarget.active = true;
-    onlineRivalTarget.ball = null;
-    onlineRivalTarget.x = 0; onlineRivalTarget.y = 0; onlineRivalTarget.z = serverSide === 'us' ? -5.4 : -9.6;
+    onlineWorld.rivalTarget.active = true;
+    onlineWorld.rivalTarget.x = 0; onlineWorld.rivalTarget.y = 0;
+    onlineWorld.rivalTarget.z = serverSide === 'us' ? -5.4 : -10.6;
     spawnCharacters({
       name: 'ONLINE RIVAL', tag: 'RIVAL', targetPts,
       jersey: 0x0f172a, trim: 0x34d399,
       enemySpeed: 7.0, blockCount: 2, spikePower: 1.15, servePower: 1.0, receiveSkill: 0.5
     });
+    // Symmetric ally coordinates across net so all 6 characters share exact world space!
+    if (enemies[1]) { enemies[1].homeX = -0.7; enemies[1].homeZ = -2.0; enemies[1].x = -0.7; enemies[1].z = -2.0; }
+    if (enemies[2]) { enemies[2].homeX = 2.4; enemies[2].homeZ = -3.4; enemies[2].x = 2.4; enemies[2].z = -3.4; }
     SFX.whistle();
     SFX.startBeat(() => ({ playing: gameMode !== 'title' && gameMode !== 'over' && gameMode !== 'upgrade', zone: zoneActiveTimer > 0 }));
     startNextPoint();
@@ -5630,11 +6495,13 @@
     if (isHost) {
       applyOnlineMatchInit(initPayload);
       NetP2P.send(initPayload);
+      broadcastWorldSnap();
       setTimeout(() => {
         if (gameMode === 'online' && NetP2P.connected && onlineSync.matchId === nextMatchId && onlineSync.pointSeq === 1) {
           NetP2P.send(initPayload);
+          broadcastWorldSnap();
         }
-      }, 320);
+      }, 280);
     } else {
       applyOnlineMatchInit({
         matchId: 0,
@@ -5676,7 +6543,7 @@
   NetP2P.onMessage((msg) => {
     if (!msg || !msg.type) return;
 
-    // NTP-style clock synchronization messages
+    // RTT / Clock synchronization probes
     if (msg.type === 'clock_ping') {
       const t1 = performance.now();
       NetP2P.send({ type: 'clock_pong', seq: msg.seq, t0: msg.t0, t1, t2: performance.now() });
@@ -5703,25 +6570,8 @@
     }
 
     if (msg.type === 'match_init') {
-      if (!NetP2P.isHost) {
-        if (onlineSync.matchId !== msg.matchId) {
-          applyOnlineMatchInit(msg);
-        } else {
-          if (msg.matchStartSyncedMs) onlineSync.matchStartSyncedMs = msg.matchStartSyncedMs;
-          if (typeof msg.pointSeq === 'number' && msg.pointSeq > onlineSync.pointSeq) {
-            onlineSync.pointSeq = msg.pointSeq;
-            onlineSync.hostScore = msg.hostScore;
-            onlineSync.guestScore = msg.guestScore;
-            onlineSync.serverIsHost = !!msg.serverIsHost;
-            onlineSync.nextPointAtSyncedMs = 0;
-            myScore = msg.guestScore;
-            enScore = msg.hostScore;
-            serverSide = msg.serverIsHost ? 'enemy' : 'us';
-            startNextPoint();
-          } else {
-            updateOnlineMetaHud();
-          }
-        }
+      if (!NetP2P.isHost && onlineSync.matchId !== msg.matchId) {
+        applyOnlineMatchInit(msg);
       }
       return;
     }
@@ -5739,6 +6589,7 @@
         matchStartSyncedMs: onlineSync.matchStartSyncedMs,
         sentAt: Math.round(performance.now())
       });
+      broadcastWorldSnap();
       return;
     }
 
@@ -5762,173 +6613,36 @@
       return;
     }
 
-    if (msg.type === 'pose') {
-      onlineRivalTarget.active = true;
-      onlineRivalTarget.x = -msg.x;
-      onlineRivalTarget.y = msg.y || 0;
-      onlineRivalTarget.z = -msg.z;
-      onlineRivalTarget.pose = msg.pose || 'idle';
-      if (msg.ball && gameMode === 'online' && ball.expectedActor === 'online_wait' && !ball.deadBounce) {
-        onlineRivalTarget.ball = {
-          x: -msg.ball.x,
-          y: msg.ball.y,
-          z: -msg.ball.z,
-          ts: performance.now()
-        };
-      }
-      // Canonical score heartbeat reconciliation from Host
-      if (!NetP2P.isHost && gameMode === 'online' && msg.matchId === onlineSync.matchId && msg.pseq === onlineSync.pointSeq && matchState !== 'point_pause') {
-        if (typeof msg.hs === 'number' && typeof msg.gs === 'number' && (myScore !== msg.gs || enScore !== msg.hs)) {
-          onlineSync.hostScore = msg.hs;
-          onlineSync.guestScore = msg.gs;
-          myScore = msg.gs;
-          enScore = msg.hs;
-          updateHud();
-        }
-      }
-      return;
-    }
-
-    if (gameMode !== 'online') return;
-
-    if (msg.type === 'point_claim' && NetP2P.isHost) {
-      if (msg.matchId && msg.matchId !== onlineSync.matchId) return;
-      if (typeof msg.pointSeq === 'number' && msg.pointSeq !== onlineSync.pointSeq) return;
-      if (onlineSync.committedPointSeq >= onlineSync.pointSeq) return;
-      if (msg.loserIsHost) onlineSync.guestScore++;
-      else onlineSync.hostScore++;
-      onlineSync.serverIsHost = !msg.loserIsHost;
-      const nextPointAt = Math.max(Math.round(getSyncedNowMs() + 1350), msg.nextPointAt || 0);
-      const commitPayload = {
-        type: 'point_commit',
-        matchId: onlineSync.matchId,
-        pointSeq: onlineSync.pointSeq,
-        hostScore: onlineSync.hostScore,
-        guestScore: onlineSync.guestScore,
-        serverIsHost: onlineSync.serverIsHost,
-        loserIsHost: !!msg.loserIsHost,
-        reason: msg.reason || 'ONLINE POINT!!',
-        nextPointAt,
-        isBlock: !!msg.isBlock,
-        bx: msg.bx || 0,
-        sentAt: Math.round(getSyncedNowMs())
-      };
-      NetP2P.send(commitPayload);
-      applyOnlinePointCommit(commitPayload);
-      return;
-    }
-
-    if (msg.type === 'point_commit' && !NetP2P.isHost) {
-      if (msg.matchId && msg.matchId !== onlineSync.matchId) return;
-      if (typeof msg.pointSeq === 'number' && msg.pointSeq < onlineSync.pointSeq) return;
-      applyOnlinePointCommit(msg);
-      return;
-    }
-
-    if (msg.type === 'point_start' && !NetP2P.isHost) {
-      if (msg.matchId && msg.matchId !== onlineSync.matchId) return;
-      if (msg.pointSeq <= onlineSync.pointSeq && matchState !== 'point_pause') return;
-      onlineSync.pointSeq = msg.pointSeq;
-      onlineSync.hostScore = msg.hostScore;
-      onlineSync.guestScore = msg.guestScore;
-      onlineSync.serverIsHost = !!msg.serverIsHost;
-      onlineSync.nextPointAtSyncedMs = 0;
-      myScore = msg.guestScore;
-      enScore = msg.hostScore;
-      serverSide = msg.serverIsHost ? 'enemy' : 'us';
-      startNextPoint();
-      return;
-    }
-
     if (msg.type === 'match_end') {
-      if (msg.matchId && msg.matchId !== onlineSync.matchId) return;
+      if (msg.matchId && onlineSync.matchId && msg.matchId !== onlineSync.matchId) return;
       onlineSync.hostScore = msg.hostScore;
       onlineSync.guestScore = msg.guestScore;
       finishOnlineMatch(!!msg.winnerIsHost, msg.reason || '');
       return;
     }
 
-    if (msg.type === 'shot_over') {
-      if (msg.matchId && onlineSync.matchId && msg.matchId !== onlineSync.matchId) return;
-      if (typeof msg.pointSeq === 'number' && msg.pointSeq !== onlineSync.pointSeq) return;
-      onlineRivalTarget.ball = null;
-      const sx = -msg.sx;
-      const sy = msg.sy;
-      const sz = -msg.sz;
-      const tx = -msg.tx;
-      const tz = -msg.tz;
-      const omegaX = -(msg.omegaX || 0);
-      ball.onlineBlockWindow = 0;
-
-      // Mirror incoming shot cleanly onto OUR court with exact shared flightTime + clock-synced latency compensation!
-      ball.x = sx; ball.y = Math.max(1.2, sy); ball.z = sz;
-      ball.side = 'us';
-      ball.touches = 0;
-      ball.deadBounce = false;
-      ball.expectedActor = 'player_recv';
-      recvSlowNotified = false;
-      const incomingHigh = !!msg.incomingHigh;
-      const ty = typeof msg.ty === 'number' ? msg.ty : (incomingHigh ? 1.56 : 0.88);
-      const exactFlight = msg.flightTime || (msg.kind === 'serve' ? 0.92 : 0.72);
-      launchBallTo(tx, ty, tz, exactFlight, {
-        trailColor: msg.meteor ? 0xfacc15 : (incomingHigh ? 0x34d399 : 0xf43f5e),
-        trailPower: msg.meteor ? 1.25 : 0.88,
-        omegaX,
-        knuckle: !!msg.knuckle,
-        incomingHigh,
-        feint: !!msg.feint,
-        just: !!msg.just,
-        meteor: !!msg.meteor
-      });
-      ball.onlineBlockPending = (msg.kind === 'spike' && !msg.meteor && !msg.feint);
-      ball.onlineBlockChecked = false;
-      if (typeof msg.sentAt === 'number' && onlineSync.clockSynced) {
-        const ageSec = Math.max(0, Math.min(exactFlight * 0.42, (getSyncedNowMs() - msg.sentAt) / 1000));
-        if (ageSec > 0.005) fastForwardBall(ageSec);
-      }
-      SFX.spike(!!msg.just, !!msg.meteor, 1);
-      if (enemies[0]) { enemies[0].pose = 'spike_hit'; enemies[0].poseTimer = 0.42; }
+    // Authoritative Server -> Guest World Snapshot
+    if (msg.type === 'world_snap' && !NetP2P.isHost) {
+      applyWorldSnap(msg);
       return;
     }
 
-    if (msg.type === 'rally_update') {
-      if (msg.matchId && onlineSync.matchId && msg.matchId !== onlineSync.matchId) return;
-      if (typeof msg.pointSeq === 'number' && msg.pointSeq !== onlineSync.pointSeq) return;
-      const bx = -msg.bx, by = msg.by, bz = -msg.bz;
-      const tx = -msg.tx, ty = msg.ty, tz = -msg.tz;
-      ball.x = bx; ball.y = by; ball.z = bz;
-      ball.side = 'enemy';
-      ball.deadBounce = false;
-      ball.expectedActor = 'online_wait';
-      const ft = Math.max(0.42, msg.flightTime || 0.9);
-      launchBallTo(tx, ty, tz, ft, {
-        trailColor: msg.phase === 'toss' ? 0xf5b800 : 0x38bdf8,
-        trailPower: 0.52,
-        omegaX: 4
-      });
-      let ageSec = 0;
-      if (typeof msg.sentAt === 'number' && onlineSync.clockSynced) {
-        ageSec = Math.max(0, Math.min(ft * 0.42, (getSyncedNowMs() - msg.sentAt) / 1000));
-        if (ageSec > 0.005) fastForwardBall(ageSec);
-      }
-      if (msg.phase === 'recv') {
-        SFX.receive(false, false, 1);
-        if (enemies[0]) { enemies[0].pose = 'receive'; enemies[0].poseTimer = 0.38; }
-      } else if (msg.phase === 'toss') {
-        SFX.toss(false, 1);
-        ball.onlineBlockWindow = Math.max(0.2, ft - ageSec) + 0.65;
-        if (enemies[1]) { enemies[1].pose = 'toss'; enemies[1].poseTimer = 0.42; }
-      }
+    // Guest -> Authoritative Server State & Actions
+    if (msg.type === 'guest_state' && NetP2P.isHost && gameMode === 'online') {
+      if (msg.mid && msg.mid !== onlineSync.matchId) return;
+      if (typeof msg.pseq === 'number' && msg.pseq !== onlineSync.pointSeq) return;
+      const g = onlineWorld.guest;
+      g.x = Math.max(-4.6, Math.min(4.6, msg.x || 0));
+      g.y = Math.max(0, msg.y || 0);
+      g.z = Math.max(-11.2, Math.min(-0.55, msg.z || -5.4));
+      g.aimX = Math.max(-4.2, Math.min(4.2, msg.aimX || 0));
+      g.pose = msg.pose || 'idle';
+      g.zoneActive = !!msg.za;
       return;
     }
 
-    // Legacy fallbacks if ever triggered
-    if (msg.type === 'point_lost') {
-      if (NetP2P.isHost) claimOnlinePoint(false, msg.reason || 'ONLINE POINT!!');
-      return;
-    }
-    if (msg.type === 'block_shutout') {
-      if (NetP2P.isHost) claimOnlinePoint(true, 'MONSTER BLOCK!!', { isBlock: true, bx: msg.bx || 0 });
+    if (msg.type === 'guest_act' && NetP2P.isHost && gameMode === 'online') {
+      handleGuestAction(msg);
       return;
     }
   });
@@ -6452,31 +7166,85 @@
       }
     }
 
-    // Gentle Proximity Slow-Mo (Triggers ONLY when close to the incoming ball; keeps Online feel consistent with CPU matches!)
+    // Gentle Proximity Slow-Mo (Triggers ONLY when close to the incoming ball; shared identically in Online!)
     let timeScale = 1.0;
-    recvSlowActive = false;
-    if (ball.expectedActor === 'player_recv' && ball.active && !ball.deadBounce) {
-      const rem = ball.flightTotal - ball.flightTimer;
-      const distBallXZ = Math.hypot(ball.x - player.x, ball.z - player.z);
-      const distBall3D = Math.hypot(ball.x - player.x, ball.y - (player.y + 1.25), ball.z - player.z);
-      const dTarget = Math.hypot(ball.targetX - player.x, ball.targetZ - player.z);
-      if (ball.z > 0.2 && rem <= 0.42 && rem >= -0.08 && dTarget <= 2.35 && distBallXZ <= 2.40 && distBall3D <= 2.80) {
-        recvSlowActive = true;
-        const closeness = Math.max(0, Math.min(1, 1 - distBallXZ / 2.40));
-        timeScale = 0.68 - closeness * 0.16; // Mild slow-mo: 0.68x -> 0.52x only when close to the ball
-        if (!recvSlowNotified) {
+    if (gameMode === 'online') {
+      if (NetP2P.isHost) {
+        let hostScale = 1.0;
+        let guestScale = 1.0;
+        let airScale = 1.0;
+        let hSlow = false;
+        let gSlow = false;
+        if (ball.active && !ball.deadBounce) {
+          const rem = ball.flightTotal - ball.flightTimer;
+          if (onlineWorld.worldActor === 'host_recv') {
+            const distBallXZ = Math.hypot(ball.x - player.x, ball.z - player.z);
+            const distBall3D = Math.hypot(ball.x - player.x, ball.y - (player.y + 1.25), ball.z - player.z);
+            const dTarget = Math.hypot(ball.targetX - player.x, ball.targetZ - player.z);
+            if (ball.z > 0.2 && rem <= 0.42 && rem >= -0.08 && dTarget <= 2.35 && distBallXZ <= 2.40 && distBall3D <= 2.80) {
+              hSlow = true;
+              const closeness = Math.max(0, Math.min(1, 1 - distBallXZ / 2.40));
+              hostScale = 0.68 - closeness * 0.16;
+            }
+          } else if (onlineWorld.worldActor === 'guest_recv') {
+            const g = onlineWorld.guest;
+            const distBallXZ = Math.hypot(ball.x - g.x, ball.z - g.z);
+            const distBall3D = Math.hypot(ball.x - g.x, ball.y - (g.y + 1.25), ball.z - g.z);
+            const dTarget = Math.hypot(ball.targetX - g.x, ball.targetZ - g.z);
+            if (ball.z < -0.2 && rem <= 0.42 && rem >= -0.08 && dTarget <= 2.35 && distBallXZ <= 2.40 && distBall3D <= 2.80) {
+              gSlow = true;
+              const closeness = Math.max(0, Math.min(1, 1 - distBallXZ / 2.40));
+              guestScale = 0.68 - closeness * 0.16;
+            }
+          } else if ((onlineWorld.worldActor === 'host_spike' || onlineWorld.worldActor === 'host_serve_hit') && player.y > 0.60) {
+            const distXZ = Math.hypot(ball.x - player.x, ball.z - player.z);
+            const distY = Math.abs(ball.y - (player.y + 1.65));
+            if (distXZ < 1.95 && distY < 1.05 && ball.vy < 2.4) airScale = 0.62;
+          } else if ((onlineWorld.worldActor === 'guest_spike' || onlineWorld.worldActor === 'guest_serve_hit') && onlineWorld.guest.y > 0.60) {
+            const g = onlineWorld.guest;
+            const distXZ = Math.hypot(ball.x - g.x, ball.z - g.z);
+            const distY = Math.abs(ball.y - (g.y + 1.65));
+            if (distXZ < 1.95 && distY < 1.05 && ball.vy < 2.4) airScale = 0.62;
+          }
+        }
+        onlineWorld.hostRecvSlow = hSlow;
+        onlineWorld.guestRecvSlow = gSlow;
+        onlineWorld.worldTimeScale = Math.min(hostScale, guestScale, airScale);
+        timeScale = onlineWorld.worldTimeScale;
+        const prevSlow = recvSlowActive;
+        recvSlowActive = hSlow;
+        if (recvSlowActive && !prevSlow) {
           recvSlowNotified = true;
           SFX.slowEnter();
         }
+      } else {
+        timeScale = onlineWorld.worldTimeScale || 1.0;
       }
-    } else if ((ball.expectedActor === 'player_spike' || ball.expectedActor === 'player_serve_hit') && player.y > 0.60 && ball.active && !ball.deadBounce) {
-      const distXZ = Math.hypot(ball.x - player.x, ball.z - player.z);
-      const distY = Math.abs(ball.y - (player.y + 1.65));
-      if (distXZ < 1.95 && distY < 1.05 && ball.vy < 2.4) {
-        timeScale = gameMode === 'online' ? 0.62 : 0.45;
+    } else {
+      recvSlowActive = false;
+      if (ball.expectedActor === 'player_recv' && ball.active && !ball.deadBounce) {
+        const rem = ball.flightTotal - ball.flightTimer;
+        const distBallXZ = Math.hypot(ball.x - player.x, ball.z - player.z);
+        const distBall3D = Math.hypot(ball.x - player.x, ball.y - (player.y + 1.25), ball.z - player.z);
+        const dTarget = Math.hypot(ball.targetX - player.x, ball.targetZ - player.z);
+        if (ball.z > 0.2 && rem <= 0.42 && rem >= -0.08 && dTarget <= 2.35 && distBallXZ <= 2.40 && distBall3D <= 2.80) {
+          recvSlowActive = true;
+          const closeness = Math.max(0, Math.min(1, 1 - distBallXZ / 2.40));
+          timeScale = 0.68 - closeness * 0.16; // Mild slow-mo: 0.68x -> 0.52x only when close to the ball
+          if (!recvSlowNotified) {
+            recvSlowNotified = true;
+            SFX.slowEnter();
+          }
+        }
+      } else if ((ball.expectedActor === 'player_spike' || ball.expectedActor === 'player_serve_hit') && player.y > 0.60 && ball.active && !ball.deadBounce) {
+        const distXZ = Math.hypot(ball.x - player.x, ball.z - player.z);
+        const distY = Math.abs(ball.y - (player.y + 1.65));
+        if (distXZ < 1.95 && distY < 1.05 && ball.vy < 2.4) {
+          timeScale = 0.45;
+        }
       }
     }
-    const targetVig = (timeScale < 0.85 || recvSlowActive) ? 1.0 : 0.0;
+    const targetVig = (recvSlowActive || (timeScale < 0.85 && ball.side === 'us')) ? 1.0 : 0.0;
     slowVignetteAlpha += (targetVig - slowVignetteAlpha) * Math.min(1, dtBase * 10);
 
     const dt = dtBase * timeScale;
@@ -6503,25 +7271,15 @@
 
     if (matchState === 'point_pause') {
       if (gameMode === 'online') {
-        const nowSynced = getSyncedNowMs();
         if (NetP2P.isHost) {
-          if (onlineSync.nextPointAtSyncedMs > 0 && nowSynced >= onlineSync.nextPointAtSyncedMs) {
+          if (onlineSync.nextPointAtSyncedMs > 0 && performance.now() >= onlineSync.nextPointAtSyncedMs) {
             if (!checkMatchEnd()) {
               onlineSync.pointSeq++;
               onlineSync.nextPointAtSyncedMs = 0;
-              NetP2P.send({
-                type: 'point_start',
-                matchId: onlineSync.matchId,
-                pointSeq: onlineSync.pointSeq,
-                hostScore: onlineSync.hostScore,
-                guestScore: onlineSync.guestScore,
-                serverIsHost: onlineSync.serverIsHost,
-                sentAt: Math.round(nowSynced)
-              });
               startNextPoint();
             }
           }
-        } else if (onlineSync.nextPointAtSyncedMs > 0 && nowSynced >= onlineSync.nextPointAtSyncedMs + 2200 && (performance.now() - onlineSync.lastSyncReqAt > 1200)) {
+        } else if (onlineWorld.lastSnapLocalMs > 0 && (performance.now() - onlineWorld.lastSnapLocalMs > 2500) && (performance.now() - onlineSync.lastSyncReqAt > 1200)) {
           onlineSync.lastSyncReqAt = performance.now();
           NetP2P.send({ type: 'sync_req' });
         }
@@ -6533,26 +7291,24 @@
       }
     }
 
-    if (gameMode === 'online' && onlineSync.matchStartSyncedMs > 0 && !onlineSync.matchEnded) {
-      const nowSynced = getSyncedNowMs();
-      const elapsedSec = Math.max(0, (nowSynced - onlineSync.matchStartSyncedMs) / 1000);
-      const remSec = Math.max(0, ONLINE_MATCH_DURATION_SEC - elapsedSec);
-      const dispSec = nowSynced < onlineSync.matchStartSyncedMs
-        ? -Math.ceil((onlineSync.matchStartSyncedMs - nowSynced) / 100)
-        : Math.ceil(remSec);
+    if (gameMode === 'online' && !onlineSync.matchEnded) {
+      const preMs = getOnlinePreMatchMs();
+      const remMs = getOnlineRemainingMs();
+      const dispSec = preMs > 0 ? -Math.ceil(preMs / 100) : Math.ceil(remMs / 1000);
       if (dispSec !== onlineSync.lastHudSec) {
         onlineSync.lastHudSec = dispSec;
         updateOnlineMetaHud();
       }
-      if (remSec <= 0) {
-        if (myScore !== enScore) {
+      if (preMs <= 0 && remMs <= 0) {
+        if (onlineSync.hostScore !== onlineSync.guestScore) {
           if (NetP2P.isHost && matchState !== 'point_pause') {
             commitOnlineMatchEnd(onlineSync.hostScore > onlineSync.guestScore, 'TIME UP!!');
           }
-        } else if (!onlineSync.overtime) {
+        } else if (!onlineSync.overtime && NetP2P.isHost) {
           onlineSync.overtime = true;
           addCallout('OVERTIME!!', '同点！次の1点を取った方が勝利!!', '#facc15');
           updateOnlineMetaHud();
+          broadcastWorldSnap();
         }
       }
     }
@@ -6577,8 +7333,8 @@
       }
     }
 
-    // Input Buffer Evaluation
-    if (player.actionBuffer) {
+    // Input Buffer Evaluation (Local Player on Host/CPU)
+    if (player.actionBuffer && !(gameMode === 'online' && !NetP2P.isHost)) {
       player.actionBuffer.timer -= dtBase;
       if (player.actionBuffer.kind === 'recv_over' && tryResolveReceive('over')) {
         player.actionBuffer = null;
@@ -6588,6 +7344,24 @@
         player.actionBuffer = null;
       } else if (player.actionBuffer && player.actionBuffer.timer <= 0) {
         player.actionBuffer = null;
+      }
+    }
+
+    // Server-Side Guest Action Buffer Evaluation (on Host)
+    if (gameMode === 'online' && NetP2P.isHost && onlineWorld.guest.actionBuffer && matchState !== 'point_pause') {
+      const g = onlineWorld.guest;
+      const buf = g.actionBuffer;
+      buf.timer -= dtBase;
+      let resolved = false;
+      if (buf.kind === 'serve_hit' || buf.kind === 'serve_feint') {
+        resolved = tryResolveGuestServeHit(buf.kind === 'serve_feint', g.x, g.y, g.z, buf.aimX, buf.cb);
+      } else if (buf.kind === 'recv_over' || buf.kind === 'recv_under') {
+        resolved = tryResolveGuestReceive(buf.kind === 'recv_over' ? 'over' : 'under', g.x, g.y, g.z, buf.cb);
+      } else if (buf.kind === 'spike_hit' || buf.kind === 'spike_feint') {
+        resolved = tryResolveGuestSpike(buf.kind === 'spike_feint', g.x, g.y, g.z, buf.aimX, buf.za, buf.cb);
+      }
+      if (resolved || buf.timer <= 0) {
+        g.actionBuffer = null;
       }
     }
 
@@ -6647,7 +7421,7 @@
       }
 
       player.x = Math.max(-4.6, Math.min(4.6, player.x));
-      const minZ = matchState === 'serve_wait' ? 9.2 : 0.55;
+      const minZ = (matchState === 'serve_wait' && ball.expectedActor === 'player_serve_toss') ? 9.2 : 0.55;
       const maxZ = 11.2;
       player.z = Math.max(minZ, Math.min(maxZ, player.z));
 
@@ -6661,28 +7435,49 @@
       }
     }
 
+    // Serve-Wait Ball Holding (strictly held by whoever is serving!)
     if (matchState === 'serve_wait') {
-      ball.x = player.x - 0.14;
-      ball.y = 1.32 + Math.sin(elapsedTotal * 4.5) * 0.03;
-      ball.z = player.z - 0.44;
+      if (gameMode === 'online' && NetP2P.isHost) {
+        if (onlineWorld.worldActor === 'host_serve_toss') {
+          ball.x = player.x - 0.14;
+          ball.y = 1.32 + Math.sin(elapsedTotal * 4.5) * 0.03;
+          ball.z = player.z - 0.44;
+        } else if (onlineWorld.worldActor === 'guest_serve_toss') {
+          ball.x = onlineWorld.guest.x + 0.14;
+          ball.y = 1.32 + Math.sin(elapsedTotal * 4.5) * 0.03;
+          ball.z = onlineWorld.guest.z + 0.44;
+        }
+      } else if (ball.expectedActor === 'player_serve_toss') {
+        ball.x = player.x - 0.14;
+        ball.y = 1.32 + Math.sin(elapsedTotal * 4.5) * 0.03;
+        ball.z = player.z - 0.44;
+      }
     }
 
     // Ball Physics Update
+    const isThinGuest = (gameMode === 'online' && !NetP2P.isHost);
     if (ball.active && activePlay) {
-      const prevZ = ball.z;
-      if (!ball.deadBounce) {
-        rallyGuardTimer += dt;
-        ball.flightTimer += dt;
+      let stepBall = true;
+      if (isThinGuest && !ball.deadBounce) {
+        onlineWorld.guestExtrapTime = (onlineWorld.guestExtrapTime || 0) + dtBase;
+        if (onlineWorld.guestExtrapTime > 0.085) stepBall = false;
       }
-      ball.knucklePhase += dt;
+      const prevZ = ball.z;
+      if (stepBall) {
+        if (!ball.deadBounce) {
+          rallyGuardTimer += dt;
+          ball.flightTimer += dt;
+        }
+        ball.knucklePhase += dt;
 
-      const acc = computeBallAccel(ball.vx, ball.vy, ball.vz, ball.omegaX, ball.omegaY, ball.omegaZ, ball.knuckle, ball.knucklePhase);
-      ball.vx += acc.ax * dt;
-      ball.vy += acc.ay * dt;
-      ball.vz += acc.az * dt;
-      ball.x += ball.vx * dt;
-      ball.y += ball.vy * dt;
-      ball.z += ball.vz * dt;
+        const acc = computeBallAccel(ball.vx, ball.vy, ball.vz, ball.omegaX, ball.omegaY, ball.omegaZ, ball.knuckle, ball.knucklePhase);
+        ball.vx += acc.ax * dt;
+        ball.vy += acc.ay * dt;
+        ball.vz += acc.az * dt;
+        ball.x += ball.vx * dt;
+        ball.y += ball.vy * dt;
+        ball.z += ball.vz * dt;
+      }
 
       ballMesh.rotation.x += (ball.omegaX || ball.vz * 1.4) * dt;
       ballMesh.rotation.y += ball.omegaY * dt;
@@ -6707,29 +7502,45 @@
         }
       }
 
-      if (gameMode === 'online' && ball.onlineBlockPending && !ball.onlineBlockChecked && !ball.deadBounce && ball.z >= -0.25 && ball.z <= 0.65) {
-        ball.onlineBlockChecked = true;
-        ball.onlineBlockPending = false;
-        if (player.y > 0.50 && player.z < 2.45 && Math.abs(player.x - ball.x) < 1.45) {
-          const bx = ball.x;
-          bumpCombo(2);
-          SFX.block(comboCount);
-          hitstopTimer = 0.08;
-          fovPunch = -9.0;
-          player.shake = 0.30;
-          speedLinesAlpha = 0.92;
-          flashAlpha = 0.30; flashColor = '#38bdf8';
-          crowdExcitement = 1.0;
-          spawnShockwave(bx, NET_H, 0, 0x38bdf8, 2.8, true);
-          spawnBurstParticles(bx, NET_H, 0, 0x38bdf8, 32, 1.15);
-          addZone(28);
-          ball.x = bx; ball.y = NET_H + 0.1; ball.z = -0.15;
-          ball.side = 'enemy';
-          ball.deadBounce = false;
-          ball.expectedActor = 'none';
-          launchBallTo(bx * 0.7, 0.16, -2.8, 0.36, { trailColor: 0x38bdf8, trailPower: 1.25, just: true, omegaX: -24 });
-          addCallout('MONSTER BLOCK!!', '', '#38bdf8');
-          claimOnlinePoint(!NetP2P.isHost, 'MONSTER BLOCK!!', { isBlock: true, bx: -bx });
+      // Authoritative Symmetric Net Block Checks on Host (covers BOTH Host blocking Guest AND Guest blocking Host!)
+      if (gameMode === 'online' && NetP2P.isHost && ball.onlineBlockPending && !ball.onlineBlockChecked && !ball.deadBounce) {
+        if (onlineWorld.worldActor === 'host_recv' && ball.z >= -0.25 && ball.z <= 0.65) {
+          ball.onlineBlockChecked = true;
+          ball.onlineBlockPending = false;
+          if (player.y > 0.48 && player.z < 2.45 && Math.abs(player.x - ball.x) < 1.50) {
+            const bx = ball.x;
+            bumpCombo(2);
+            SFX.block(comboCount);
+            fovPunch = -9.0;
+            player.shake = 0.30;
+            speedLinesAlpha = 0.92;
+            flashAlpha = 0.30; flashColor = '#38bdf8';
+            crowdExcitement = 1.0;
+            spawnShockwave(bx, NET_H, 0, 0x38bdf8, 2.8, true);
+            spawnBurstParticles(bx, NET_H, 0, 0x38bdf8, 32, 1.15);
+            addZone(28);
+            ball.x = bx; ball.y = NET_H + 0.1; ball.z = -0.15;
+            ball.side = 'enemy';
+            ball.deadBounce = true;
+            ball.vx = (bx * 0.7 - bx) / 0.36; ball.vy = -4.2; ball.vz = -5.6;
+            addCallout('MONSTER BLOCK!!', '', '#38bdf8');
+            commitAuthoritativePoint(false, 'MONSTER BLOCK!!', { isBlock: true, bx });
+          }
+        } else if (onlineWorld.worldActor === 'guest_recv' && ball.z <= 0.25 && ball.z >= -0.65) {
+          ball.onlineBlockChecked = true;
+          ball.onlineBlockPending = false;
+          const g = onlineWorld.guest;
+          if (g.y > 0.45 && g.z > -2.55 && Math.abs(g.x - ball.x) < 1.55) {
+            const bx = ball.x;
+            SFX.block(2);
+            spawnShockwave(bx, NET_H, 0, 0xf43f5e, 2.6, true);
+            spawnBurstParticles(bx, NET_H, 0, 0xf43f5e, 28, 1.05);
+            ball.x = bx; ball.y = NET_H + 0.1; ball.z = 0.15;
+            ball.side = 'us';
+            ball.deadBounce = true;
+            ball.vx = (bx * 0.7 - bx) / 0.36; ball.vy = -4.2; ball.vz = 5.6;
+            commitAuthoritativePoint(true, 'MONSTER BLOCK!!', { isBlock: true, bx });
+          }
         }
       }
 
@@ -6743,6 +7554,12 @@
           } else {
             ball.vy = 0; ball.vx *= 0.92; ball.vz *= 0.92;
           }
+        }
+      } else if (isThinGuest) {
+        // Thin Guest Client: smooth between-snapshot motion only; Host owns all floor/toss/point decisions!
+        if (ball.y < BALL_R + 0.01) {
+          ball.y = BALL_R + 0.01;
+          if (ball.vy < 0) ball.vy = 0;
         }
       } else {
         if (ball.enemySpikeEta > 0) {
@@ -6760,68 +7577,78 @@
           ball.onlineBlockWindow = Math.max(0, ball.onlineBlockWindow - dtBase);
         }
 
-        if (ball.side === 'us' && ball.expectedActor === 'ally_toss' && ball.flightTimer >= ball.flightTotal * 0.92) {
-          spawnAllyTossToPlayer();
-        } else if (ball.side === 'us' && ball.expectedActor === 'ally_recv' && ball.flightTimer >= ball.flightTotal * 0.92) {
-          spawnAllyReceiveToPlayer();
-        } else if (ball.side === 'us' && ball.expectedActor === 'ally_spike' && ball.flightTimer >= ball.flightTotal * 0.88) {
-          const spk = allies[1];
-          spk.x = ball.x; spk.z = ball.z + 0.4;
-          spk.y = 1.25; spk.vy = 1.8;
-          spk.pose = 'spike_hit'; spk.poseTimer = 0.48;
-          SFX.spike(ball.isJust, false, comboCount);
-          spawnBurstParticles(ball.x, ball.y, ball.z, 0xfacc15, 22, 0.95);
-          const aimX = (Math.random() - 0.5) * 7.0;
-          const aimZ = -4.5 - Math.random() * 3.8;
-          const sx = ball.x, sy = ball.y, sz = ball.z;
-          const ft = ball.isJust ? 0.35 : 0.46;
-          const sharedFlight = gameMode === 'online' ? Math.max(0.72, ft + 0.22) : ft;
-          const sharedTy = gameMode === 'online' ? 0.88 : 0.16;
-          ball.side = 'enemy';
-          ball.touches = 0;
-          ball.expectedActor = gameMode === 'online' ? 'online_wait' : 'enemy_play';
-          launchBallTo(aimX, sharedTy, aimZ, sharedFlight, {
-            trailColor: ball.isJust ? 0xfacc15 : 0x34d399,
-            trailPower: ball.isJust ? 1.15 : 0.80,
-            just: ball.isJust,
-            omegaX: -30
-          });
-          if (gameMode === 'online') {
-            NetP2P.send({
-              type: 'shot_over', kind: 'spike',
-              matchId: onlineSync.matchId, pointSeq: onlineSync.pointSeq,
-              sentAt: Math.round(getSyncedNowMs()),
-              sx, sy, sz, tx: aimX, ty: sharedTy, tz: aimZ,
-              flightTime: sharedFlight,
-              omegaX: -30, knuckle: false, incomingHigh: false, feint: false, just: !!ball.isJust, meteor: false
-            });
+        if (gameMode === 'online' && NetP2P.isHost) {
+          if (onlineWorld.worldActor === 'host_ally_toss' && ball.flightTimer >= ball.flightTotal * 0.92) {
+            spawnAllyTossToPlayer();
+          } else if (onlineWorld.worldActor === 'guest_ally_toss' && ball.flightTimer >= ball.flightTotal * 0.92) {
+            spawnGuestAllyToss();
           }
-          rallyCount++;
-          maxRallyMatch = Math.max(maxRallyMatch, rallyCount);
-          if (gameMode === 'drill_toss') addCallout('NICE KILL!!', '最高のアシスト!!', '#facc15');
-          updateHud();
-        }
-
-        if (ball.side === 'enemy' && ball.expectedActor === 'enemy_play' && ball.enemySpikeEta <= 0 && ball.y <= BALL_R + 0.10 && ball.vz < 0) {
-          if (gameMode === 'drill_toss') {
-            spawnShockwave(ball.x, 0.03, ball.z, 0xfacc15, 2.8);
-            spawnBurstParticles(ball.x, 0.2, ball.z, 0xfacc15, 24, 1.0);
-            SFX.floorHit(1.0);
-            SFX.cheer();
-            ball.vy = Math.abs(ball.vy) * 0.62 + 2.2;
-            ball.deadBounce = true;
-            myScore++; rallyCount++;
+        } else {
+          if (ball.side === 'us' && ball.expectedActor === 'ally_toss' && ball.flightTimer >= ball.flightTotal * 0.92) {
+            spawnAllyTossToPlayer();
+          } else if (ball.side === 'us' && ball.expectedActor === 'ally_recv' && ball.flightTimer >= ball.flightTotal * 0.92) {
+            spawnAllyReceiveToPlayer();
+          } else if (ball.side === 'us' && ball.expectedActor === 'ally_spike' && ball.flightTimer >= ball.flightTotal * 0.88) {
+            const spk = allies[1];
+            spk.x = ball.x; spk.z = ball.z + 0.4;
+            spk.y = 1.25; spk.vy = 1.8;
+            spk.pose = 'spike_hit'; spk.poseTimer = 0.48;
+            SFX.spike(ball.isJust, false, comboCount);
+            spawnBurstParticles(ball.x, ball.y, ball.z, 0xfacc15, 22, 0.95);
+            const aimX = (Math.random() - 0.5) * 7.0;
+            const aimZ = -4.5 - Math.random() * 3.8;
+            const ft = ball.isJust ? 0.35 : 0.46;
+            ball.side = 'enemy';
+            ball.touches = 0;
+            ball.expectedActor = 'enemy_play';
+            launchBallTo(aimX, 0.16, aimZ, ft, {
+              trailColor: ball.isJust ? 0xfacc15 : 0x34d399,
+              trailPower: ball.isJust ? 1.15 : 0.80,
+              just: ball.isJust,
+              omegaX: -30
+            });
+            rallyCount++;
             maxRallyMatch = Math.max(maxRallyMatch, rallyCount);
-            addCallout('ASSIST POINT!!', 'ナイストス！次も配球しよう！', '#facc15');
-            matchState = 'point_pause'; pauseTimer = 1.0;
+            if (gameMode === 'drill_toss') addCallout('NICE KILL!!', '最高のアシスト!!', '#facc15');
             updateHud();
-          } else {
-            handleEnemyBallArrival();
+          }
+
+          if (ball.side === 'enemy' && ball.expectedActor === 'enemy_play' && ball.enemySpikeEta <= 0 && ball.y <= BALL_R + 0.10 && ball.vz < 0) {
+            if (gameMode === 'drill_toss') {
+              spawnShockwave(ball.x, 0.03, ball.z, 0xfacc15, 2.8);
+              spawnBurstParticles(ball.x, 0.2, ball.z, 0xfacc15, 24, 1.0);
+              SFX.floorHit(1.0);
+              SFX.cheer();
+              ball.vy = Math.abs(ball.vy) * 0.62 + 2.2;
+              ball.deadBounce = true;
+              myScore++; rallyCount++;
+              maxRallyMatch = Math.max(maxRallyMatch, rallyCount);
+              addCallout('ASSIST POINT!!', 'ナイストス！次も配球しよう！', '#facc15');
+              matchState = 'point_pause'; pauseTimer = 1.0;
+              updateHud();
+            } else {
+              handleEnemyBallArrival();
+            }
           }
         }
 
         if (ball.y <= BALL_R + 0.04 && ball.vy < 0) {
-          if (ball.z >= 0) {
+          if (gameMode === 'online' && NetP2P.isHost) {
+            ball.vy = Math.abs(ball.vy) * 0.58 + 1.6;
+            ball.vx *= 0.7; ball.vz *= 0.7;
+            ball.deadBounce = true;
+            if (ball.z >= 0) {
+              spawnShockwave(ball.x, 0.03, ball.z, 0xf43f5e, 1.8);
+              SFX.floorHit(0.95);
+              comboCount = 0; comboPill.classList.remove('show');
+              commitAuthoritativePoint(true, onlineWorld.worldActor.startsWith('host_serve') ? 'サーブトスを落とした！' : 'ボールが自コートに落ちた！');
+            } else {
+              spawnShockwave(ball.x, 0.03, ball.z, 0xfacc15, 2.8);
+              spawnBurstParticles(ball.x, 0.2, ball.z, 0xfacc15, 24, 1.0);
+              SFX.floorHit(1.0);
+              commitAuthoritativePoint(false, onlineWorld.worldActor.startsWith('guest_serve') ? '相手のサーブミス!!' : '相手コートに着弾!!');
+            }
+          } else if (ball.z >= 0) {
             spawnShockwave(ball.x, 0.03, ball.z, 0xf43f5e, 1.8);
             SFX.floorHit(0.95);
             ball.vy = Math.abs(ball.vy) * 0.58 + 1.4;
@@ -6842,11 +7669,6 @@
             } else {
               awardPoint('enemy', ball.expectedActor.startsWith('player_serve') ? 'サーブトスを落とした！' : 'ボールが自コートに落ちた！');
             }
-          } else if (gameMode === 'online' && ball.expectedActor === 'online_wait') {
-            // Defender has authority over their own court (allows fair local slow-mo receive!).
-            // Hold ball cleanly near floor until defender sends rally_update (saved) or point_claim (scored)!
-            ball.y = BALL_R + 0.02;
-            ball.vx = 0; ball.vy = 0; ball.vz = 0;
           } else if (ball.expectedActor !== 'enemy_play') {
             ball.vy = Math.abs(ball.vy) * 0.58 + 2.0;
             ball.deadBounce = true;
@@ -6917,93 +7739,122 @@
     if (showAim) aimReticle.position.set(player.aimX, 0.03, -5.5);
 
     const st = STAGES[stageIdx] || STAGES[0];
-    allies.forEach(a => animateChar(a, dt, elapsedTotal, 6.2));
     if (gameMode === 'online' && NetP2P.connected) {
-      onlinePoseTimer += dtBase;
-      const poseInterval = NetP2P.transport === 'relay' ? 0.055 : 0.04;
-      if (onlinePoseTimer >= poseInterval) {
-        onlinePoseTimer = 0;
-        const ownBall = (ball.side === 'us' || matchState === 'serve_wait') && !ball.deadBounce;
-        NetP2P.send({
-          type: 'pose',
-          matchId: onlineSync.matchId,
-          pseq: onlineSync.pointSeq,
-          hs: NetP2P.isHost ? myScore : enScore,
-          gs: NetP2P.isHost ? enScore : myScore,
-          x: +player.x.toFixed(2),
-          y: +player.y.toFixed(2),
-          z: +player.z.toFixed(2),
-          pose: vmAnim.timer > 0 ? vmAnim.mode : 'idle',
-          ball: ownBall ? { x: +ball.x.toFixed(2), y: +ball.y.toFixed(2), z: +ball.z.toFixed(2) } : null,
-          sentAt: Math.round(getSyncedNowMs())
-        });
-      }
-      if (enemies[0] && onlineRivalTarget.active) {
-        const rv = enemies[0];
-        const rRate = Math.min(1, dtBase * 16);
-        rv.x += (onlineRivalTarget.x - rv.x) * rRate;
-        rv.y += (onlineRivalTarget.y - rv.y) * rRate;
-        rv.z += (onlineRivalTarget.z - rv.z) * rRate;
-        rv.targetX = rv.x; rv.targetZ = rv.z;
-        rv.teleColor = 0x34d399;
-        rv.teleAlpha = 0.65;
-        if (rv.poseTimer <= 0 && onlineRivalTarget.pose && onlineRivalTarget.pose !== 'idle') {
-          const mp = onlineRivalTarget.pose;
-          if (mp === 'receive' || mp === 'over_receive' || mp === 'dive') rv.pose = 'receive';
-          else if (mp === 'toss' || mp === 'serve_toss') rv.pose = 'toss';
-          else if (mp === 'spike' || mp === 'feint') rv.pose = 'spike_hit';
-          else if (mp === 'block') rv.pose = 'block';
-          else if (mp === 'approach_jump') rv.pose = 'spike_windup';
-          rv.poseTimer = 0.25;
+      const netInterval = NetP2P.transport === 'relay' ? 0.045 : 0.033;
+      const rRate = Math.min(1, dtBase * 18);
+      const mapVmPose = (mp) => {
+        if (mp === 'receive' || mp === 'over_receive' || mp === 'dive') return 'receive';
+        if (mp === 'toss' || mp === 'serve_toss') return 'toss';
+        if (mp === 'spike' || mp === 'feint') return 'spike_hit';
+        if (mp === 'block') return 'block';
+        if (mp === 'approach_jump') return 'spike_windup';
+        return 'idle';
+      };
+
+      if (NetP2P.isHost) {
+        allies.forEach(a => animateChar(a, dt, elapsedTotal, 6.2));
+        if (enemies[0]) {
+          const rv = enemies[0];
+          const g = onlineWorld.guest;
+          rv.x += (g.x - rv.x) * rRate;
+          rv.y += (g.y - rv.y) * rRate;
+          rv.z += (g.z - rv.z) * rRate;
+          rv.targetX = rv.x; rv.targetZ = rv.z;
+          rv.teleColor = 0x34d399;
+          rv.teleAlpha = 0.65;
+          if (rv.poseTimer <= 0 && g.pose && g.pose !== 'idle') {
+            rv.pose = mapVmPose(g.pose);
+            rv.poseTimer = 0.25;
+          }
+          animateChar(rv, dtBase, elapsedTotal, 0);
+          rv.mesh.root.position.set(rv.x, 0, rv.z);
+          rv.mesh.shadow.position.y = 0.015;
         }
-      }
-      if (ball.expectedActor === 'online_wait' && !ball.deadBounce && (!ball.active || (ball.z < 0 && ball.flightTimer >= ball.flightTotal)) && onlineRivalTarget.ball && (performance.now() - onlineRivalTarget.ball.ts < 650)) {
-        const rb = onlineRivalTarget.ball;
-        if (!ball.active) {
-          ball.x = rb.x; ball.y = rb.y; ball.z = rb.z;
-        } else {
-          const bRate = Math.min(1, dtBase * 18);
-          ball.x += (rb.x - ball.x) * bRate;
-          ball.y += (rb.y - ball.y) * bRate;
-          ball.z += (rb.z - ball.z) * bRate;
+        for (let i = 1; i < enemies.length; i++) {
+          animateChar(enemies[i], dt, elapsedTotal, 6.2);
         }
-        ballMesh.position.set(ball.x, ball.y, ball.z);
-        ballShadow.position.set(ball.x, 0.018, ball.z);
-        const sSc = Math.max(0.32, 1.15 - ball.y * 0.14);
-        ballShadow.scale.set(sSc, sSc, 1);
-      }
-    }
-    if (gameMode !== 'online' && gameMode !== 'title' && gameMode !== 'drill_spike' && enemies.length >= 3) {
-      if (matchState === 'serve_wait' || (ball.side === 'enemy' && ball.expectedActor === 'enemy_play' && ball.isServe)) {
-        enemies[0].targetX = -2.2; enemies[0].targetZ = -4.2;
-        enemies[1].targetX = 2.2;  enemies[1].targetZ = -4.2;
-        enemies[2].targetX = 0.0;  enemies[2].targetZ = -6.8;
-      }
-      if (ball.side === 'enemy' && ball.expectedActor === 'enemy_play' && ball.enemySpikeEta <= 0 && !ball.deadBounce) {
-        const tx = Math.max(-COURT_HALF_W, Math.min(COURT_HALF_W, ball.targetX));
-        const tz = Math.max(-COURT_HALF_L, Math.min(-0.85, ball.targetZ));
-        let bestIdx = 2, bestDist = 999;
-        for (let i = 0; i < enemies.length; i++) {
-          const d = Math.hypot(enemies[i].x - tx, enemies[i].z - tz);
-          if (d < bestDist) { bestDist = d; bestIdx = i; }
+        onlineWorld.snapTimer += dtBase;
+        if (onlineWorld.snapTimer >= netInterval) {
+          broadcastWorldSnap();
         }
-        enemies[bestIdx].targetX = tx;
-        enemies[bestIdx].targetZ = tz;
-      } else if (ball.side === 'us' && ball.enemySpikeEta <= 0) {
-        enemies.forEach(e => {
-          if (e.poseTimer <= 0) { e.targetX = e.homeX; e.targetZ = e.homeZ; }
-        });
-      }
-    }
-    enemies.forEach((e, idx) => {
-      if (gameMode === 'online' && idx === 0 && onlineRivalTarget.active) {
-        animateChar(e, dtBase, elapsedTotal, 0);
-        e.mesh.root.position.set(e.x, 0, e.z);
-        e.mesh.shadow.position.y = 0.015;
       } else {
-        animateChar(e, dt, elapsedTotal, st.enemySpeed);
+        // Guest streams own player position to Host & mirrors all 5 other court characters from world_snap!
+        onlineWorld.guestStateTimer += dtBase;
+        if (onlineWorld.guestStateTimer >= netInterval) {
+          onlineWorld.guestStateTimer = 0;
+          sendGuestState(false);
+        }
+        allies.forEach((a, i) => {
+          const tgt = onlineWorld.guestAlliesTarget[i];
+          if (tgt) {
+            a.x += (tgt.x - a.x) * rRate;
+            a.y += (tgt.y - a.y) * rRate;
+            a.z += (tgt.z - a.z) * rRate;
+            a.targetX = a.x; a.targetZ = a.z;
+            if (tgt.pose && tgt.pose !== 'idle') { a.pose = tgt.pose; a.poseTimer = 0.2; }
+          }
+          animateChar(a, dtBase, elapsedTotal, 0);
+          a.mesh.root.position.set(a.x, 0, a.z);
+          a.mesh.shadow.position.y = 0.015;
+        });
+        if (enemies[0] && onlineWorld.rivalTarget.active) {
+          const rv = enemies[0];
+          const rt = onlineWorld.rivalTarget;
+          rv.x += (rt.x - rv.x) * rRate;
+          rv.y += (rt.y - rv.y) * rRate;
+          rv.z += (rt.z - rv.z) * rRate;
+          rv.targetX = rv.x; rv.targetZ = rv.z;
+          rv.teleColor = 0x34d399;
+          rv.teleAlpha = 0.65;
+          if (rv.poseTimer <= 0 && rt.pose && rt.pose !== 'idle') {
+            rv.pose = mapVmPose(rt.pose);
+            rv.poseTimer = 0.25;
+          }
+          animateChar(rv, dtBase, elapsedTotal, 0);
+          rv.mesh.root.position.set(rv.x, 0, rv.z);
+          rv.mesh.shadow.position.y = 0.015;
+        }
+        for (let i = 1; i < enemies.length; i++) {
+          const e = enemies[i];
+          const tgt = onlineWorld.hostAlliesTarget[i - 1];
+          if (tgt) {
+            e.x += (tgt.x - e.x) * rRate;
+            e.y += (tgt.y - e.y) * rRate;
+            e.z += (tgt.z - e.z) * rRate;
+            e.targetX = e.x; e.targetZ = e.z;
+            if (tgt.pose && tgt.pose !== 'idle') { e.pose = tgt.pose; e.poseTimer = 0.2; }
+          }
+          animateChar(e, dtBase, elapsedTotal, 0);
+          e.mesh.root.position.set(e.x, 0, e.z);
+          e.mesh.shadow.position.y = 0.015;
+        }
       }
-    });
+    } else {
+      allies.forEach(a => animateChar(a, dt, elapsedTotal, 6.2));
+      if (gameMode !== 'title' && gameMode !== 'drill_spike' && enemies.length >= 3) {
+        if (matchState === 'serve_wait' || (ball.side === 'enemy' && ball.expectedActor === 'enemy_play' && ball.isServe)) {
+          enemies[0].targetX = -2.2; enemies[0].targetZ = -4.2;
+          enemies[1].targetX = 2.2;  enemies[1].targetZ = -4.2;
+          enemies[2].targetX = 0.0;  enemies[2].targetZ = -6.8;
+        }
+        if (ball.side === 'enemy' && ball.expectedActor === 'enemy_play' && ball.enemySpikeEta <= 0 && !ball.deadBounce) {
+          const tx = Math.max(-COURT_HALF_W, Math.min(COURT_HALF_W, ball.targetX));
+          const tz = Math.max(-COURT_HALF_L, Math.min(-0.85, ball.targetZ));
+          let bestIdx = 2, bestDist = 999;
+          for (let i = 0; i < enemies.length; i++) {
+            const d = Math.hypot(enemies[i].x - tx, enemies[i].z - tz);
+            if (d < bestDist) { bestDist = d; bestIdx = i; }
+          }
+          enemies[bestIdx].targetX = tx;
+          enemies[bestIdx].targetZ = tz;
+        } else if (ball.side === 'us' && ball.enemySpikeEta <= 0) {
+          enemies.forEach(e => {
+            if (e.poseTimer <= 0) { e.targetX = e.homeX; e.targetZ = e.homeZ; }
+          });
+        }
+      }
+      enemies.forEach(e => animateChar(e, dt, elapsedTotal, st.enemySpeed));
+    }
 
     // Update 3D Spark Particles
     for (let i = particles.length - 1; i >= 0; i--) {
@@ -7337,14 +8188,14 @@
   setInterval(() => {
     if (bgTickBusy || window.__manualStep || gameMode !== 'online') return;
     const now = performance.now();
-    const threshold = document.hidden ? 0.08 : 0.25;
+    const threshold = document.hidden ? 0.035 : 0.25;
     let gap = (now - prevTime) / 1000;
     if (gap >= threshold) {
       bgTickBusy = true;
       try {
         gap = Math.min(0.24, gap);
         while (gap > 0.001) {
-          const sub = Math.min(0.04, gap);
+          const sub = Math.min(0.033, gap);
           stepFrame(sub, true);
           gap -= sub;
         }
@@ -7353,7 +8204,7 @@
         bgTickBusy = false;
       }
     }
-  }, 50);
+  }, 33);
 
   window.__ACE_SPIKE_DEBUG__ = {
     getState: () => ({
@@ -7369,7 +8220,7 @@
       recommendedRecv: getRecommendedReceive(),
       camLook: { x: +camLook.x.toFixed(2), y: +camLook.y.toFixed(2), z: +camLook.z.toFixed(2) },
       player: { x: +player.x.toFixed(2), y: +player.y.toFixed(2), z: +player.z.toFixed(2), vy: +player.vy.toFixed(2), aimX: +player.aimX.toFixed(2) },
-      ball: { x: +ball.x.toFixed(2), y: +ball.y.toFixed(2), z: +ball.z.toFixed(2), omegaX: +ball.omegaX.toFixed(1), side: ball.side, touches: ball.touches, expectedActor: ball.expectedActor, incomingHigh: ball.incomingHigh, active: ball.active },
+      ball: { x: +ball.x.toFixed(2), y: +ball.y.toFixed(2), z: +ball.z.toFixed(2), targetX: +ball.targetX.toFixed(2), targetZ: +ball.targetZ.toFixed(2), omegaX: +ball.omegaX.toFixed(1), side: ball.side, touches: ball.touches, expectedActor: ball.expectedActor, incomingHigh: ball.incomingHigh, active: ball.active, deadBounce: ball.deadBounce },
       onlineSync: {
         matchId: onlineSync.matchId,
         pointSeq: onlineSync.pointSeq,
@@ -7377,6 +8228,12 @@
         hostScore: onlineSync.hostScore,
         guestScore: onlineSync.guestScore,
         serverIsHost: onlineSync.serverIsHost,
+        worldActor: onlineWorld.worldActor,
+        worldTimeScale: +onlineWorld.worldTimeScale.toFixed(2),
+        snapSeq: onlineWorld.snapSeq,
+        lastAppliedSnapSeq: onlineWorld.lastAppliedSnapSeq,
+        remMs: Math.round(getOnlineRemainingMs()),
+        preMs: Math.round(getOnlinePreMatchMs()),
         rttMs: onlineSync.rttMs,
         clockOffsetMs: +onlineSync.clockOffsetMs.toFixed(2),
         clockSynced: onlineSync.clockSynced,
@@ -7387,8 +8244,8 @@
     }),
     startMode: (m, idx = 0) => startMode(m, idx),
     act: (k, d) => executePlayerAction(k, d),
-    setPlayerPos: (x, z) => { player.x = x; player.z = z; },
-    setAim: (ax) => { player.aimX = ax; },
+    setPlayerPos: (x, z) => { player.x = x; player.z = z; if (gameMode === 'online' && !NetP2P.isHost) sendGuestState(true); },
+    setAim: (ax) => { player.aimX = ax; if (gameMode === 'online' && !NetP2P.isHost) sendGuestState(true); },
     canSpike: () => isSpikeInReach(),
     canServeHit: () => isServeHitInReach(),
     canToss: () => isTossInReach(),
