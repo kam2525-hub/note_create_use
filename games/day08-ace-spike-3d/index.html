@@ -2221,8 +2221,9 @@
         ws.send(concatBytes(vh, body));
         return true;
       }
-      function publish(obj) {
+      function publish(obj, droppable = false) {
         if (!ready || closed) return false;
+        if (droppable && ws && ws.bufferedAmount > 1024) return false;
         const tBytes = encodeStr(pubTopic);
         const pBytes = textEnc.encode(JSON.stringify(obj));
         return sendPacket(0x30, concatBytes(tBytes, pBytes));
@@ -2629,9 +2630,11 @@
       return true;
     }
 
-    function send(payload) {
+    function send(payload, droppable = false) {
       if (!state.connected) return false;
       if (state.transport === 'webrtc' && conn && conn.open) {
+        const dc = conn.dataChannel || conn._dc;
+        if (droppable && dc && dc.bufferedAmount > 2048) return false;
         conn.send(payload);
         return true;
       }
@@ -2640,7 +2643,7 @@
         return true;
       }
       if (state.transport === 'relay' && relay && relay.ready) {
-        return relay.publish({ _from: state.clientId, ...payload });
+        return relay.publish({ _from: state.clientId, ...payload }, droppable);
       }
       return false;
     }
@@ -3254,8 +3257,10 @@
   // =========================================================
   const particles = [];
   const partGeo = new THREE.OctahedronGeometry(0.085, 0);
+  const shockwaveGeo = new THREE.RingGeometry(0.24, 0.42, 24);
   function spawnBurstParticles(x, y, z, colorHex, count = 22, power = 1.0) {
-    for (let i = 0; i < count; i++) {
+    const budget = Math.max(0, Math.min(count, 48 - particles.length));
+    for (let i = 0; i < budget; i++) {
       const mat = new THREE.MeshBasicMaterial({ color: i % 3 === 0 ? 0xffffff : colorHex, transparent: true, opacity: 1 });
       const mesh = new THREE.Mesh(partGeo, mat);
       mesh.position.set(x, y, z);
@@ -3276,8 +3281,13 @@
 
   const shockwaves = [];
   function spawnShockwave(x, y, z, colorHex, maxScale = 2.6, vertical = false) {
+    if (shockwaves.length >= 10) {
+      const old = shockwaves.shift();
+      scene.remove(old.mesh);
+      if (old.mesh.material) old.mesh.material.dispose();
+    }
     const m = new THREE.Mesh(
-      new THREE.RingGeometry(0.24, 0.42, 28),
+      shockwaveGeo,
       new THREE.MeshBasicMaterial({ color: colorHex, side: THREE.DoubleSide, transparent: true, opacity: 0.96 })
     );
     if (!vertical) m.rotation.x = -Math.PI / 2;
@@ -3954,6 +3964,7 @@
     guestStateTimer: 0,
     worldActor: 'none',
     worldTimeScale: 1.0,
+    lastSentTimeScale: 1.0,
     hostRecvSlow: false,
     guestRecvSlow: false,
     eventSeq: 0,
@@ -5621,7 +5632,7 @@
       aimX: +(-player.aimX).toFixed(2),
       pose: vmAnim.timer > 0 ? vmAnim.mode : 'idle',
       za: zoneActiveTimer > 0 ? 1 : 0
-    });
+    }, !force);
   }
 
   function sendGuestAction(kind, dirHint = 0, optimisticActor = null, hint = null, predicted = false) {
@@ -5656,22 +5667,26 @@
       payload.htx = +hint.tx.toFixed(2);
       payload.htz = +hint.tz.toFixed(2);
     }
-    NetP2P.send(payload);
+    NetP2P.send(payload, false);
   }
 
   function broadcastWorldSnap(ev = null) {
     if (gameMode !== 'online' || !NetP2P.isHost || !NetP2P.connected) return;
-    const now = performance.now();
     if (ev) {
       ev.id = ++onlineWorld.eventSeq;
-      onlineWorld.recentEvent = ev;
-      onlineWorld.recentEventUntil = now + 180;
+      if (ev.kind !== 'serve_jump') {
+        onlineWorld.worldTimeScale = 1.0;
+        onlineWorld.hostRecvSlow = false;
+        onlineWorld.guestRecvSlow = false;
+      }
     }
-    const activeEv = ev || (now < onlineWorld.recentEventUntil ? onlineWorld.recentEvent : null);
     onlineWorld.snapTimer = 0;
-    NetP2P.send({
+    onlineWorld.lastSentTimeScale = onlineWorld.worldTimeScale;
+    const seq = ++onlineWorld.snapSeq;
+    const sendAllies = !!ev || (seq % 2 === 0);
+    const snap = {
       type: 'world_snap',
-      seq: ++onlineWorld.snapSeq,
+      seq,
       mid: onlineSync.matchId,
       pseq: onlineSync.pointSeq,
       la: onlineWorld.guest.lastActSeq,
@@ -5708,14 +5723,17 @@
       hp: {
         x: +player.x.toFixed(2), y: +player.y.toFixed(2), z: +player.z.toFixed(2),
         p: vmAnim.timer > 0 ? vmAnim.mode : 'idle'
-      },
-      ha: allies.map(a => [+a.x.toFixed(2), +a.y.toFixed(2), +a.z.toFixed(2), a.pose]),
-      ga: [
-        enemies[1] ? [+enemies[1].x.toFixed(2), +enemies[1].y.toFixed(2), +enemies[1].z.toFixed(2), enemies[1].pose] : [-0.7, 0, -2.0, 'idle'],
-        enemies[2] ? [+enemies[2].x.toFixed(2), +enemies[2].y.toFixed(2), +enemies[2].z.toFixed(2), enemies[2].pose] : [2.4, 0, -3.4, 'idle']
-      ],
-      ev: activeEv
-    });
+      }
+    };
+    if (sendAllies) {
+      snap.ha = allies.map(a => [+a.x.toFixed(1), +a.y.toFixed(1), +a.z.toFixed(1), a.pose]);
+      snap.ga = [
+        enemies[1] ? [+enemies[1].x.toFixed(1), +enemies[1].y.toFixed(1), +enemies[1].z.toFixed(1), enemies[1].pose] : [-0.7, 0, -2.0, 'idle'],
+        enemies[2] ? [+enemies[2].x.toFixed(1), +enemies[2].y.toFixed(1), +enemies[2].z.toFixed(1), enemies[2].pose] : [2.4, 0, -3.4, 'idle']
+      ];
+    }
+    if (ev) snap.ev = ev;
+    NetP2P.send(snap, !ev);
   }
 
   // Host Authoritative Guest Resolvers (all in shared World Coordinates; Guest court is z < 0, faces +z)
@@ -6029,11 +6047,11 @@
     });
   }
 
-  function playWorldEventFx(ev) {
+  function playWorldEventFx(ev, reconciledPredSeq = 0) {
     if (!ev || !ev.id || ev.id <= onlineWorld.lastEventId) return;
     onlineWorld.lastEventId = ev.id;
     const isMe = ev.actor === 'g'; // Called on Guest!
-    const alreadyPredicted = isMe && ev.actSeq && ev.actSeq === onlineWorld.predictedActSeq;
+    const alreadyPredicted = isMe && ev.actSeq && (ev.actSeq === onlineWorld.predictedActSeq || ev.actSeq === reconciledPredSeq);
     const fxX = typeof ev.x === 'number' ? -ev.x : ball.x;
     const fxY = typeof ev.y === 'number' ? ev.y : ball.y;
     const fxZ = typeof ev.z === 'number' ? -ev.z : ball.z;
@@ -6277,7 +6295,13 @@
           if (gy < BALL_R + 0.01) gy = BALL_R + 0.01;
         }
 
-        const wasPredictedReconcile = onlineWorld.predictedActSeq > 0 && (snap.la || 0) >= onlineWorld.predictedActSeq;
+        const reconciledPredSeq = (onlineWorld.predictedActSeq > 0 && (snap.la || 0) >= onlineWorld.predictedActSeq)
+          ? onlineWorld.predictedActSeq
+          : 0;
+        const wasPredictedReconcile = reconciledPredSeq > 0;
+        if (wasPredictedReconcile) {
+          onlineWorld.predictedActSeq = 0;
+        }
         ball.x = gx; ball.y = gy; ball.z = gz;
         ball.vx = gvx; ball.vy = gvy; ball.vz = gvz;
         ball.omegaX = gox; ball.omegaY = 0; ball.omegaZ = 0;
@@ -6301,7 +6325,7 @@
         const ey = prevVisY - gy;
         const ez = prevVisZ - gz;
         const err = Math.hypot(ex, ey, ez);
-        if (!b.a || newPoint || err > 2.2 || (actChanged && !wasPredictedReconcile)) {
+        if (!b.a || newPoint || err > 1.8 || (actChanged && !wasPredictedReconcile)) {
           onlineWorld.ballVisErr.x = 0;
           onlineWorld.ballVisErr.y = 0;
           onlineWorld.ballVisErr.z = 0;
@@ -6311,7 +6335,10 @@
           onlineWorld.ballVisErr.y = ey;
           onlineWorld.ballVisErr.z = ez;
         }
+        if (snap.ev) playWorldEventFx(snap.ev, reconciledPredSeq);
       }
+    } else if (snap.ev) {
+      playWorldEventFx(snap.ev, 0);
     }
 
     // 7. Mirror Host Player & All 4 Allies in Exact Shared World Coords
@@ -6343,8 +6370,6 @@
       }
     }
 
-    // 8. Discrete Event Effects (deduplicated by ev.id and predictedActSeq)
-    if (snap.ev) playWorldEventFx(snap.ev);
     if (hudDirty || newPoint || snap.ev) updateHud();
   }
 
@@ -6636,6 +6661,7 @@
     onlineWorld.recentEvent = null;
     onlineWorld.recentEventUntil = 0;
     onlineWorld.worldTimeScale = 1.0;
+    onlineWorld.lastSentTimeScale = 1.0;
     onlineWorld.hostRecvSlow = false;
     onlineWorld.guestRecvSlow = false;
     onlineWorld.serverRemMs = ONLINE_MATCH_DURATION_SEC * 1000;
@@ -7660,13 +7686,15 @@
     if (ball.active && activePlay) {
       let ballDt = dt;
       if (isThinGuest && !ball.deadBounce) {
-        // Keep full 60fps motion during normal snapshot interval (0..55ms) and during Guest's own 0ms predicted launch,
-        // then smoothly brake extrapolation between 55ms..145ms if a packet is delayed so ball never freezes OR overshoots!
+        // Keep full 60fps deterministic flight across each transport's normal snapshot cadence + jitter,
+        // and during Guest's own 0ms predicted launch; gently brake only on genuine stalls!
         const inPredicted = performance.now() < onlineWorld.localActPendingUntil && onlineWorld.predictedActSeq === onlineWorld.localActSeq;
         if (!inPredicted) {
           onlineWorld.guestExtrapTime = (onlineWorld.guestExtrapTime || 0) + dtBase;
-          if (onlineWorld.guestExtrapTime > 0.055) {
-            const extrapScale = Math.max(0, 1 - (onlineWorld.guestExtrapTime - 0.055) / 0.09);
+          const extrapFull = NetP2P.transport === 'relay' ? 0.11 : (NetP2P.transport === 'webrtc' ? 0.08 : 0.055);
+          const extrapBrake = NetP2P.transport === 'relay' ? 0.10 : 0.075;
+          if (onlineWorld.guestExtrapTime > extrapFull) {
+            const extrapScale = Math.max(0, 1 - (onlineWorld.guestExtrapTime - extrapFull) / extrapBrake);
             ballDt = dt * extrapScale;
           }
         }
@@ -7966,7 +7994,7 @@
 
     const st = STAGES[stageIdx] || STAGES[0];
     if (gameMode === 'online' && NetP2P.connected) {
-      const netInterval = NetP2P.transport === 'relay' ? 0.033 : 0.022;
+      const netInterval = NetP2P.transport === 'relay' ? 0.066 : (NetP2P.transport === 'local' ? 0.033 : 0.050);
       const rRate = Math.min(1, dtBase * 18);
       const mapVmPose = (mp) => {
         if (mp === 'receive' || mp === 'over_receive' || mp === 'dive') return 'receive';
@@ -8000,7 +8028,8 @@
           animateChar(enemies[i], dt, elapsedTotal, 6.2);
         }
         onlineWorld.snapTimer += dtBase;
-        if (onlineWorld.snapTimer >= netInterval) {
+        const tsChanged = Math.abs(onlineWorld.worldTimeScale - (onlineWorld.lastSentTimeScale ?? 1.0)) >= 0.08;
+        if (onlineWorld.snapTimer >= netInterval || tsChanged) {
           broadcastWorldSnap();
         }
       } else {
@@ -8088,6 +8117,7 @@
       pt.age += dtBase;
       if (pt.age >= pt.dur) {
         scene.remove(pt.mesh);
+        if (pt.mesh.material) pt.mesh.material.dispose();
         particles.splice(i, 1);
       } else {
         pt.vy += GRAVITY * 0.7 * dtBase;
@@ -8108,6 +8138,7 @@
       const p = sw.age / sw.dur;
       if (p >= 1) {
         scene.remove(sw.mesh);
+        if (sw.mesh.material) sw.mesh.material.dispose();
         shockwaves.splice(i, 1);
       } else {
         const s = 1 + p * sw.maxScale;
@@ -8448,6 +8479,7 @@
       player: { x: +player.x.toFixed(2), y: +player.y.toFixed(2), z: +player.z.toFixed(2), vy: +player.vy.toFixed(2), aimX: +player.aimX.toFixed(2) },
       ball: { x: +ball.x.toFixed(2), y: +ball.y.toFixed(2), z: +ball.z.toFixed(2), targetX: +ball.targetX.toFixed(2), targetZ: +ball.targetZ.toFixed(2), omegaX: +ball.omegaX.toFixed(1), side: ball.side, touches: ball.touches, expectedActor: ball.expectedActor, incomingHigh: ball.incomingHigh, active: ball.active, deadBounce: ball.deadBounce },
       visBall: { x: +ballMesh.position.x.toFixed(3), y: +ballMesh.position.y.toFixed(3), z: +ballMesh.position.z.toFixed(3), err: +Math.hypot(onlineWorld.ballVisErr.x, onlineWorld.ballVisErr.y, onlineWorld.ballVisErr.z).toFixed(3) },
+      fxCounts: { particles: particles.length, shockwaves: shockwaves.length },
       onlineSync: {
         matchId: onlineSync.matchId,
         pointSeq: onlineSync.pointSeq,
@@ -8457,6 +8489,7 @@
         serverIsHost: onlineSync.serverIsHost,
         worldActor: onlineWorld.worldActor,
         worldTimeScale: +onlineWorld.worldTimeScale.toFixed(2),
+        predictedActSeq: onlineWorld.predictedActSeq,
         snapSeq: onlineWorld.snapSeq,
         lastAppliedSnapSeq: onlineWorld.lastAppliedSnapSeq,
         remMs: Math.round(getOnlineRemainingMs()),
