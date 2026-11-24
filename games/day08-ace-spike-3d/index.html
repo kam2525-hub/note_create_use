@@ -192,6 +192,16 @@
     font-weight: 900;
     color: #e2e8f0;
   }
+  .online-meta-line {
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 0.06em;
+    color: #34d399;
+    font-variant-numeric: tabular-nums;
+    margin-top: 2px;
+  }
+  .online-meta-line.urgent { color: #facc15; }
+  .online-meta-line.hidden { display: none; }
   .ctrl-row {
     display: flex;
     gap: 6px;
@@ -1636,11 +1646,17 @@
     body:not(.shorts-mode) .hero-3d-plate { font-size: 14px; padding: 4px 7px; }
     body:not(.shorts-mode) .home-dock { width: clamp(280px, 44vw, 370px); gap: 6px; }
     body:not(.shorts-mode) .dock-hero { padding: 10px 14px 10px 16px; }
+    body:not(.shorts-mode) .dock-online { padding: 8px 12px 8px 16px; }
     body:not(.shorts-mode) .dock-jp { font-size: 18px; }
     body:not(.shorts-mode) .dock-play-arrow { width: 32px; height: 32px; }
     body:not(.shorts-mode) .dock-tile { padding: 8px 9px; }
     body:not(.shorts-mode) .dock-tile-text strong { font-size: 12px; }
     body:not(.shorts-mode) .home-ticker { padding: 6px 10px; font-size: 9.5px; }
+    body:not(.shorts-mode) .online-panel { padding: 12px 14px; }
+    body:not(.shorts-mode) .online-card { padding: 8px 11px; margin-bottom: 7px; }
+    body:not(.shorts-mode) .online-card-title { font-size: 13px; margin-bottom: 5px; }
+    body:not(.shorts-mode) .room-code-digits { font-size: 22px; }
+    body:not(.shorts-mode) .room-code-input { font-size: 18px; padding: 6px 8px; }
 
     body:not(.shorts-mode) .overlay:not(#screen-title) {
       padding: max(10px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
@@ -1676,6 +1692,7 @@
     body:not(.shorts-mode) .hero-wordmark { font-size: clamp(24px, 8.8vh, 34px); }
     body:not(.shorts-mode) .home-dock { bottom: max(8px, env(safe-area-inset-bottom)); gap: 5px; }
     body:not(.shorts-mode) .dock-hero { padding: 7px 12px 7px 14px; }
+    body:not(.shorts-mode) .dock-online { padding: 6px 10px 6px 14px; }
     body:not(.shorts-mode) .dock-jp { font-size: 15px; }
     body:not(.shorts-mode) .dock-next-line { display: none; }
     body:not(.shorts-mode) .dock-tile { padding: 6px 8px; }
@@ -1720,6 +1737,7 @@
           <div class="stage-pill">
             <div class="stage-name" id="hud-stage">STAGE 1/4 // アオバ高</div>
             <div class="rally-line" id="hud-rally">RALLY: 0 // MAX: 0</div>
+            <div class="online-meta-line hidden" id="hud-online-meta">⏱ 03:00 // PING --ms</div>
           </div>
           <div class="ctrl-row">
             <button class="mini-btn" id="btn-fs" title="全画面切替 (F)">⛶ FULL</button>
@@ -1835,6 +1853,23 @@
           </span>
         </button>
 
+        <button class="dock-online" id="btn-open-online">
+          <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+            <span class="dock-tile-ico" style="color:#34d399;background:rgba(16,185,129,0.16);">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="square">
+                <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
+                <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+                <circle cx="12" cy="19.5" r="1.4" fill="currentColor"></circle>
+              </svg>
+            </span>
+            <span class="dock-tile-text">
+              <small style="color:#6ee7b7;">ONLINE 1VS1 // ROOM CODE</small>
+              <strong style="font-size:15px;">オンライン対戦</strong>
+            </span>
+          </div>
+          <span class="online-pill-live"><span class="online-dot"></span>P2P</span>
+        </button>
+
         <div class="dock-split">
           <button class="dock-tile" id="btn-howto">
             <span class="dock-tile-ico ice">
@@ -1869,6 +1904,42 @@
           <span>CLEAR <strong id="tick-clear">0/5</strong></span>
           <span>MAX RALLY <strong id="tick-rally">0</strong></span>
           <span>JUST <strong id="tick-just">0</strong></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Online 1vs1 Room Match Lobby (WebRTC PeerJS + Local 2-Tab Link) -->
+    <div class="overlay hidden" id="screen-online">
+      <div class="screen-sheet online-panel">
+        <div class="sheet-head" style="margin-bottom:12px;">
+          <div class="sheet-head-title">
+            <small style="color:#34d399;">ONLINE 1VS1 // P2P WEBRTC</small>
+            <h2>ルーム対戦</h2>
+          </div>
+          <button class="back-chip" id="btn-online-back">BACK</button>
+        </div>
+
+        <div class="online-card">
+          <div class="online-card-label">HOST // ルームを作成して友達を待つ</div>
+          <div class="online-card-title">合言葉（4桁コード）を発行</div>
+          <div class="room-code-display hidden" id="room-code-box">
+            <span class="room-code-digits" id="room-code-digits">----</span>
+            <button class="room-copy-btn" id="btn-copy-code">COPY</button>
+          </div>
+          <button class="cta-btn" id="btn-create-room" style="margin-bottom:0;padding:11px 14px;font-size:14px;">ルームを作成 // CREATE</button>
+        </div>
+
+        <div class="online-card join">
+          <div class="online-card-label">GUEST // 友達のコードを入力して参加</div>
+          <div class="online-card-title">ルームに参加</div>
+          <div class="room-join-row">
+            <input class="room-code-input" id="input-room-code" type="text" inputmode="numeric" maxlength="4" placeholder="0000" autocomplete="off" />
+            <button class="room-join-btn" id="btn-join-room">参加 // JOIN</button>
+          </div>
+        </div>
+
+        <div class="online-status-bar" id="online-status">
+          4桁の合言葉で1vs1対戦（7点先取 / 3分制）。時刻・得点・弾道を完全同期してリアルタイム対戦！
         </div>
       </div>
     </div>
@@ -1971,6 +2042,7 @@
 </div>
 
 <script src="./three.min.js"></script>
+<script src="./peerjs.min.js"></script>
 <script>
 (() => {
   'use strict';
@@ -1999,6 +2071,7 @@
   const hudEnemyTag = document.getElementById('hud-enemy-tag');
   const hudStage = document.getElementById('hud-stage');
   const hudRally = document.getElementById('hud-rally');
+  const hudOnlineMeta = document.getElementById('hud-online-meta');
   const zoneFill = document.getElementById('zone-fill');
   const zoneLabel = document.getElementById('zone-label');
   const tdot1 = document.getElementById('tdot-1');
@@ -2018,7 +2091,7 @@
   const btnSound = document.getElementById('btn-sound');
   const btnMenu = document.getElementById('btn-menu');
   const screenTitle = document.getElementById('screen-title');
-  const screenOnline = document.getElementById('screen-online') || { classList: { add() {}, remove() {} } };
+  const screenOnline = document.getElementById('screen-online');
   const screenStory = document.getElementById('screen-story');
   const screenStoryIntro = document.getElementById('screen-story-intro');
   const storyListEl = document.getElementById('story-list');
@@ -2132,9 +2205,14 @@
 
     function bindConn(c) {
       conn = c;
-      c.on('open', () => finishConnect('webrtc'));
+      if (c.open) {
+        queueMicrotask(() => finishConnect('webrtc'));
+      } else {
+        c.on('open', () => finishConnect('webrtc'));
+      }
       c.on('data', (d) => {
-        if (!d || !state.connected) return;
+        if (!d) return;
+        if (!state.connected) finishConnect('webrtc');
         if (d.type === 'peer_left') {
           state.connected = false;
           if (onCloseCb) onCloseCb();
@@ -2152,6 +2230,9 @@
         if (!state.connected) setStatus('P2P接続に失敗しました。もう一度お試しください。', 'err');
       });
     }
+    window.addEventListener('pagehide', () => {
+      if (state.connected) close(true);
+    });
 
     function createRoom(forcedCode) {
       close(false);
@@ -3484,7 +3565,10 @@
     incomingHigh: false, // True -> Overhand receive recommended! False -> Underhand recommended!
     overBoostToss: false, // Perfect over-receive boosts next ally toss into golden combo set!
     enemySpikeEta: 0,
-    enemySpikerIdx: 0
+    enemySpikerIdx: 0,
+    onlineBlockWindow: 0,
+    onlineBlockPending: false,
+    onlineBlockChecked: false
   };
 
   // Smooth Camera Gaze Lock Vector (tracks ball naturally!)
@@ -3518,6 +3602,86 @@
   let rallyGuardTimer = 0;
   let blockPointTimer = 0;
   let drillRecvNextTimer = 0;
+
+  const ONLINE_MATCH_DURATION_SEC = 180;
+  const onlineSync = {
+    matchId: 0,
+    pointSeq: 1,
+    committedPointSeq: 0,
+    hostScore: 0,
+    guestScore: 0,
+    serverIsHost: true,
+    matchStartSyncedMs: 0,
+    nextPointAtSyncedMs: 0,
+    matchEnded: false,
+    overtime: false,
+    rematchLocalReady: false,
+    rematchRemoteReady: false,
+    clockOffsetMs: 0,
+    clockSamples: [],
+    rttMs: 0,
+    clockSynced: false,
+    pingTimer: null,
+    pingSeq: 0,
+    lastHudSec: -1,
+    lastSyncReqAt: 0
+  };
+
+  function getSyncedNowMs() {
+    if (gameMode === 'online' && !NetP2P.isHost) {
+      return performance.now() + onlineSync.clockOffsetMs;
+    }
+    return performance.now();
+  }
+
+  function recordClockSample(rtt, offset) {
+    onlineSync.clockSamples.push({ rtt, offset, ts: performance.now() });
+    if (onlineSync.clockSamples.length > 8) onlineSync.clockSamples.shift();
+    const sorted = [...onlineSync.clockSamples].sort((a, b) => a.rtt - b.rtt);
+    const best = sorted.slice(0, Math.min(4, sorted.length));
+    const avgOffset = best.reduce((s, x) => s + x.offset, 0) / best.length;
+    const bestRtt = best[0].rtt;
+    if (!onlineSync.clockSynced) {
+      onlineSync.clockOffsetMs = avgOffset;
+      onlineSync.clockSynced = true;
+    } else {
+      onlineSync.clockOffsetMs = onlineSync.clockOffsetMs * 0.35 + avgOffset * 0.65;
+    }
+    onlineSync.rttMs = Math.max(1, Math.round(bestRtt));
+  }
+
+  function sendClockPing() {
+    if (!NetP2P.connected) return;
+    onlineSync.pingSeq++;
+    if (NetP2P.isHost) {
+      NetP2P.send({ type: 'host_ping', seq: onlineSync.pingSeq, t0: performance.now() });
+    } else {
+      NetP2P.send({ type: 'clock_ping', seq: onlineSync.pingSeq, t0: performance.now() });
+    }
+  }
+
+  function stopClockSync() {
+    if (onlineSync.pingTimer) {
+      clearInterval(onlineSync.pingTimer);
+      onlineSync.pingTimer = null;
+    }
+  }
+
+  function startClockSync() {
+    stopClockSync();
+    onlineSync.clockSamples = [];
+    onlineSync.clockSynced = NetP2P.isHost;
+    onlineSync.clockOffsetMs = 0;
+    onlineSync.rttMs = 0;
+    sendClockPing();
+    setTimeout(sendClockPing, 60);
+    setTimeout(sendClockPing, 140);
+    setTimeout(sendClockPing, 260);
+    onlineSync.pingTimer = setInterval(() => {
+      if (!NetP2P.connected) { stopClockSync(); return; }
+      sendClockPing();
+    }, 1400);
+  }
 
   const perks = {
     jumpMult: 1.0,
@@ -3607,6 +3771,37 @@
     updateHud();
   }
 
+  function updateOnlineMetaHud() {
+    if (!hudOnlineMeta) return;
+    if (gameMode !== 'online') {
+      hudOnlineMeta.classList.add('hidden');
+      return;
+    }
+    hudOnlineMeta.classList.remove('hidden');
+    const pingStr = onlineSync.rttMs > 0 ? `${onlineSync.rttMs}ms` : '--ms';
+    const nowSynced = getSyncedNowMs();
+    if (!onlineSync.matchStartSyncedMs || nowSynced < onlineSync.matchStartSyncedMs) {
+      const pre = onlineSync.matchStartSyncedMs
+        ? Math.max(0, (onlineSync.matchStartSyncedMs - nowSynced) / 1000).toFixed(1)
+        : '0.5';
+      hudOnlineMeta.className = 'online-meta-line';
+      hudOnlineMeta.textContent = `SYNC ${pre}s // PING ${pingStr}`;
+      return;
+    }
+    const elapsedSec = Math.max(0, (nowSynced - onlineSync.matchStartSyncedMs) / 1000);
+    const remSec = Math.max(0, ONLINE_MATCH_DURATION_SEC - elapsedSec);
+    if (remSec <= 0 && myScore === enScore) {
+      hudOnlineMeta.className = 'online-meta-line urgent';
+      hudOnlineMeta.textContent = `⏱ GOLDEN PT // ${pingStr}`;
+      return;
+    }
+    const disp = Math.ceil(remSec);
+    const mm = String(Math.floor(disp / 60)).padStart(2, '0');
+    const ss = String(disp % 60).padStart(2, '0');
+    hudOnlineMeta.className = 'online-meta-line' + (disp <= 15 ? ' urgent' : '');
+    hudOnlineMeta.textContent = `⏱ ${mm}:${ss} // ${pingStr}`;
+  }
+
   function updateHud() {
     const st = STAGES[stageIdx] || STAGES[0];
     hudMyScore.textContent = myScore;
@@ -3620,6 +3815,7 @@
     else if (gameMode === 'drill_recv') hudStage.textContent = 'TUTORIAL // レシーブ練習';
     else hudStage.textContent = 'TUTORIAL // フリー練習';
     hudRally.textContent = `RALLY: ${rallyCount} // MAX: ${maxRallyMatch}`;
+    updateOnlineMetaHud();
 
     const zPct = zoneActiveTimer > 0 ? Math.round((zoneActiveTimer / 11.5) * 100) : Math.round(zone);
     zoneFill.style.width = zPct + '%';
@@ -3697,6 +3893,8 @@
     ball.active = true;
     ball.deadBounce = false;
     ball.netChecked = false;
+    ball.onlineBlockPending = false;
+    ball.onlineBlockChecked = false;
     ball.trailColor = opts.trailColor ?? getSelectedSkin().trail;
     ball.trailPower = opts.trailPower ?? 0.42;
     ball.isFeint = !!opts.feint;
@@ -3705,6 +3903,24 @@
     ball.isServe = !!opts.isServe;
     ball.incomingHigh = !!opts.incomingHigh;
     recvSlowNotified = false;
+  }
+
+  function fastForwardBall(ageSec) {
+    let rem = Math.max(0, ageSec);
+    const h = 0.015;
+    while (rem > 0.0001) {
+      const step = Math.min(h, rem);
+      ball.flightTimer += step;
+      ball.knucklePhase += step;
+      const acc = computeBallAccel(ball.vx, ball.vy, ball.vz, ball.omegaX, ball.omegaY, ball.omegaZ, ball.knuckle, ball.knucklePhase);
+      ball.vx += acc.ax * step;
+      ball.vy += acc.ay * step;
+      ball.vz += acc.az * step;
+      ball.x += ball.vx * step;
+      ball.y += ball.vy * step;
+      ball.z += ball.vz * step;
+      rem -= step;
+    }
   }
 
   function launchBallVel(vx, vy, vz, opts = {}) {
@@ -3775,6 +3991,8 @@
     ball.deadBounce = false;
     ball.enemySpikeEta = 0;
     ball.onlineBlockWindow = 0;
+    ball.onlineBlockPending = false;
+    ball.onlineBlockChecked = false;
     recvSlowActive = false;
 
     if (gameMode === 'drill_spike') {
@@ -3888,6 +4106,7 @@
     const sz = 1.25 + Math.random() * 0.50;
     const peakContactY = boosted ? 3.12 : 3.02;
     const flightT = boosted ? 1.08 : 1.22;
+    const bx0 = ball.x, by0 = ball.y, bz0 = ball.z;
     launchBallTo(sx, peakContactY, sz, flightT, {
       trailColor: boosted ? 0xfacc15 : 0x38bdf8,
       trailPower: boosted ? 0.90 : 0.55,
@@ -3898,7 +4117,9 @@
     if (gameMode === 'online') {
       NetP2P.send({
         type: 'rally_update', phase: 'toss',
-        bx: allies[0].x, by: 2.0, bz: allies[0].z,
+        matchId: onlineSync.matchId, pointSeq: onlineSync.pointSeq,
+        sentAt: Math.round(getSyncedNowMs()),
+        bx: bx0, by: by0, bz: bz0,
         tx: sx, ty: peakContactY, tz: sz, flightTime: flightT
       });
     }
@@ -4091,6 +4312,8 @@
         if (gameMode === 'online') {
           NetP2P.send({
             type: 'rally_update', phase: 'recv',
+            matchId: onlineSync.matchId, pointSeq: onlineSync.pointSeq,
+            sentAt: Math.round(getSyncedNowMs()),
             bx: ball.x, by: ball.y, bz: ball.z,
             tx: sx, ty: 1.92, tz: sz, flightTime: recvFt
           });
@@ -4132,6 +4355,8 @@
         if (gameMode === 'online') {
           NetP2P.send({
             type: 'shot_over', kind: 'dump',
+            matchId: onlineSync.matchId, pointSeq: onlineSync.pointSeq,
+            sentAt: Math.round(getSyncedNowMs()),
             sx, sy, sz, tx, ty: sharedTy, tz, flightTime: sharedFlight,
             omegaX: -8, knuckle: false, incomingHigh: false, feint: true, just: false, meteor: false
           });
@@ -4165,12 +4390,22 @@
       matchTosses++;
       allies[1].targetX = targetSpikeX;
       allies[1].targetZ = targetSpikeZ + 0.6;
+      const bx0 = ball.x, by0 = ball.y, bz0 = ball.z;
       launchBallTo(targetSpikeX, 3.0, targetSpikeZ, tossFlight, {
         trailColor: just ? 0xfacc15 : 0x34d399,
         trailPower: just ? 0.86 : 0.56,
         just,
         omegaX: -5
       });
+      if (gameMode === 'online') {
+        NetP2P.send({
+          type: 'rally_update', phase: 'toss',
+          matchId: onlineSync.matchId, pointSeq: onlineSync.pointSeq,
+          sentAt: Math.round(getSyncedNowMs()),
+          bx: bx0, by: by0, bz: bz0,
+          tx: targetSpikeX, ty: 3.0, tz: targetSpikeZ, flightTime: tossFlight
+        });
+      }
       bumpCombo(1);
       SFX.toss(just, comboCount);
       triggerArmAnim('toss', 0.36, dir);
@@ -4281,6 +4516,8 @@
         if (gameMode === 'online') {
           NetP2P.send({
             type: 'shot_over', kind: 'serve',
+            matchId: onlineSync.matchId, pointSeq: onlineSync.pointSeq,
+            sentAt: Math.round(getSyncedNowMs()),
             sx, sy, sz, tx, ty: sharedTy, tz,
             flightTime: sharedFlight,
             omegaX: isJumpServe ? -28 : 0,
@@ -4441,6 +4678,8 @@
         if (gameMode === 'online') {
           NetP2P.send({
             type: 'shot_over', kind: isFeint ? 'feint' : 'spike',
+            matchId: onlineSync.matchId, pointSeq: onlineSync.pointSeq,
+            sentAt: Math.round(getSyncedNowMs()),
             sx, sy, sz, tx: aimX, ty: sharedTy, tz: aimZ,
             flightTime: sharedFlight,
             omegaX: omega, knuckle: false, incomingHigh: false,
@@ -4638,13 +4877,161 @@
     }
   }
 
+  function applyOnlinePointVisuals(winner, reason, incrementScore = false) {
+    matchState = 'point_pause';
+    pauseTimer = 1.55;
+    ball.expectedActor = 'none';
+    ball.enemySpikeEta = 0;
+    ball.onlineBlockWindow = 0;
+    ball.onlineBlockPending = false;
+    ball.onlineBlockChecked = false;
+    recvSlowActive = false;
+    player.actionBuffer = null;
+
+    if (winner === 'us') {
+      if (incrementScore) myScore++;
+      serverSide = 'us';
+      SFX.point(true);
+      allies.forEach(a => { a.pose = 'celebrate'; a.poseTimer = 1.1; a.vy = 4.2; });
+      addCallout('POINT!!', reason, '#facc15');
+      recordEv('point_us');
+    } else {
+      if (incrementScore) enScore++;
+      comboCount = 0;
+      comboPill.classList.remove('show');
+      serverSide = 'enemy';
+      SFX.point(false);
+      enemies.forEach(e => { e.pose = 'celebrate'; e.poseTimer = 1.1; e.vy = 4.2; });
+      addCallout('LOST POINT...', reason, '#fb7185');
+      recordEv('point_en');
+    }
+
+    saveData.maxRally = Math.max(saveData.maxRally, maxRallyMatch);
+    persistSave();
+    updateHud();
+  }
+
+  function applyOnlinePointCommit(data) {
+    onlineSync.committedPointSeq = Math.max(onlineSync.committedPointSeq, data.pointSeq);
+    onlineSync.hostScore = data.hostScore;
+    onlineSync.guestScore = data.guestScore;
+    onlineSync.serverIsHost = !!data.serverIsHost;
+    onlineSync.nextPointAtSyncedMs = data.nextPointAt;
+
+    myScore = NetP2P.isHost ? data.hostScore : data.guestScore;
+    enScore = NetP2P.isHost ? data.guestScore : data.hostScore;
+    serverSide = (NetP2P.isHost === !!data.serverIsHost) ? 'us' : 'enemy';
+
+    const localWon = NetP2P.isHost ? !data.loserIsHost : !!data.loserIsHost;
+    if (matchState !== 'point_pause') {
+      if (data.isBlock && !localWon) {
+        const bx = data.bx || 0;
+        SFX.block(2);
+        spawnShockwave(bx, NET_H, 0, 0xf43f5e, 2.4, true);
+        spawnBurstParticles(bx, NET_H, 0, 0xf43f5e, 26, 1.0);
+        ball.x = bx; ball.y = NET_H; ball.z = 0.2;
+        ball.deadBounce = true;
+        ball.vx = 0; ball.vy = -4.2; ball.vz = 4.6;
+      } else if (localWon) {
+        spawnShockwave(ball.x, 0.03, Math.min(-1.0, ball.z), 0xfacc15, 2.8);
+        spawnBurstParticles(ball.x, 0.2, Math.min(-1.0, ball.z), 0xfacc15, 24, 1.0);
+        SFX.floorHit(1.0);
+        ball.deadBounce = true;
+      }
+      applyOnlinePointVisuals(localWon ? 'us' : 'enemy', data.reason || 'ONLINE POINT!!', false);
+    } else {
+      updateHud();
+    }
+  }
+
+  function claimOnlinePoint(loserIsHost, reason, extra = {}) {
+    if (gameMode !== 'online' || onlineSync.matchEnded) return;
+    const seq = onlineSync.pointSeq;
+    if (onlineSync.committedPointSeq >= seq) return;
+
+    const nextPointAt = Math.round(getSyncedNowMs() + 1550);
+    if (NetP2P.isHost) {
+      if (loserIsHost) onlineSync.guestScore++;
+      else onlineSync.hostScore++;
+      onlineSync.serverIsHost = !loserIsHost;
+      const commitPayload = {
+        type: 'point_commit',
+        matchId: onlineSync.matchId,
+        pointSeq: seq,
+        hostScore: onlineSync.hostScore,
+        guestScore: onlineSync.guestScore,
+        serverIsHost: onlineSync.serverIsHost,
+        loserIsHost: !!loserIsHost,
+        reason: reason || 'ONLINE POINT!!',
+        nextPointAt,
+        isBlock: !!extra.isBlock,
+        bx: extra.bx || 0,
+        sentAt: Math.round(getSyncedNowMs())
+      };
+      NetP2P.send(commitPayload);
+      applyOnlinePointCommit(commitPayload);
+    } else {
+      if (matchState === 'point_pause') return;
+      onlineSync.nextPointAtSyncedMs = nextPointAt;
+      const localWon = !!loserIsHost;
+      applyOnlinePointVisuals(localWon ? 'us' : 'enemy', reason || 'ONLINE POINT!!', true);
+      NetP2P.send({
+        type: 'point_claim',
+        matchId: onlineSync.matchId,
+        pointSeq: seq,
+        loserIsHost: !!loserIsHost,
+        reason: reason || 'ONLINE POINT!!',
+        isBlock: !!extra.isBlock,
+        bx: extra.bx || 0,
+        nextPointAt,
+        sentAt: Math.round(getSyncedNowMs())
+      });
+    }
+  }
+
+  function finishOnlineMatch(winnerIsHost, reason = '') {
+    if (onlineSync.matchEnded) return;
+    onlineSync.matchEnded = true;
+    myScore = NetP2P.isHost ? onlineSync.hostScore : onlineSync.guestScore;
+    enScore = NetP2P.isHost ? onlineSync.guestScore : onlineSync.hostScore;
+    const victory = NetP2P.isHost ? !!winnerIsHost : !winnerIsHost;
+    if (victory) {
+      saveData.wins++;
+      persistSave();
+      renderSkinPicker();
+      updateTitleBest();
+    }
+    showResultScreen(victory, true, reason);
+  }
+
+  function commitOnlineMatchEnd(winnerIsHost, reason = '') {
+    if (!NetP2P.isHost || onlineSync.matchEnded) return;
+    NetP2P.send({
+      type: 'match_end',
+      matchId: onlineSync.matchId,
+      hostScore: onlineSync.hostScore,
+      guestScore: onlineSync.guestScore,
+      winnerIsHost: !!winnerIsHost,
+      reason,
+      sentAt: Math.round(getSyncedNowMs())
+    });
+    finishOnlineMatch(winnerIsHost, reason);
+  }
+
   function awardPoint(winner, reason, fromRemote = false) {
+    if (gameMode === 'online' && !fromRemote) {
+      const loserIsHost = (winner === 'enemy') ? NetP2P.isHost : !NetP2P.isHost;
+      claimOnlinePoint(loserIsHost, reason);
+      return;
+    }
     if (matchState === 'point_pause') return;
     matchState = 'point_pause';
     pauseTimer = 1.55;
     ball.expectedActor = 'none';
     ball.enemySpikeEta = 0;
     ball.onlineBlockWindow = 0;
+    ball.onlineBlockPending = false;
+    ball.onlineBlockChecked = false;
     recvSlowActive = false;
     player.actionBuffer = null;
 
@@ -4664,9 +5051,6 @@
       enemies.forEach(e => { e.pose = 'celebrate'; e.poseTimer = 1.1; e.vy = 4.2; });
       addCallout('LOST POINT...', reason, '#fb7185');
       recordEv('point_en');
-      if (gameMode === 'online' && !fromRemote) {
-        NetP2P.send({ type: 'point_lost', reason: reason || 'ACE!!', oppMyScore: enScore, oppEnScore: myScore });
-      }
     }
 
     saveData.maxRally = Math.max(saveData.maxRally, maxRallyMatch);
@@ -4748,17 +5132,23 @@
 
   function checkMatchEnd() {
     if (gameMode === 'online') {
-      if (myScore >= targetPts && myScore - enScore >= 1) {
-        saveData.wins++;
-        persistSave();
-        renderSkinPicker();
-        updateTitleBest();
-        showResultScreen(true, true);
+      if (!NetP2P.isHost) return onlineSync.matchEnded;
+      const hs = onlineSync.hostScore;
+      const gs = onlineSync.guestScore;
+      if (hs >= targetPts && hs - gs >= 1) {
+        commitOnlineMatchEnd(true, '');
         return true;
       }
-      if (enScore >= targetPts && enScore - myScore >= 1) {
-        showResultScreen(false, true);
+      if (gs >= targetPts && gs - hs >= 1) {
+        commitOnlineMatchEnd(false, '');
         return true;
+      }
+      if (onlineSync.matchStartSyncedMs > 0) {
+        const remSec = ONLINE_MATCH_DURATION_SEC - Math.max(0, (getSyncedNowMs() - onlineSync.matchStartSyncedMs) / 1000);
+        if (remSec <= 0 && hs !== gs) {
+          commitOnlineMatchEnd(hs > gs, 'TIME UP!!');
+          return true;
+        }
       }
       return false;
     }
@@ -4812,7 +5202,7 @@
     screenUpgrade.classList.remove('hidden');
   }
 
-  function showResultScreen(victory, isOnline = false) {
+  function showResultScreen(victory, isOnline = false, onlineReason = '') {
     gameMode = 'over';
     matchState = 'idle';
     document.body.classList.add('on-menu');
@@ -4820,32 +5210,35 @@
     lastMatchWasOnline = isOnline;
     const st = STAGES[stageIdx] || STAGES[0];
     const hasNext = !isOnline && stageIdx < STAGES.length - 1;
+    const retryBtn = document.getElementById('btn-retry');
+    retryBtn.disabled = false;
     if (isOnline) {
+      onlineSync.rematchLocalReady = false;
+      onlineSync.rematchRemoteReady = false;
+      const timeTag = onlineReason === 'TIME UP!!' ? '（タイムアップ）' : '';
       document.getElementById('over-kicker').textContent = victory ? 'ONLINE 1VS1 // VICTORY' : 'ONLINE 1VS1 // DEFEAT';
       document.getElementById('over-kicker').style.color = victory ? '#34d399' : '#fb7185';
-      document.getElementById('over-title').textContent = victory ? 'オンライン対戦 勝利！' : 'オンライン対戦 惜敗…';
+      document.getElementById('over-title').textContent = (victory ? 'オンライン対戦 勝利！' : 'オンライン対戦 惜敗…') + timeTag;
       document.getElementById('over-sub').textContent = victory
         ? `ROOM ${NetP2P.roomCode} でライバルに勝利！もう1戦リマッチできます。`
         : `ROOM ${NetP2P.roomCode} で惜敗。リマッチでリベンジしよう！`;
+      retryBtn.textContent = 'リマッチ // REMATCH';
     } else {
       document.getElementById('over-kicker').textContent = victory ? `${st.diff} // STAGE CLEAR` : `${st.diff} // DEFEAT`;
       document.getElementById('over-kicker').style.color = victory ? '#f5b800' : '#fb7185';
       document.getElementById('over-title').textContent = victory ? `${st.chapter} 突破` : `${st.name} に惜敗`;
       document.getElementById('over-sub').textContent = victory ? st.epilogue : `悔しさをバネに、もう一度 ${st.name} へ挑もう。`;
+      retryBtn.textContent = (victory && hasNext) ? `次へ // ${STAGES[stageIdx + 1].diff} に挑む` : `再挑戦 // ${st.diff} リベンジ`;
     }
     document.getElementById('res-score').textContent = `${myScore} - ${enScore}`;
     document.getElementById('res-spikes').textContent = matchSpikes;
     document.getElementById('res-support').textContent = `${matchTosses} / ${matchRecvs}`;
     document.getElementById('res-rally').textContent = maxRallyMatch;
-    const retryBtn = document.getElementById('btn-retry');
-    retryBtn.textContent = isOnline
-      ? 'リマッチ // REMATCH'
-      : ((victory && hasNext) ? `次へ // ${STAGES[stageIdx + 1].diff} に挑む` : `再挑戦 // ${st.diff} リベンジ`);
     screenOver.classList.remove('hidden');
   }
 
   // Online Rival Live Pose State
-  const onlineRivalTarget = { x: 0, y: 0, z: -5.2, pose: 'idle', active: false };
+  const onlineRivalTarget = { x: 0, y: 0, z: -5.2, pose: 'idle', active: false, ball: null };
   let onlinePoseTimer = 0;
 
   function setOnlineStatus(msg, kind = '') {
@@ -4855,7 +5248,7 @@
     el.className = 'online-status-bar' + (kind ? ' ' + kind : '');
   }
 
-  function startOnlineMatch(isHost, roomCode) {
+  function applyOnlineMatchInit(initMsg) {
     document.body.classList.remove('on-menu');
     screenTitle.classList.add('hidden');
     screenOnline.classList.add('hidden');
@@ -4867,15 +5260,32 @@
     resetPerks();
     gameMode = 'online';
     lastMatchWasOnline = true;
-    myScore = 0; enScore = 0; comboCount = 0; comboPill.classList.remove('show');
+    onlineSync.matchId = initMsg.matchId;
+    onlineSync.pointSeq = initMsg.pointSeq || 1;
+    onlineSync.committedPointSeq = 0;
+    onlineSync.hostScore = initMsg.hostScore || 0;
+    onlineSync.guestScore = initMsg.guestScore || 0;
+    onlineSync.serverIsHost = initMsg.serverIsHost !== false;
+    onlineSync.matchStartSyncedMs = initMsg.matchStartSyncedMs || Math.round(getSyncedNowMs() + 600);
+    onlineSync.nextPointAtSyncedMs = 0;
+    onlineSync.matchEnded = false;
+    onlineSync.overtime = false;
+    onlineSync.rematchLocalReady = false;
+    onlineSync.rematchRemoteReady = false;
+    onlineSync.lastHudSec = -1;
+
+    myScore = NetP2P.isHost ? onlineSync.hostScore : onlineSync.guestScore;
+    enScore = NetP2P.isHost ? onlineSync.guestScore : onlineSync.hostScore;
+    comboCount = 0; comboPill.classList.remove('show');
     maxRallyMatch = 0; matchSpikes = 0; matchTosses = 0; matchRecvs = 0;
     zone = 0; zoneActiveTimer = 0;
-    targetPts = 7;
-    serverSide = isHost ? 'us' : 'enemy';
+    targetPts = initMsg.targetPts || 7;
+    serverSide = (NetP2P.isHost === onlineSync.serverIsHost) ? 'us' : 'enemy';
     onlineRivalTarget.active = true;
-    onlineRivalTarget.x = 0; onlineRivalTarget.y = 0; onlineRivalTarget.z = isHost ? -5.4 : -9.6;
+    onlineRivalTarget.ball = null;
+    onlineRivalTarget.x = 0; onlineRivalTarget.y = 0; onlineRivalTarget.z = serverSide === 'us' ? -5.4 : -9.6;
     spawnCharacters({
-      name: 'ONLINE RIVAL', tag: 'RIVAL', targetPts: 7,
+      name: 'ONLINE RIVAL', tag: 'RIVAL', targetPts,
       jersey: 0x0f172a, trim: 0x34d399,
       enemySpeed: 7.0, blockCount: 2, spikePower: 1.15, servePower: 1.0, receiveSkill: 0.5
     });
@@ -4884,11 +5294,50 @@
     startNextPoint();
   }
 
+  function startOnlineMatch(isHost, roomCode) {
+    startClockSync();
+    const nextMatchId = (onlineSync.matchId || 0) + 1;
+    const initPayload = {
+      type: 'match_init',
+      matchId: nextMatchId,
+      pointSeq: 1,
+      hostScore: 0,
+      guestScore: 0,
+      serverIsHost: true,
+      targetPts: 7,
+      durationSec: ONLINE_MATCH_DURATION_SEC,
+      matchStartSyncedMs: Math.round(performance.now() + 700),
+      sentAt: Math.round(performance.now())
+    };
+    if (isHost) {
+      applyOnlineMatchInit(initPayload);
+      NetP2P.send(initPayload);
+      setTimeout(() => {
+        if (gameMode === 'online' && NetP2P.connected && onlineSync.matchId === nextMatchId && onlineSync.pointSeq === 1) {
+          NetP2P.send(initPayload);
+        }
+      }, 320);
+    } else {
+      applyOnlineMatchInit({
+        matchId: 0,
+        pointSeq: 1,
+        hostScore: 0,
+        guestScore: 0,
+        serverIsHost: true,
+        targetPts: 7,
+        matchStartSyncedMs: 0
+      });
+      NetP2P.send({ type: 'sync_req' });
+    }
+  }
+
   NetP2P.onStatus(setOnlineStatus);
   NetP2P.onConnected((isHost, code) => {
+    onlineSync.matchId = 0;
     startOnlineMatch(isHost, code);
   });
   NetP2P.onClose(() => {
+    stopClockSync();
     if (gameMode === 'online' || lastMatchWasOnline) {
       addCallout('DISCONNECTED', '', '#fb7185');
       setOnlineStatus('対戦相手との接続が切れました。', 'err');
@@ -4898,11 +5347,103 @@
         SFX.stopBeat();
         document.body.classList.add('on-menu');
         screenOnline.classList.remove('hidden');
+      } else if (gameMode === 'over') {
+        const sub = document.getElementById('over-sub');
+        const retryBtn = document.getElementById('btn-retry');
+        if (sub) sub.textContent = '対戦相手が退室しました。ルーム画面へ戻れます。';
+        if (retryBtn) { retryBtn.disabled = false; retryBtn.textContent = 'ルーム画面へ // LOBBY'; }
       }
     }
   });
   NetP2P.onMessage((msg) => {
     if (!msg || !msg.type) return;
+
+    // NTP-style clock synchronization messages
+    if (msg.type === 'clock_ping') {
+      const t1 = performance.now();
+      NetP2P.send({ type: 'clock_pong', seq: msg.seq, t0: msg.t0, t1, t2: performance.now() });
+      return;
+    }
+    if (msg.type === 'clock_pong') {
+      const t3 = performance.now();
+      const rtt = Math.max(1, (t3 - msg.t0) - (msg.t2 - msg.t1));
+      const offset = ((msg.t1 - msg.t0) + (msg.t2 - t3)) / 2;
+      recordClockSample(rtt, offset);
+      return;
+    }
+    if (msg.type === 'host_ping') {
+      NetP2P.send({ type: 'host_pong', seq: msg.seq, t0: msg.t0 });
+      return;
+    }
+    if (msg.type === 'host_pong') {
+      const rtt = Math.max(1, performance.now() - msg.t0);
+      onlineSync.clockSamples.push({ rtt, offset: 0, ts: performance.now() });
+      if (onlineSync.clockSamples.length > 6) onlineSync.clockSamples.shift();
+      const sorted = [...onlineSync.clockSamples].sort((a, b) => a.rtt - b.rtt);
+      onlineSync.rttMs = Math.max(1, Math.round(sorted[0].rtt));
+      return;
+    }
+
+    if (msg.type === 'match_init') {
+      if (!NetP2P.isHost) {
+        if (onlineSync.matchId !== msg.matchId) {
+          applyOnlineMatchInit(msg);
+        } else {
+          if (msg.matchStartSyncedMs) onlineSync.matchStartSyncedMs = msg.matchStartSyncedMs;
+          if (typeof msg.pointSeq === 'number' && msg.pointSeq > onlineSync.pointSeq) {
+            onlineSync.pointSeq = msg.pointSeq;
+            onlineSync.hostScore = msg.hostScore;
+            onlineSync.guestScore = msg.guestScore;
+            onlineSync.serverIsHost = !!msg.serverIsHost;
+            onlineSync.nextPointAtSyncedMs = 0;
+            myScore = msg.guestScore;
+            enScore = msg.hostScore;
+            serverSide = msg.serverIsHost ? 'enemy' : 'us';
+            startNextPoint();
+          } else {
+            updateOnlineMetaHud();
+          }
+        }
+      }
+      return;
+    }
+
+    if (msg.type === 'sync_req' && NetP2P.isHost && gameMode === 'online') {
+      NetP2P.send({
+        type: 'match_init',
+        matchId: onlineSync.matchId,
+        pointSeq: onlineSync.pointSeq,
+        hostScore: onlineSync.hostScore,
+        guestScore: onlineSync.guestScore,
+        serverIsHost: onlineSync.serverIsHost,
+        targetPts,
+        durationSec: ONLINE_MATCH_DURATION_SEC,
+        matchStartSyncedMs: onlineSync.matchStartSyncedMs,
+        sentAt: Math.round(performance.now())
+      });
+      return;
+    }
+
+    if (msg.type === 'rematch_req') {
+      onlineSync.rematchRemoteReady = true;
+      if (gameMode === 'over') {
+        const sub = document.getElementById('over-sub');
+        if (!onlineSync.rematchLocalReady && sub) {
+          sub.textContent = 'ライバルがリマッチを希望しています！「リマッチ」を押して開始！';
+        }
+      }
+      if (NetP2P.isHost && onlineSync.rematchLocalReady && onlineSync.rematchRemoteReady) {
+        startOnlineMatch(true, NetP2P.roomCode);
+      }
+      return;
+    }
+
+    if (msg.type === 'rematch') {
+      onlineSync.rematchRemoteReady = true;
+      if (NetP2P.isHost) startOnlineMatch(true, NetP2P.roomCode);
+      return;
+    }
+
     if (msg.type === 'pose') {
       onlineRivalTarget.active = true;
       onlineRivalTarget.x = -msg.x;
@@ -4917,15 +5458,81 @@
           ts: performance.now()
         };
       }
+      // Canonical score heartbeat reconciliation from Host
+      if (!NetP2P.isHost && gameMode === 'online' && msg.matchId === onlineSync.matchId && msg.pseq === onlineSync.pointSeq && matchState !== 'point_pause') {
+        if (typeof msg.hs === 'number' && typeof msg.gs === 'number' && (myScore !== msg.gs || enScore !== msg.hs)) {
+          onlineSync.hostScore = msg.hs;
+          onlineSync.guestScore = msg.gs;
+          myScore = msg.gs;
+          enScore = msg.hs;
+          updateHud();
+        }
+      }
       return;
     }
-    if (msg.type === 'rematch') {
-      startOnlineMatch(NetP2P.isHost, NetP2P.roomCode);
-      return;
-    }
+
     if (gameMode !== 'online') return;
 
+    if (msg.type === 'point_claim' && NetP2P.isHost) {
+      if (msg.matchId && msg.matchId !== onlineSync.matchId) return;
+      if (typeof msg.pointSeq === 'number' && msg.pointSeq !== onlineSync.pointSeq) return;
+      if (onlineSync.committedPointSeq >= onlineSync.pointSeq) return;
+      if (msg.loserIsHost) onlineSync.guestScore++;
+      else onlineSync.hostScore++;
+      onlineSync.serverIsHost = !msg.loserIsHost;
+      const nextPointAt = Math.max(Math.round(getSyncedNowMs() + 1350), msg.nextPointAt || 0);
+      const commitPayload = {
+        type: 'point_commit',
+        matchId: onlineSync.matchId,
+        pointSeq: onlineSync.pointSeq,
+        hostScore: onlineSync.hostScore,
+        guestScore: onlineSync.guestScore,
+        serverIsHost: onlineSync.serverIsHost,
+        loserIsHost: !!msg.loserIsHost,
+        reason: msg.reason || 'ONLINE POINT!!',
+        nextPointAt,
+        isBlock: !!msg.isBlock,
+        bx: msg.bx || 0,
+        sentAt: Math.round(getSyncedNowMs())
+      };
+      NetP2P.send(commitPayload);
+      applyOnlinePointCommit(commitPayload);
+      return;
+    }
+
+    if (msg.type === 'point_commit' && !NetP2P.isHost) {
+      if (msg.matchId && msg.matchId !== onlineSync.matchId) return;
+      if (typeof msg.pointSeq === 'number' && msg.pointSeq < onlineSync.pointSeq) return;
+      applyOnlinePointCommit(msg);
+      return;
+    }
+
+    if (msg.type === 'point_start' && !NetP2P.isHost) {
+      if (msg.matchId && msg.matchId !== onlineSync.matchId) return;
+      if (msg.pointSeq <= onlineSync.pointSeq && matchState !== 'point_pause') return;
+      onlineSync.pointSeq = msg.pointSeq;
+      onlineSync.hostScore = msg.hostScore;
+      onlineSync.guestScore = msg.guestScore;
+      onlineSync.serverIsHost = !!msg.serverIsHost;
+      onlineSync.nextPointAtSyncedMs = 0;
+      myScore = msg.guestScore;
+      enScore = msg.hostScore;
+      serverSide = msg.serverIsHost ? 'enemy' : 'us';
+      startNextPoint();
+      return;
+    }
+
+    if (msg.type === 'match_end') {
+      if (msg.matchId && msg.matchId !== onlineSync.matchId) return;
+      onlineSync.hostScore = msg.hostScore;
+      onlineSync.guestScore = msg.guestScore;
+      finishOnlineMatch(!!msg.winnerIsHost, msg.reason || '');
+      return;
+    }
+
     if (msg.type === 'shot_over') {
+      if (msg.matchId && onlineSync.matchId && msg.matchId !== onlineSync.matchId) return;
+      if (typeof msg.pointSeq === 'number' && msg.pointSeq !== onlineSync.pointSeq) return;
       onlineRivalTarget.ball = null;
       const sx = -msg.sx;
       const sy = msg.sy;
@@ -4935,31 +5542,7 @@
       const omegaX = -(msg.omegaX || 0);
       ball.onlineBlockWindow = 0;
 
-      // LIVE DEFENDER NET BLOCK CHECK!
-      if (msg.kind === 'spike' && !msg.meteor && !msg.feint && player.y > 0.52 && player.z < 2.45 && Math.abs(player.x - sx) < 1.42) {
-        bumpCombo(2);
-        SFX.block(comboCount);
-        hitstopTimer = 0.08;
-        fovPunch = -9.0;
-        player.shake = 0.30;
-        speedLinesAlpha = 0.92;
-        flashAlpha = 0.30; flashColor = '#38bdf8';
-        crowdExcitement = 1.0;
-        spawnShockwave(sx, NET_H, 0, 0x38bdf8, 2.8, true);
-        spawnBurstParticles(sx, NET_H, 0, 0x38bdf8, 32, 1.15);
-        addZone(28);
-        ball.x = sx; ball.y = NET_H + 0.1; ball.z = -0.15;
-        ball.side = 'enemy';
-        ball.deadBounce = false;
-        ball.expectedActor = 'none';
-        launchBallTo(sx * 0.7, 0.16, -2.8, 0.36, { trailColor: 0x38bdf8, trailPower: 1.25, just: true, omegaX: -24 });
-        addCallout('MONSTER BLOCK!!', '', '#38bdf8');
-        NetP2P.send({ type: 'block_shutout', bx: -sx, oppMyScore: enScore, oppEnScore: myScore + 1 });
-        awardPoint('us', 'MONSTER BLOCK!!', true);
-        return;
-      }
-
-      // Mirror incoming shot cleanly onto OUR court with exact shared flightTime!
+      // Mirror incoming shot cleanly onto OUR court with exact shared flightTime + clock-synced latency compensation!
       ball.x = sx; ball.y = Math.max(1.2, sy); ball.z = sz;
       ball.side = 'us';
       ball.touches = 0;
@@ -4979,62 +5562,62 @@
         just: !!msg.just,
         meteor: !!msg.meteor
       });
+      ball.onlineBlockPending = (msg.kind === 'spike' && !msg.meteor && !msg.feint);
+      ball.onlineBlockChecked = false;
+      if (typeof msg.sentAt === 'number' && onlineSync.clockSynced) {
+        const ageSec = Math.max(0, Math.min(exactFlight * 0.42, (getSyncedNowMs() - msg.sentAt) / 1000));
+        if (ageSec > 0.005) fastForwardBall(ageSec);
+      }
       SFX.spike(!!msg.just, !!msg.meteor, 1);
       if (enemies[0]) { enemies[0].pose = 'spike_hit'; enemies[0].poseTimer = 0.42; }
       return;
     }
 
     if (msg.type === 'rally_update') {
+      if (msg.matchId && onlineSync.matchId && msg.matchId !== onlineSync.matchId) return;
+      if (typeof msg.pointSeq === 'number' && msg.pointSeq !== onlineSync.pointSeq) return;
       const bx = -msg.bx, by = msg.by, bz = -msg.bz;
       const tx = -msg.tx, ty = msg.ty, tz = -msg.tz;
       ball.x = bx; ball.y = by; ball.z = bz;
       ball.side = 'enemy';
       ball.deadBounce = false;
       ball.expectedActor = 'online_wait';
-      const ft = Math.max(0.45, msg.flightTime || 0.9);
+      const ft = Math.max(0.42, msg.flightTime || 0.9);
       launchBallTo(tx, ty, tz, ft, {
         trailColor: msg.phase === 'toss' ? 0xf5b800 : 0x38bdf8,
         trailPower: 0.52,
         omegaX: 4
       });
+      let ageSec = 0;
+      if (typeof msg.sentAt === 'number' && onlineSync.clockSynced) {
+        ageSec = Math.max(0, Math.min(ft * 0.42, (getSyncedNowMs() - msg.sentAt) / 1000));
+        if (ageSec > 0.005) fastForwardBall(ageSec);
+      }
       if (msg.phase === 'recv') {
         SFX.receive(false, false, 1);
         if (enemies[0]) { enemies[0].pose = 'receive'; enemies[0].poseTimer = 0.38; }
       } else if (msg.phase === 'toss') {
         SFX.toss(false, 1);
-        ball.onlineBlockWindow = ft + 0.65;
+        ball.onlineBlockWindow = Math.max(0.2, ft - ageSec) + 0.65;
         if (enemies[1]) { enemies[1].pose = 'toss'; enemies[1].poseTimer = 0.42; }
       }
       return;
     }
 
+    // Legacy fallbacks if ever triggered
     if (msg.type === 'point_lost') {
-      if (typeof msg.oppMyScore === 'number') { myScore = msg.oppMyScore - 1; enScore = msg.oppEnScore; }
-      spawnShockwave(ball.x, 0.03, Math.min(-1.0, ball.z), 0xfacc15, 2.8);
-      spawnBurstParticles(ball.x, 0.2, Math.min(-1.0, ball.z), 0xfacc15, 24, 1.0);
-      SFX.floorHit(1.0);
-      ball.deadBounce = true;
-      awardPoint('us', msg.reason || 'ONLINE POINT!!', true);
+      if (NetP2P.isHost) claimOnlinePoint(false, msg.reason || 'ONLINE POINT!!');
       return;
     }
-
     if (msg.type === 'block_shutout') {
-      if (typeof msg.oppMyScore === 'number') { myScore = msg.oppMyScore; enScore = msg.oppEnScore - 1; }
-      const bx = msg.bx || 0;
-      SFX.block(2);
-      spawnShockwave(bx, NET_H, 0, 0xf43f5e, 2.4, true);
-      spawnBurstParticles(bx, NET_H, 0, 0xf43f5e, 26, 1.0);
-      ball.x = bx; ball.y = NET_H; ball.z = 0.2;
-      ball.deadBounce = true;
-      ball.vx = 0; ball.vy = -4.2; ball.vz = 4.6;
-      addCallout('BLOCKED!!', '', '#fb7185');
-      awardPoint('enemy', 'BLOCKED BY RIVAL!!', true);
+      if (NetP2P.isHost) claimOnlinePoint(true, 'MONSTER BLOCK!!', { isBlock: true, bx: msg.bx || 0 });
       return;
     }
   });
 
   function startStageMatch(idxOverride) {
     if (typeof idxOverride === 'number') stageIdx = idxOverride;
+    stopClockSync();
     NetP2P.close(false);
     document.body.classList.remove('on-menu');
     screenTitle.classList.add('hidden');
@@ -5060,6 +5643,7 @@
   }
 
   function startMode(mode, storyIndex = 0) {
+    stopClockSync();
     NetP2P.close(false);
     document.body.classList.remove('on-menu');
     screenTitle.classList.add('hidden');
@@ -5086,6 +5670,41 @@
   }
 
   document.getElementById('btn-open-story').addEventListener('click', openStorySelect);
+  document.getElementById('btn-open-online').addEventListener('click', () => {
+    document.body.classList.add('on-menu');
+    screenTitle.classList.add('hidden');
+    screenOnline.classList.remove('hidden');
+    setOnlineStatus('4桁の合言葉で1vs1対戦（7点先取 / 3分制）。時刻・得点・弾道を完全同期してリアルタイム対戦！');
+  });
+  document.getElementById('btn-online-back').addEventListener('click', () => {
+    stopClockSync();
+    NetP2P.close(true);
+    document.getElementById('room-code-box').classList.add('hidden');
+    screenOnline.classList.add('hidden');
+    screenTitle.classList.remove('hidden');
+    updateTitleBest();
+  });
+  document.getElementById('btn-create-room').addEventListener('click', async () => {
+    const code = await NetP2P.createRoom();
+    document.getElementById('room-code-digits').textContent = code;
+    document.getElementById('room-code-box').classList.remove('hidden');
+  });
+  document.getElementById('btn-copy-code').addEventListener('click', () => {
+    const code = document.getElementById('room-code-digits').textContent;
+    if (navigator.clipboard && code && code !== '----') {
+      navigator.clipboard.writeText(code).catch(() => {});
+      const b = document.getElementById('btn-copy-code');
+      b.textContent = 'COPIED';
+      setTimeout(() => { b.textContent = 'COPY'; }, 1200);
+    }
+  });
+  document.getElementById('btn-join-room').addEventListener('click', () => {
+    const inp = document.getElementById('input-room-code');
+    NetP2P.joinRoom(inp ? inp.value : '');
+  });
+  document.getElementById('input-room-code').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') NetP2P.joinRoom(e.target.value);
+  });
   document.getElementById('btn-quick-play').addEventListener('click', () => {
     const clearedCnt = Object.keys(saveData.cleared || {}).length;
     startMode('drill_all', Math.min(3, Math.max(1, clearedCnt)));
@@ -5130,8 +5749,16 @@
   });
   document.getElementById('btn-retry').addEventListener('click', () => {
     if (lastMatchWasOnline && NetP2P.connected) {
-      NetP2P.send({ type: 'rematch' });
-      startOnlineMatch(NetP2P.isHost, NetP2P.roomCode);
+      onlineSync.rematchLocalReady = true;
+      const retryBtn = document.getElementById('btn-retry');
+      const sub = document.getElementById('over-sub');
+      retryBtn.disabled = true;
+      retryBtn.textContent = '相手を待っています… // WAITING';
+      if (sub) sub.textContent = '対戦相手のリマッチ応答を待っています…';
+      NetP2P.send({ type: 'rematch_req', matchId: onlineSync.matchId });
+      if (NetP2P.isHost && onlineSync.rematchRemoteReady) {
+        startOnlineMatch(true, NetP2P.roomCode);
+      }
     } else if (lastMatchWasOnline) {
       screenOver.classList.add('hidden');
       screenOnline.classList.remove('hidden');
@@ -5142,10 +5769,12 @@
     }
   });
   document.getElementById('btn-over-story').addEventListener('click', () => {
+    stopClockSync();
     NetP2P.close(true);
     openStorySelect();
   });
   function returnToTitle() {
+    stopClockSync();
     if (gameMode === 'online' || NetP2P.connected) NetP2P.close(true);
     gameMode = 'title';
     matchState = 'idle';
@@ -5464,30 +6093,31 @@
       }
     }
 
-    // Determine Bullet-Time Slow-Mo (Single-player keeps 0.36x bullet-time; Online stays 1.0x real-time so both screens stay 100% synced!)
+    // Gentle Proximity Slow-Mo (Triggers ONLY when close to the incoming ball; keeps Online feel consistent with CPU matches!)
     let timeScale = 1.0;
     recvSlowActive = false;
     if (ball.expectedActor === 'player_recv' && ball.active && !ball.deadBounce) {
       const rem = ball.flightTotal - ball.flightTimer;
+      const distBallXZ = Math.hypot(ball.x - player.x, ball.z - player.z);
+      const distBall3D = Math.hypot(ball.x - player.x, ball.y - (player.y + 1.25), ball.z - player.z);
       const dTarget = Math.hypot(ball.targetX - player.x, ball.targetZ - player.z);
-      if (rem <= 0.48 && rem >= -0.10 && dTarget <= 3.6) {
+      if (ball.z > 0.2 && rem <= 0.42 && rem >= -0.08 && dTarget <= 2.35 && distBallXZ <= 2.40 && distBall3D <= 2.80) {
         recvSlowActive = true;
-        if (gameMode !== 'online') {
-          timeScale = 0.36;
-        }
+        const closeness = Math.max(0, Math.min(1, 1 - distBallXZ / 2.40));
+        timeScale = 0.68 - closeness * 0.16; // Mild slow-mo: 0.68x -> 0.52x only when close to the ball
         if (!recvSlowNotified) {
           recvSlowNotified = true;
           SFX.slowEnter();
         }
       }
-    } else if (gameMode !== 'online' && (ball.expectedActor === 'player_spike' || ball.expectedActor === 'player_serve_hit') && player.y > 0.60 && ball.active && !ball.deadBounce) {
+    } else if ((ball.expectedActor === 'player_spike' || ball.expectedActor === 'player_serve_hit') && player.y > 0.60 && ball.active && !ball.deadBounce) {
       const distXZ = Math.hypot(ball.x - player.x, ball.z - player.z);
       const distY = Math.abs(ball.y - (player.y + 1.65));
-      if (distXZ < 2.2 && distY < 1.15 && ball.vy < 2.4) {
-        timeScale = 0.35;
+      if (distXZ < 1.95 && distY < 1.05 && ball.vy < 2.4) {
+        timeScale = gameMode === 'online' ? 0.62 : 0.45;
       }
     }
-    const targetVig = (timeScale < 0.8 || recvSlowActive) ? 1.0 : 0.0;
+    const targetVig = (timeScale < 0.85 || recvSlowActive) ? 1.0 : 0.0;
     slowVignetteAlpha += (targetVig - slowVignetteAlpha) * Math.min(1, dtBase * 10);
 
     const dt = dtBase * timeScale;
@@ -5513,9 +6143,58 @@
     }
 
     if (matchState === 'point_pause') {
-      pauseTimer -= dtBase;
-      if (pauseTimer <= 0) {
-        if (!checkMatchEnd()) startNextPoint();
+      if (gameMode === 'online') {
+        const nowSynced = getSyncedNowMs();
+        if (NetP2P.isHost) {
+          if (onlineSync.nextPointAtSyncedMs > 0 && nowSynced >= onlineSync.nextPointAtSyncedMs) {
+            if (!checkMatchEnd()) {
+              onlineSync.pointSeq++;
+              onlineSync.nextPointAtSyncedMs = 0;
+              NetP2P.send({
+                type: 'point_start',
+                matchId: onlineSync.matchId,
+                pointSeq: onlineSync.pointSeq,
+                hostScore: onlineSync.hostScore,
+                guestScore: onlineSync.guestScore,
+                serverIsHost: onlineSync.serverIsHost,
+                sentAt: Math.round(nowSynced)
+              });
+              startNextPoint();
+            }
+          }
+        } else if (onlineSync.nextPointAtSyncedMs > 0 && nowSynced >= onlineSync.nextPointAtSyncedMs + 2200 && (performance.now() - onlineSync.lastSyncReqAt > 1200)) {
+          onlineSync.lastSyncReqAt = performance.now();
+          NetP2P.send({ type: 'sync_req' });
+        }
+      } else {
+        pauseTimer -= dtBase;
+        if (pauseTimer <= 0) {
+          if (!checkMatchEnd()) startNextPoint();
+        }
+      }
+    }
+
+    if (gameMode === 'online' && onlineSync.matchStartSyncedMs > 0 && !onlineSync.matchEnded) {
+      const nowSynced = getSyncedNowMs();
+      const elapsedSec = Math.max(0, (nowSynced - onlineSync.matchStartSyncedMs) / 1000);
+      const remSec = Math.max(0, ONLINE_MATCH_DURATION_SEC - elapsedSec);
+      const dispSec = nowSynced < onlineSync.matchStartSyncedMs
+        ? -Math.ceil((onlineSync.matchStartSyncedMs - nowSynced) / 100)
+        : Math.ceil(remSec);
+      if (dispSec !== onlineSync.lastHudSec) {
+        onlineSync.lastHudSec = dispSec;
+        updateOnlineMetaHud();
+      }
+      if (remSec <= 0) {
+        if (myScore !== enScore) {
+          if (NetP2P.isHost && matchState !== 'point_pause') {
+            commitOnlineMatchEnd(onlineSync.hostScore > onlineSync.guestScore, 'TIME UP!!');
+          }
+        } else if (!onlineSync.overtime) {
+          onlineSync.overtime = true;
+          addCallout('OVERTIME!!', '同点！次の1点を取った方が勝利!!', '#facc15');
+          updateOnlineMetaHud();
+        }
       }
     }
 
@@ -5655,15 +6334,43 @@
         if (ball.y >= NET_H - 0.10 && ball.y <= NET_H + BALL_R + 0.08) {
           netShake = 1.0;
           SFX.netHit();
-          ball.vz *= 0.62;
-          ball.vy = Math.max(1.2, ball.vy * 0.45);
-          if (!ball.deadBounce && ball.side === 'enemy') addCallout('NET IN!!', '白帯に当たってポトリ!!', '#facc15');
+          if (gameMode !== 'online') {
+            ball.vz *= 0.62;
+            ball.vy = Math.max(1.2, ball.vy * 0.45);
+            if (!ball.deadBounce && ball.side === 'enemy') addCallout('NET IN!!', '白帯に当たってポトリ!!', '#facc15');
+          }
         } else if (ball.y < NET_H - 0.10 && ball.y > NET_H - 1.05 && !ball.deadBounce && ball.expectedActor === 'enemy_play') {
           if (ball.y > NET_H - 0.35) {
             netShake = 0.8; ball.y = NET_H + 0.08; ball.vy = Math.max(0.4, ball.vy);
           } else {
             netShake = 1.0; SFX.netHit(); ball.vz = -ball.vz * 0.28; ball.vy = 0.8;
           }
+        }
+      }
+
+      if (gameMode === 'online' && ball.onlineBlockPending && !ball.onlineBlockChecked && !ball.deadBounce && ball.z >= -0.25 && ball.z <= 0.65) {
+        ball.onlineBlockChecked = true;
+        ball.onlineBlockPending = false;
+        if (player.y > 0.50 && player.z < 2.45 && Math.abs(player.x - ball.x) < 1.45) {
+          const bx = ball.x;
+          bumpCombo(2);
+          SFX.block(comboCount);
+          hitstopTimer = 0.08;
+          fovPunch = -9.0;
+          player.shake = 0.30;
+          speedLinesAlpha = 0.92;
+          flashAlpha = 0.30; flashColor = '#38bdf8';
+          crowdExcitement = 1.0;
+          spawnShockwave(bx, NET_H, 0, 0x38bdf8, 2.8, true);
+          spawnBurstParticles(bx, NET_H, 0, 0x38bdf8, 32, 1.15);
+          addZone(28);
+          ball.x = bx; ball.y = NET_H + 0.1; ball.z = -0.15;
+          ball.side = 'enemy';
+          ball.deadBounce = false;
+          ball.expectedActor = 'none';
+          launchBallTo(bx * 0.7, 0.16, -2.8, 0.36, { trailColor: 0x38bdf8, trailPower: 1.25, just: true, omegaX: -24 });
+          addCallout('MONSTER BLOCK!!', '', '#38bdf8');
+          claimOnlinePoint(!NetP2P.isHost, 'MONSTER BLOCK!!', { isBlock: true, bx: -bx });
         }
       }
 
@@ -5723,6 +6430,8 @@
           if (gameMode === 'online') {
             NetP2P.send({
               type: 'shot_over', kind: 'spike',
+              matchId: onlineSync.matchId, pointSeq: onlineSync.pointSeq,
+              sentAt: Math.round(getSyncedNowMs()),
               sx, sy, sz, tx: aimX, ty: sharedTy, tz: aimZ,
               flightTime: sharedFlight,
               omegaX: -30, knuckle: false, incomingHigh: false, feint: false, just: !!ball.isJust, meteor: false
@@ -5776,7 +6485,7 @@
             }
           } else if (gameMode === 'online' && ball.expectedActor === 'online_wait') {
             // Defender has authority over their own court (allows fair local slow-mo receive!).
-            // Hold ball cleanly near floor until defender sends rally_update (saved) or point_lost (scored)!
+            // Hold ball cleanly near floor until defender sends rally_update (saved) or point_claim (scored)!
             ball.y = BALL_R + 0.02;
             ball.vx = 0; ball.vy = 0; ball.vz = 0;
           } else if (ball.expectedActor !== 'enemy_play') {
@@ -5857,11 +6566,16 @@
         const ownBall = (ball.side === 'us' || matchState === 'serve_wait') && !ball.deadBounce;
         NetP2P.send({
           type: 'pose',
+          matchId: onlineSync.matchId,
+          pseq: onlineSync.pointSeq,
+          hs: NetP2P.isHost ? myScore : enScore,
+          gs: NetP2P.isHost ? enScore : myScore,
           x: +player.x.toFixed(2),
           y: +player.y.toFixed(2),
           z: +player.z.toFixed(2),
-          pose: vmAnim.timer > 0 ? vmAnim.name : 'idle',
-          ball: ownBall ? { x: +ball.x.toFixed(2), y: +ball.y.toFixed(2), z: +ball.z.toFixed(2) } : null
+          pose: vmAnim.timer > 0 ? vmAnim.mode : 'idle',
+          ball: ownBall ? { x: +ball.x.toFixed(2), y: +ball.y.toFixed(2), z: +ball.z.toFixed(2) } : null,
+          sentAt: Math.round(getSyncedNowMs())
         });
       }
       if (enemies[0] && onlineRivalTarget.active) {
@@ -5873,6 +6587,15 @@
         rv.targetX = rv.x; rv.targetZ = rv.z;
         rv.teleColor = 0x34d399;
         rv.teleAlpha = 0.65;
+        if (rv.poseTimer <= 0 && onlineRivalTarget.pose && onlineRivalTarget.pose !== 'idle') {
+          const mp = onlineRivalTarget.pose;
+          if (mp === 'receive' || mp === 'over_receive' || mp === 'dive') rv.pose = 'receive';
+          else if (mp === 'toss' || mp === 'serve_toss') rv.pose = 'toss';
+          else if (mp === 'spike' || mp === 'feint') rv.pose = 'spike_hit';
+          else if (mp === 'block') rv.pose = 'block';
+          else if (mp === 'approach_jump') rv.pose = 'spike_windup';
+          rv.poseTimer = 0.25;
+        }
       }
       if (ball.expectedActor === 'online_wait' && !ball.deadBounce && (!ball.active || (ball.z < 0 && ball.flightTimer >= ball.flightTotal)) && onlineRivalTarget.ball && (performance.now() - onlineRivalTarget.ball.ts < 650)) {
         const rb = onlineRivalTarget.ball;
@@ -5914,9 +6637,9 @@
     }
     enemies.forEach((e, idx) => {
       if (gameMode === 'online' && idx === 0 && onlineRivalTarget.active) {
-        animateChar(e, 0, elapsedTotal, 0);
-        e.mesh.root.position.set(e.x, e.y, e.z);
-        e.mesh.shadow.position.y = -e.y + 0.02;
+        animateChar(e, dtBase, elapsedTotal, 0);
+        e.mesh.root.position.set(e.x, 0, e.z);
+        e.mesh.shadow.position.y = 0.015;
       } else {
         animateChar(e, dt, elapsedTotal, st.enemySpeed);
       }
@@ -6233,9 +6956,19 @@
   let prevTime = performance.now();
   function tick(now) {
     requestAnimationFrame(tick);
-    const rawDt = Math.min(0.05, Math.max(0.001, (now - prevTime) / 1000));
+    let rawSec = Math.max(0.001, (now - prevTime) / 1000);
     prevTime = now;
-    if (!window.__manualStep) stepFrame(rawDt, false);
+    if (window.__manualStep) return;
+    if (gameMode === 'online' && rawSec > 0.05) {
+      rawSec = Math.min(0.25, rawSec);
+      while (rawSec > 0.04) {
+        stepFrame(0.04, true);
+        rawSec -= 0.04;
+      }
+      stepFrame(rawSec, false);
+    } else {
+      stepFrame(Math.min(0.05, rawSec), false);
+    }
   }
   requestAnimationFrame(tick);
 
@@ -6276,7 +7009,21 @@
       recommendedRecv: getRecommendedReceive(),
       camLook: { x: +camLook.x.toFixed(2), y: +camLook.y.toFixed(2), z: +camLook.z.toFixed(2) },
       player: { x: +player.x.toFixed(2), y: +player.y.toFixed(2), z: +player.z.toFixed(2), vy: +player.vy.toFixed(2), aimX: +player.aimX.toFixed(2) },
-      ball: { x: +ball.x.toFixed(2), y: +ball.y.toFixed(2), z: +ball.z.toFixed(2), omegaX: +ball.omegaX.toFixed(1), side: ball.side, touches: ball.touches, expectedActor: ball.expectedActor, incomingHigh: ball.incomingHigh, active: ball.active }
+      ball: { x: +ball.x.toFixed(2), y: +ball.y.toFixed(2), z: +ball.z.toFixed(2), omegaX: +ball.omegaX.toFixed(1), side: ball.side, touches: ball.touches, expectedActor: ball.expectedActor, incomingHigh: ball.incomingHigh, active: ball.active },
+      onlineSync: {
+        matchId: onlineSync.matchId,
+        pointSeq: onlineSync.pointSeq,
+        committedPointSeq: onlineSync.committedPointSeq,
+        hostScore: onlineSync.hostScore,
+        guestScore: onlineSync.guestScore,
+        serverIsHost: onlineSync.serverIsHost,
+        rttMs: onlineSync.rttMs,
+        clockOffsetMs: +onlineSync.clockOffsetMs.toFixed(2),
+        clockSynced: onlineSync.clockSynced,
+        syncedNowMs: Math.round(getSyncedNowMs()),
+        matchStartSyncedMs: onlineSync.matchStartSyncedMs,
+        timerText: hudOnlineMeta ? hudOnlineMeta.textContent : ''
+      }
     }),
     startMode: (m, idx = 0) => startMode(m, idx),
     act: (k, d) => executePlayerAction(k, d),
