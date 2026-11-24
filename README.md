@@ -14,6 +14,7 @@
 - 1クリックコピペヘルパー: [notes/day09/copy_helper.html](notes/day09/copy_helper.html)
 - note 記事原稿: [notes/day09/note_draft.md](notes/day09/note_draft.md)
 - YouTube メタデータ: [notes/day09/youtube_metadata.txt](notes/day09/youtube_metadata.txt)
+- ショート動画生成スクリプト（1080×1920・全20種武器ルーレット＆チャンネル登録＆リクエストCTA込み）: [shorts/day09/generate_shorts.py](shorts/day09/generate_shorts.py)
 
 ## Day 08: ACE SPIKE 3D（一人称3Dバレーボール・トス×スパイク×レシーブ）
 - ゲーム本体: [games/day08-ace-spike-3d/index.html](games/day08-ace-spike-3d/index.html)

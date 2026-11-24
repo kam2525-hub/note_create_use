@@ -38,8 +38,8 @@ https://kam2525-hub.github.io/note_create_use/games/day09-overclock-gunner-3d/
    胴体弾を弾く**エネルギー盾兵**、赤レーザー照準の**スナイパー**、高速突進する**特攻ドローン**、3連ミサイル**重装メック**が襲来。セクターごとに **`TITAN-IX OMEGA`** → **`VALKYRIE-ZERO`** → **`KRONOS OVERLORD`** の3種巨大ボス（チャージ極太レーザー＆ドローン召喚）と決戦！
 4. **⚡ セクター中盤＆ボス後の全8種シナジーMOD覚醒**：
    **`🎰 LUCKY ROULETTE（EXOTIC/MYTHIC率2倍＆切替時ミサイル消去衝撃波）`** や **`CHAIN LIGHTNING` / `GRAVITY VORTEX` / `CHRONO DODGE`** など全8種から3択で強化！
-5. **📱 指1本のシンプル操作 ＆ 縦・横画面フル対応**：
-   操作は「画面をなぞって照準＆連射」＋「`DODGE` 回避」＋「`OVERDRIVE` 武器ロック必殺」だけ！
+5. **📱 指1本のシンプル操作 ＆ 縦・横画面フル対応 ＆ 実践チュートリアル搭載**：
+   操作は「画面をなぞって照準＆連射」＋「`DODGE` 回避」＋「`OVERDRIVE` 武器ロック必殺」だけ！初めてでもタイトル画面の **`🎯 TUTORIAL`** から4ステップの実践3Dトレーニングで即マスターできます。
 
 ---
 

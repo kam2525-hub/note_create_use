@@ -601,15 +601,90 @@
   .sec-btn {
     width: 100%;
     border: 1px solid rgba(255, 34, 85, 0.72);
-    padding: 10px 18px;
+    padding: 10px 14px;
     background: rgba(34, 6, 18, 0.82);
     color: var(--gold);
     font-family: 'Chakra Petch', 'Noto Sans JP', sans-serif;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 700;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.06em;
     cursor: pointer;
     clip-path: polygon(4% 0, 100% 0, 96% 100%, 0 100%);
+  }
+  .cta-sub-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    width: 100%;
+  }
+  .cta-sub-row .sec-btn {
+    white-space: nowrap;
+    font-size: clamp(11px, 3vw, 13px);
+    padding: 10px 8px;
+  }
+  .tut-cta {
+    border: 1px solid rgba(0, 229, 255, 0.82);
+    background: rgba(6, 26, 46, 0.86);
+    color: var(--cyan);
+  }
+  #tut-bar {
+    position: fixed;
+    left: 50%;
+    top: max(142px, calc(126px + env(safe-area-inset-top)));
+    transform: translateX(-50%);
+    width: min(500px, calc(100vw - 24px));
+    padding: 9px 12px;
+    background: linear-gradient(90deg, rgba(4, 18, 36, 0.94), rgba(14, 26, 48, 0.94));
+    border-left: 4px solid var(--cyan);
+    border-right: 1px solid rgba(0, 229, 255, 0.45);
+    border-top: 1px solid rgba(0, 229, 255, 0.35);
+    border-bottom: 1px solid rgba(0, 229, 255, 0.35);
+    box-shadow: 0 8px 26px rgba(0, 0, 0, 0.65);
+    pointer-events: auto;
+    text-align: left;
+    z-index: 24;
+  }
+  @media (min-width: 768px) {
+    #tut-bar {
+      top: 66px;
+      padding: 10px 14px;
+    }
+  }
+  .tut-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 3px;
+  }
+  #tut-step {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--gold);
+    letter-spacing: 0.14em;
+  }
+  #tut-msg {
+    font-size: clamp(12px, 2.7vw, 14px);
+    font-weight: 900;
+    color: #fff;
+    line-height: 1.35;
+  }
+  #tut-prog {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--cyan);
+    margin-top: 2px;
+  }
+  #btn-tut-skip {
+    border: 1px solid rgba(255, 212, 0, 0.7);
+    background: rgba(32, 24, 6, 0.85);
+    color: var(--gold);
+    font-family: 'Chakra Petch', 'Noto Sans JP', sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 4px 10px;
+    cursor: pointer;
+    white-space: nowrap;
   }
   .best-line {
     font-size: 12px;
@@ -738,6 +813,14 @@
           <div class="boss-track"><div id="boss-hp-fill"></div></div>
         </div>
         <div id="callout-stack"></div>
+        <div id="tut-bar" class="hidden">
+          <div class="tut-top">
+            <span id="tut-step">TUTORIAL // STEP 1 / 4</span>
+            <button id="btn-tut-skip">SKIP → 本番出撃</button>
+          </div>
+          <div id="tut-msg">画面をドラッグ（マウス移動＆押しっぱなし）で狙って敵を撃破せよ！</div>
+          <div id="tut-prog">撃破 0 / 2</div>
+        </div>
       </div>
 
       <div class="hud-right">
@@ -787,7 +870,10 @@
       <div class="skin-row" id="skin-picker"></div>
       <div class="cta-stack">
         <button class="cta-btn" id="btn-start">DEPLOY // 出撃</button>
-        <button class="sec-btn" id="btn-boss-rush">👹 BOSS RUSH（ボス直行）</button>
+        <div class="cta-sub-row">
+          <button class="sec-btn tut-cta" id="btn-tutorial">🎯 TUTORIAL</button>
+          <button class="sec-btn" id="btn-boss-rush">👹 BOSS RUSH</button>
+        </div>
       </div>
       <div class="best-line" id="title-best">BEST SCORE: 0 // CAREER KILLS: 0</div>
     </div>
@@ -915,7 +1001,15 @@
       return b;
     }
 
+    function recEv(type, extra = {}) {
+      if (window.__manualStep) {
+        if (!window.__gameEvents) window.__gameEvents = [];
+        window.__gameEvents.push(Object.assign({ t: window.__simTime || 0, type }, extra));
+      }
+    }
+
     function playGun(lv, isOD) {
+      recEv('gun', { lv });
       const c = ensure(); if (!c) return;
       const t = c.currentTime;
       const pitch = isOD ? 1.12 : 1.0;
@@ -946,6 +1040,7 @@
     }
 
     function playTick(high = false) {
+      recEv('tick', { high });
       const c = ensure(); if (!c) return;
       const t = c.currentTime;
       const o = c.createOscillator();
@@ -959,6 +1054,7 @@
     }
 
     function playHit(crit, combo) {
+      if (crit) recEv('crit');
       const c = ensure(); if (!c) return;
       const t = c.currentTime;
       const mul = Math.min(1.5, 1 + combo * 0.03);
@@ -976,6 +1072,7 @@
     }
 
     function playExplosion(big = false) {
+      recEv(big ? 'boom_big' : 'boom');
       const c = ensure(); if (!c) return;
       const t = c.currentTime;
       const dur = big ? 0.68 : 0.42;
@@ -1003,6 +1100,7 @@
     }
 
     function playEvolve() {
+      recEv('shift');
       const c = ensure(); if (!c) return;
       const t = c.currentTime;
       [440, 554.37, 659.25, 880, 1318.5].forEach((f, i) => {
@@ -1018,6 +1116,7 @@
     }
 
     function playDodge() {
+      recEv('dodge');
       const c = ensure(); if (!c) return;
       const t = c.currentTime;
       const n = c.createBufferSource();
@@ -2479,6 +2578,11 @@
         showCallout(`HEADSHOT ×${state.combo}!!`, 'CRITICAL SHATTER', '#ffd400');
       }
 
+      if (state.isTutorial) {
+        onTutorialKill();
+        return;
+      }
+
       const midTarget = Math.floor(state.bossKillTarget * 0.5);
       if (state.phase === 'play' && !state.midModGiven && state.sectorKills >= midTarget) {
         state.midModGiven = true;
@@ -2730,6 +2834,13 @@
       addEvoAndScore(350, 110, 24);
       showCallout('JUST DODGE!!', 'COUNTER OVERCLOCK +350', '#00e5ff');
     }
+
+    if (state.isTutorial && state.tutStep === 3) {
+      state.missiles.forEach(m => { m.alive = false; entityGroup.remove(m.group); });
+      state.missiles = [];
+      showCallout('NICE DODGE!!', '敵弾を完全回避！', '#00e5ff');
+      setupTutorialStep(4);
+    }
   }
 
   function triggerOverdrive() {
@@ -2741,10 +2852,23 @@
     state.evolveFlash = 0.5;
     SFX.playEvolve();
     showCallout('OVERDRIVE LOCK!!', '現武器をロック＆超連射・火力1.5倍!!', '#ffd400');
+
+    if (state.isTutorial && state.tutStep === 4) {
+      state.tutOdDone = true;
+      updateTutorialUI();
+    }
   }
 
   function takePlayerHit() {
     if (state.invulnTimer > 0) return;
+    if (state.isTutorial) {
+      state.invulnTimer = 0.85;
+      state.damageFlash = 0.35;
+      state.shakeAmt = 0.4;
+      SFX.playDamage();
+      showCallout('DODGEで回避しよう！', 'チュートリアル中はダメージ無効', '#00e5ff');
+      return;
+    }
     state.hp--;
     state.combo = 0;
     state.invulnTimer = 0.85;
@@ -2762,11 +2886,136 @@
   }
 
   // =========================================================
-  // 10. FLOW: START, BOSS RUSH, 3-CHOICE MODS, GAME OVER
+  // 10. FLOW: INTERACTIVE 4-STEP TUTORIAL, START, BOSS RUSH, MODS, GAME OVER
   // =========================================================
+  function spawnTutorialTarget(type, x, z) {
+    const t = buildCyberTrooper(type);
+    t.group.position.set(x, 0, z);
+    entityGroup.add(t.group);
+    const hp = type === 'shield' ? 95 : 55;
+    state.enemies.push({
+      type, group: t.group, legL: t.legL, legR: t.legR, mPlate: t.mPlate, shieldMesh: t.shieldMesh, laser: null,
+      pos: new THREE.Vector3(x, 0, z), targetZ: -11.5,
+      hp, maxHp: hp, headOffY: t.headPosY, bodyOffY: t.bodyPosY, hitR: 0.78 * t.scale,
+      fireTimer: 99, swayPhase: Math.random() * 6, alive: true
+    });
+  }
+
+  function updateTutorialUI() {
+    const stepEl = document.getElementById('tut-step');
+    const msgEl = document.getElementById('tut-msg');
+    const progEl = document.getElementById('tut-prog');
+    if (state.tutStep === 1) {
+      stepEl.textContent = 'TUTORIAL // STEP 1 / 4  AIM & SHOOT';
+      msgEl.textContent = '画面をドラッグ（マウス移動＆押しっぱなし）で狙って敵を撃破せよ！';
+      progEl.textContent = `トレーニング撃破: ${state.tutCount} / 2`;
+    } else if (state.tutStep === 2) {
+      stepEl.textContent = 'TUTORIAL // STEP 2 / 4  SHIELD & HEADSHOT';
+      msgEl.textContent = '青い盾は胴体弾を弾く！赤い【頭（CRIT LOCK）】を狙撃せよ！';
+      progEl.textContent = `盾兵撃破: ${state.tutCount} / 1`;
+    } else if (state.tutStep === 3) {
+      stepEl.textContent = 'TUTORIAL // STEP 3 / 4  JUST DODGE';
+      msgEl.textContent = '迫り来る敵弾に合わせて【DODGE（SPACE / 右クリック）】で緊急回避！';
+      progEl.textContent = 'DODGE ボタンをタップまたは SPACE キー！';
+    } else if (state.tutStep === 4) {
+      stepEl.textContent = 'TUTORIAL // STEP 4 / 4  ROULETTE & OVERDRIVE';
+      msgEl.textContent = '全20種がランダム切替！神武器が出たら【OVERDRIVE】でロック＆殲滅！';
+      progEl.textContent = state.tutOdDone
+        ? `OVERDRIVE発動OK! 敵を殲滅: ${state.tutCount} / 2`
+        : 'まず右下の【OVERDRIVE】を発動せよ！（キー: E）';
+    }
+  }
+
+  function setupTutorialStep(step) {
+    clearEntities();
+    state.tutStep = step;
+    state.tutCount = 0;
+    state.tutOdDone = false;
+    state.tutMissileTimer = 0.5;
+    if (step === 1) {
+      triggerWeaponShift(1, true); // #02 DUAL STRIKER
+      spawnTutorialTarget('trooper', -2.6, -24);
+      spawnTutorialTarget('trooper', 2.6, -26);
+    } else if (step === 2) {
+      triggerWeaponShift(0, true); // #01 MK-9 TACTICAL (HS x2.5!)
+      spawnTutorialTarget('shield', 0, -24);
+      showCallout('STEP 2 // HEADSHOT', '青い盾を避けて頭を狙え！', '#00e5ff');
+    } else if (step === 3) {
+      state.tutMissileTimer = 0.25;
+      showCallout('STEP 3 // DODGE', 'ミサイルが来る！DODGEで回避せよ！', '#ff2255');
+    } else if (step === 4) {
+      triggerWeaponShift(18, false); // Live shift to #19 CYBER KATANA!
+      state.odGauge = 100;
+      spawnTutorialTarget('trooper', -2.5, -22);
+      spawnTutorialTarget('trooper', 2.5, -24);
+    }
+    updateTutorialUI();
+  }
+
+  function onTutorialKill() {
+    state.tutCount++;
+    updateTutorialUI();
+    if (state.tutStep === 1 && state.tutCount >= 2) {
+      showCallout('STEP 1 CLEAR!!', 'NICE AIM!', '#ffd400');
+      setTimeout(() => { if (state.isTutorial && state.tutStep === 1) setupTutorialStep(2); }, 550);
+    } else if (state.tutStep === 2 && state.tutCount >= 1) {
+      showCallout('HEADSHOT BREAK!!', '盾兵の攻略完了！', '#ffd400');
+      setTimeout(() => { if (state.isTutorial && state.tutStep === 2) setupTutorialStep(3); }, 600);
+    } else if (state.tutStep === 4) {
+      if (state.tutCount >= 2 && state.tutOdDone) {
+        state.isTutorial = false;
+        document.getElementById('tut-bar').classList.add('hidden');
+        showCallout('🎓 TUTORIAL CLEAR!!', '全操作マスター！本番ミッションへ出撃！', '#ffd400');
+        SFX.playEvolve();
+        setTimeout(() => { if (state.phase === 'play') startRun(false); }, 1350);
+      } else if (state.enemies.filter(e => e.alive).length === 0) {
+        spawnTutorialTarget('trooper', -2.4, -22);
+        spawnTutorialTarget('trooper', 2.4, -24);
+      }
+    }
+  }
+
+  function startTutorial() {
+    SFX.ensure();
+    clearEntities();
+    state.isTutorial = true;
+    state.phase = 'play';
+    state.sector = 1;
+    state.score = 0;
+    state.kills = 0;
+    state.sectorKills = 0;
+    state.combo = 0;
+    state.hp = state.maxHp;
+    state.powerPts = 0;
+    state.powerLv = 1;
+    state.seenWeapons = new Set();
+    state.odGauge = 0;
+    state.odActive = false;
+    state.chronoBoostTimer = 0;
+    state.mods = [];
+    state.firing = false;
+    state.shiftInterval = 9.5;
+    state.shiftTimer = 9.5;
+
+    updateHpUI();
+    renderModsUI();
+    document.getElementById('screen-title').classList.add('hidden');
+    document.getElementById('screen-mod').classList.add('hidden');
+    document.getElementById('screen-over').classList.add('hidden');
+    document.getElementById('btn-home-fs').classList.add('hidden');
+    document.getElementById('hud').classList.remove('hidden');
+    document.getElementById('wave-shell').classList.add('hidden');
+    document.getElementById('boss-bar').classList.add('hidden');
+    document.getElementById('tut-bar').classList.remove('hidden');
+
+    SFX.startBeat(() => state);
+    setupTutorialStep(1);
+  }
+
   function startRun(bossRush = false) {
     SFX.ensure();
     clearEntities();
+    state.isTutorial = false;
     state.phase = bossRush ? 'boss' : 'play';
     state.sector = 1;
     state.score = 0;
@@ -2796,6 +3045,7 @@
     document.getElementById('screen-title').classList.add('hidden');
     document.getElementById('screen-mod').classList.add('hidden');
     document.getElementById('screen-over').classList.add('hidden');
+    document.getElementById('tut-bar').classList.add('hidden');
     document.getElementById('btn-home-fs').classList.add('hidden');
     document.getElementById('hud').classList.remove('hidden');
     document.getElementById('wave-shell').classList.toggle('hidden', bossRush);
@@ -2890,6 +3140,7 @@
     state.weaponIdx = 7; // Start title showcase with M134 Vulcan, then cycle showcase weapons!
     applyWeaponModelVisibility();
     document.getElementById('hud').classList.add('hidden');
+    document.getElementById('tut-bar').classList.add('hidden');
     document.getElementById('screen-over').classList.add('hidden');
     document.getElementById('screen-mod').classList.add('hidden');
     document.getElementById('screen-title').classList.remove('hidden');
@@ -3006,6 +3257,8 @@
 
   // Buttons
   document.getElementById('btn-start').addEventListener('click', () => startRun(false));
+  document.getElementById('btn-tutorial').addEventListener('click', () => startTutorial());
+  document.getElementById('btn-tut-skip').addEventListener('click', () => startRun(false));
   document.getElementById('btn-boss-rush').addEventListener('click', () => startRun(true));
   document.getElementById('btn-retry').addEventListener('click', () => startRun(false));
   document.getElementById('btn-home').addEventListener('click', openTitle);
@@ -3197,12 +3450,19 @@
   // 13. MAIN LOOP
   // =========================================================
   let lastT = performance.now();
+  window.__manualStep = new URLSearchParams(location.search).has('shorts');
+  window.__simTime = 0;
+  window.__gameEvents = [];
 
   function tick(now) {
     requestAnimationFrame(tick);
+    if (window.__manualStep) return;
     const rawDt = Math.min(0.05, (now - lastT) / 1000);
     lastT = now;
+    stepSimulation(rawDt, now);
+  }
 
+  function stepSimulation(rawDt, now) {
     if (state.hitstop > 0) {
       state.hitstop -= rawDt;
       renderer.render(scene, camera);
@@ -3301,8 +3561,8 @@
       if (state.odTimer <= 0) state.odActive = false;
     }
 
-    // 20-Weapon Random Roulette Countdown! (Locked during Overdrive so you keep your weapon!)
-    if (!state.odActive) {
+    // 20-Weapon Random Roulette Countdown! (Locked during Overdrive or Tutorial!)
+    if (!state.odActive && !state.isTutorial) {
       state.shiftTimer -= rawDt;
       if (state.shiftTimer <= 2.1 && state.shiftTimer > 0) {
         const tickBucket = Math.ceil(state.shiftTimer * 2);
@@ -3375,12 +3635,22 @@
     rightMuzzleFlash.material.opacity *= Math.pow(0.0001, rawDt);
     leftMuzzleFlash.material.opacity *= Math.pow(0.0001, rawDt);
 
-    // Spawn Enemies in Play Phase
+    // Spawn Enemies in Play Phase (or gentle practice missiles during Tutorial Step 3!)
     if (state.phase === 'play') {
-      state.spawnTimer -= dt;
-      if (state.spawnTimer <= 0) {
-        state.spawnTimer = Math.max(0.45, 1.22 - state.sector * 0.12);
-        spawnWaveEnemy();
+      if (state.isTutorial) {
+        if (state.tutStep === 3) {
+          state.tutMissileTimer -= dt;
+          if (state.tutMissileTimer <= 0) {
+            state.tutMissileTimer = 1.6;
+            spawnEnemyMissile(new THREE.Vector3((Math.random() - 0.5) * 1.8, 2.2, -16), 0.65, 0);
+          }
+        }
+      } else {
+        state.spawnTimer -= dt;
+        if (state.spawnTimer <= 0) {
+          state.spawnTimer = Math.max(0.45, 1.22 - state.sector * 0.12);
+          spawnWaveEnemy();
+        }
       }
     }
 
@@ -3873,7 +4143,22 @@
       const b = state.barrels.find(x => x.alive);
       if (b) detonateBarrel(b);
       else spawnBigExplosion(new THREE.Vector3(0, 1.5, -11), 6, true);
+    },
+    spawnWaveEnemy,
+    spawnShowcaseMissile() {
+      spawnEnemyMissile(new THREE.Vector3((Math.random() - 0.5) * 2.5, 2.2, -13), 0.72, 0);
+    },
+    spawnOrbitalNow(x = 0, z = -12) {
+      spawnOrbitalLaser(new THREE.Vector3(x, 1.2, z), 240);
+    },
+    spawnVortexNow(x = 0, z = -12) {
+      spawnGravityVortex(new THREE.Vector3(x, 2.0, z), 55);
     }
+  };
+
+  window.__stepFrame = (dt) => {
+    window.__simTime = (window.__simTime || 0) + dt;
+    stepSimulation(dt, window.__simTime * 1000);
   };
 
   openTitle();
