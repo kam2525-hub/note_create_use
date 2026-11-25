@@ -9,6 +9,12 @@
 ## 制作ログ（重複防止カタログ）
 - 一覧表: [CATALOG.md](CATALOG.md) / 機械可読データ: [CATALOG.json](CATALOG.json)
 
+## Day 11: SKY SMASH 3D（一人称3Dバドミントン・スマッシュ×ヘアピン×ハイクリア）
+- ゲーム本体: [games/day11-sky-smash-3d/index.html](games/day11-sky-smash-3d/index.html)
+- 1クリックコピペヘルパー: [notes/day11/copy_helper.html](notes/day11/copy_helper.html)
+- note 記事原稿: [notes/day11/note_draft.md](notes/day11/note_draft.md)
+- YouTube メタデータ: [notes/day11/youtube_metadata.txt](notes/day11/youtube_metadata.txt)
+
 ## Day 10: おなら立ち幅跳び 999（ONARA LONG JUMP 999）
 - ゲーム本体: [games/day10-onara-long-jump/index.html](games/day10-onara-long-jump/index.html)
 - 1クリックコピペヘルパー: [notes/day10/copy_helper.html](notes/day10/copy_helper.html)

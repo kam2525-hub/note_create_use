@@ -120,6 +120,18 @@
       "game_path": "games/day10-onara-long-jump/index.html",
       "note_path": "notes/day10/note_draft.md",
       "shorts_script": "shorts/day10/generate_shorts.py"
+    },
+    {
+      "day": 11,
+      "date": "2026-11-25",
+      "slug": "day11-sky-smash-3d",
+      "title": "SKY SMASH 3D（一人称3Dバドミントン・スマッシュ×ヘアピン×ハイクリア）",
+      "type": "game",
+      "genre": "Three.js 一人称3Dバドミントン / スポーツアクション",
+      "core_mechanic": "Three.js一人称POV視点＆バドミントン専用空気抵抗物理（初速400km/h級スマッシュ＆急落クリア・ヘアピン軌道）！ショート/ロングサーブから、高い球には大ジャンプ＋空中スローで狙い撃つジャンプスマッシュ＆カットドロップ、ネット前のドロップにはスローモーション中にヘアピンorロブを選択、相手の強打にはカウンタードライブorダイブレシーブで逆襲！ストーリー全5章（EASY〜鬼）・技別特訓4種・オンライン1vs1対戦対応",
+      "game_path": "games/day11-sky-smash-3d/index.html",
+      "note_path": "notes/day11/note_draft.md",
+      "shorts_script": "shorts/day11/generate_shorts.py"
     }
   ]
 }
