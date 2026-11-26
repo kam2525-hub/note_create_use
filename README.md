@@ -9,6 +9,14 @@
 ## 制作ログ（重複防止カタログ）
 - 一覧表: [CATALOG.md](CATALOG.md) / 機械可読データ: [CATALOG.json](CATALOG.json)
 
+## Day 12: WARIBASHI MASTER 3D（極限・一人称3D割り箸割り）
+- ゲーム本体: [games/day12-waribashi-3d/index.html](games/day12-waribashi-3d/index.html)
+- スプレッドシート全国ランキングGAS: [games/day12-waribashi-3d/gas_ranking.gs](games/day12-waribashi-3d/gas_ranking.gs) / [設定手順](games/day12-waribashi-3d/RANKING_SETUP.md)
+- 1クリックコピペヘルパー: [notes/day12/copy_helper.html](notes/day12/copy_helper.html)
+- note 記事原稿: [notes/day12/note_draft.md](notes/day12/note_draft.md)
+- YouTube メタデータ: [notes/day12/youtube_metadata.txt](notes/day12/youtube_metadata.txt)
+- サムネ／Shorts スクリプト: [shorts/day12/generate_shorts.py](shorts/day12/generate_shorts.py)
+
 ## Day 11: SKY SMASH 3D（一人称3Dバドミントン・スマッシュ×ヘアピン×ハイクリア）
 - ゲーム本体: [games/day11-sky-smash-3d/index.html](games/day11-sky-smash-3d/index.html)
 - 1クリックコピペヘルパー: [notes/day11/copy_helper.html](notes/day11/copy_helper.html)

@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#070b12" />
+<title>WARIBASHI MASTER 3D｜極限・一人称3D割り箸割り（5段階激ムズ）</title>
+<meta name="description" content="Three.js 一人称3D！両手で割り箸を握り、動く緑テンション帯と極悪木目・節（フシ）を逆ステアで見切って50.00% : 50.00%を狙う超ハードコア割り箸物理アクション！" />
+<link rel="icon" href="data:," />
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+  html, body { width: 100%; height: 100%; height: 100dvh; overflow: hidden; overscroll-behavior: none; background: #070b12; color: #f8fafc; font-family: 'Segoe UI', 'Hiragino Sans', 'Noto Sans JP', system-ui, sans-serif; touch-action: none; }
+  #app { position: fixed; inset: 0; width: 100%; height: 100%; overflow: hidden; }
+  #gl-canvas, #fx-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  #fx-canvas { z-index: 2; pointer-events: none; }
+  .hidden { display: none !important; }
+
+  .back-link {
+    position: fixed; top: max(10px, env(safe-area-inset-top)); left: max(10px, env(safe-area-inset-left));
+    z-index: 60; padding: 6px 12px; border-radius: 8px;
+    background: rgba(9, 14, 24, 0.88); border: 1px solid rgba(190, 242, 100, 0.4);
+    color: #f8fafc; font-size: 12px; font-weight: 800; text-decoration: none; backdrop-filter: blur(8px);
+  }
+  body.shorts-mode .back-link { display: none !important; }
+
+  #hud {
+    position: absolute; inset: 0; z-index: 10; pointer-events: none;
+    display: flex; flex-direction: column; justify-content: space-between;
+    padding: max(46px, calc(env(safe-area-inset-top) + 36px)) max(12px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  }
+  .hud-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; flex-wrap: wrap; }
+  .broadcast-box {
+    background: rgba(9, 13, 22, 0.90); border: 1px solid rgba(255,255,255,0.16);
+    border-left: 4px solid #bef264; border-radius: 10px; padding: 7px 12px;
+    backdrop-filter: blur(10px); box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+  }
+  .bc-tag { font-size: 10px; font-weight: 900; letter-spacing: 0.12em; color: #bef264; }
+  .bc-val { font-size: 22px; font-weight: 900; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .strain-track { width: 132px; height: 6px; background: #1e293b; border-radius: 999px; overflow: hidden; margin-top: 5px; }
+  #strainFill { width: 0%; height: 100%; background: linear-gradient(90deg, #facc15, #ef4444); }
+
+  .tier-row { pointer-events: auto; display: flex; gap: 5px; overflow-x: auto; max-width: 100%; padding-bottom: 2px; }
+  .tier-btn {
+    border: 1px solid rgba(255,255,255,0.22); border-radius: 8px; padding: 6px 10px;
+    background: rgba(15, 23, 42, 0.88); color: #e2e8f0; font-size: 11.5px; font-weight: 900; cursor: pointer; white-space: nowrap;
+  }
+  .tier-btn.active { background: #bef264; color: #090d16; border-color: #bef264; }
+  .tier-btn.active.oni { background: #ef4444; color: #ffffff; border-color: #ef4444; }
+
+  .hud-bottom { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .result-actions { pointer-events: auto; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  .act-btn {
+    border: 1px solid rgba(255,255,255,0.22); border-radius: 10px; padding: 10px 14px;
+    background: rgba(15, 23, 42, 0.92); color: #ffffff; font-size: 12.5px; font-weight: 900; cursor: pointer;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.45);
+  }
+  .act-btn.lime { background: #bef264; color: #090d16; border-color: #bef264; }
+  .act-btn.gold { background: #facc15; color: #090d16; border-color: #facc15; }
+  .act-btn.x { background: #0f172a; border-color: #38bdf8; color: #38bdf8; }
+
+  #rankModal {
+    position: fixed; inset: 0; z-index: 90; background: rgba(4, 7, 14, 0.84); backdrop-filter: blur(8px);
+    display: flex; align-items: center; justify-content: center; padding: 14px; touch-action: auto;
+  }
+  .rank-panel {
+    width: 100%; max-width: 480px; max-height: 88dvh; overflow-y: auto; touch-action: pan-y;
+    background: #0b1120; border: 1px solid rgba(190, 242, 100, 0.36); border-radius: 16px;
+    padding: 16px; box-shadow: 0 24px 60px rgba(0,0,0,0.75); display: flex; flex-direction: column; gap: 10px;
+  }
+  .rank-panel input, .rank-panel textarea {
+    user-select: text !important; -webkit-user-select: text !important; touch-action: auto !important;
+    background: #060a14; color: #f8fafc; border: 1px solid rgba(255,255,255,0.22); border-radius: 8px;
+    padding: 8px 10px; font-size: 13px; font-weight: 700; outline: none; width: 100%;
+  }
+  .rank-panel input:focus { border-color: #bef264; }
+  .rank-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .rank-table th { text-align: left; color: #94a3b8; font-size: 10.5px; padding: 6px 5px; border-bottom: 1px solid rgba(255,255,255,0.12); }
+  .rank-table td { padding: 7px 5px; border-bottom: 1px solid rgba(255,255,255,0.06); font-variant-numeric: tabular-nums; }
+  .rank-god { color: #facc15; font-weight: 900; }
+</style>
+</head>
+<body>
+<div id="app">
+  <a class="back-link" href="../../index.html">← 一覧へ</a>
+  <canvas id="gl-canvas"></canvas>
+  <canvas id="fx-canvas"></canvas>
+
+  <div id="hud">
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <div class="hud-top">
+        <div class="broadcast-box">
+          <div class="bc-tag" id="tierTag">上級 // 町中華の激歪み箸</div>
+          <div class="bc-val" id="timerVal">11.00s</div>
+        </div>
+        <div class="broadcast-box" style="border-left-color:#38bdf8;text-align:right;">
+          <div class="bc-tag" style="color:#38bdf8;">LIVE SPLIT RATIO</div>
+          <div class="bc-val" id="ratioVal">50.00 : 50.00</div>
+          <div class="strain-track"><div id="strainFill"></div></div>
+        </div>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
+        <div class="tier-row" id="tierRow"></div>
+        <div style="display:flex;gap:5px;pointer-events:auto;">
+          <button class="tier-btn" id="btnRankOpen" type="button">🏆 ランキング</button>
+          <button class="tier-btn" id="btnSound" type="button">🔊 音ON</button>
+          <button class="tier-btn" id="btnReset" type="button">🥢 新しい箸</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="hud-bottom">
+      <div class="result-actions hidden" id="resActions">
+        <button class="act-btn lime" id="btnAgain" type="button">🔁 もう1膳挑む</button>
+        <button class="act-btn gold hidden" id="btnRankSubmitOpen" type="button">🏆 ランキング登録</button>
+        <button class="act-btn" id="btnSavePng" type="button">📸 3D断面保存</button>
+        <button class="act-btn x" id="btnShareX" type="button">𝕏 結果を晒す</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="rankModal" class="hidden" role="dialog" aria-modal="true">
+    <div class="rank-panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+        <div>
+          <div style="font-size:10px;font-weight:900;letter-spacing:0.12em;color:#bef264;">PRECISION LEADERBOARD</div>
+          <div style="font-size:17px;font-weight:900;">🏆 割り箸50:50精度ランキング</div>
+        </div>
+        <button class="tier-btn" id="btnRankClose" type="button">✕ 閉じる</button>
+      </div>
+
+      <div id="rankStatus" style="font-size:11px;font-weight:700;color:#38bdf8;background:rgba(56,189,248,0.1);border:1px solid rgba(56,189,248,0.28);border-radius:8px;padding:6px 10px;"></div>
+
+      <div id="submitBox" class="hidden" style="background:rgba(250,204,21,0.08);border:1px solid rgba(250,204,21,0.38);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px;">
+        <div id="submitSummary" style="font-size:12px;font-weight:900;color:#fde047;"></div>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <input id="playerNameInput" type="text" maxlength="12" placeholder="プレイヤー名（12文字まで）" />
+          <button class="act-btn gold" id="btnSubmitScore" type="button" style="white-space:nowrap;padding:8px 14px;">記録登録</button>
+        </div>
+        <div id="submitMsg" style="font-size:11px;font-weight:700;color:#cbd5e1;"></div>
+      </div>
+
+      <div class="tier-row" id="rankFilterRow"></div>
+
+      <div style="overflow-x:auto;">
+        <table class="rank-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>職人名</th>
+              <th>難度</th>
+              <th>誤差(50%)</th>
+              <th>比率 / 節</th>
+            </tr>
+          </thead>
+          <tbody id="rankTbody"></tbody>
+        </table>
+      </div>
+
+      <details style="font-size:11px;color:#94a3b8;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 10px;">
+        <summary style="cursor:pointer;font-weight:800;color:#cbd5e1;">⚙ スプレッドシート連携設定（制作者用）</summary>
+        <div style="margin-top:8px;display:flex;flex-direction:column;gap:6px;">
+          <div>同フォルダの <code>gas_ranking.gs</code> を Google スプレッドシートの Apps Script にデプロイし、ウェブアプリURLを貼ると全国ランキングと同期します（<code>index.html</code> の <code>GAS_ENDPOINT</code> に貼れば全ユーザー共有）。</div>
+          <div style="display:flex;gap:6px;">
+            <input id="gasUrlInput" type="url" placeholder="https://script.google.com/macros/s/.../exec" />
+            <button class="tier-btn active" id="btnSaveGasUrl" type="button">保存</button>
+          </div>
+        </div>
+      </details>
+    </div>
+  </div>
+</div>
+
+<script src="three.min.js"></script>
+<script>
+(() => {
+  'use strict';
+
+  const Sfx = (() => {
+    let ctx = null, enabled = true, lastCreak = 0, lastCrack = 0;
+    function ensure() {
+      if (!enabled) return null;
+      if (!ctx) { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null; ctx = new AC(); }
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+      return ctx;
+    }
+    function creak(tension) {
+      const now = performance.now(); if (now - lastCreak < 75) return; lastCreak = now;
+      const c = ensure(); if (!c) return;
+      const t = c.currentTime, o = c.createOscillator(), g = c.createGain(), f = c.createBiquadFilter();
+      o.type = 'sawtooth'; const bf = 95 + tension * 220;
+      o.frequency.setValueAtTime(bf, t); o.frequency.linearRampToValueAtTime(bf * 1.18, t + 0.05);
+      g.gain.setValueAtTime(0.03 + tension * 0.055, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+      f.type = 'bandpass'; f.frequency.value = 720; f.Q.value = 3.2;
+      o.connect(f); f.connect(g); g.connect(c.destination); o.start(t); o.stop(t + 0.065);
+    }
+    function noise(freq, dur, vol, q = 1.5) {
+      const c = ensure(); if (!c) return;
+      const t = c.currentTime, len = Math.max(80, Math.floor(c.sampleRate * dur)), buf = c.createBuffer(1, len, c.sampleRate), d = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (len * 0.25));
+      const src = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
+      src.buffer = buf; f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = q; g.gain.setValueAtTime(vol, t);
+      src.connect(f); f.connect(g); g.connect(c.destination); src.start(t);
+    }
+    function crack(int = 0.5) { const now = performance.now(); if (now - lastCrack < 26) return; lastCrack = now; noise(1800 + Math.random() * 1600, 0.03, 0.12 + int * 0.14); }
+    function counterPing() {
+      const c = ensure(); if (!c) return;
+      const t = c.currentTime, o = c.createOscillator(), g = c.createGain();
+      o.type = 'sine'; o.frequency.setValueAtTime(880, t); o.frequency.exponentialRampToValueAtTime(1760, t + 0.09);
+      g.gain.setValueAtTime(0.13, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+      o.connect(g); g.connect(c.destination); o.start(t); o.stop(t + 0.13);
+    }
+    function snapFinish(perfect, broken) {
+      noise(broken ? 700 : 2500, 0.16, 0.34, 1.0);
+      const c = ensure(); if (!c) return;
+      const t = c.currentTime;
+      if (perfect) [523, 659, 784, 1046, 1318].forEach((fr, i) => {
+        const o = c.createOscillator(), g = c.createGain(); o.type = 'triangle'; o.frequency.setValueAtTime(fr, t + i * 0.06);
+        g.gain.setValueAtTime(0.12, t + i * 0.06); g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.06 + 0.25);
+        o.connect(g); g.connect(c.destination); o.start(t + i * 0.06); o.stop(t + i * 0.06 + 0.26);
+      });
+    }
+    function toggle() { enabled = !enabled; return enabled; }
+    return { ensure, creak, crack, counterPing, snapFinish, toggle };
+  })();
+
+  const TIERS = [
+    { name: '初級', wood: 'コンビニ元禄箸', timeLim: 13.0, knots: 2, grainChaos: 0.72, runaway: 0.085, sweetW: 0.30, sweetMove: 0.06, brittle: 1.0, tremor: 0.03, colHex: 0xf2d4a2 },
+    { name: '上級', wood: '町中華の激歪み箸', timeLim: 11.0, knots: 3, grainChaos: 1.05, runaway: 0.115, sweetW: 0.24, sweetMove: 0.11, brittle: 1.25, tremor: 0.07, colHex: 0xecd6a8 },
+    { name: '達人', wood: '高級吉野杉（超脆性）', timeLim: 10.0, knots: 3, grainChaos: 0.92, runaway: 0.125, sweetW: 0.20, sweetMove: 0.14, brittle: 1.75, tremor: 0.08, colHex: 0xf6c89e },
+    { name: '鬼', wood: '呪いの節だらけ箸', timeLim: 9.2, knots: 4, grainChaos: 1.32, runaway: 0.145, sweetW: 0.17, sweetMove: 0.18, brittle: 1.65, tremor: 0.13, colHex: 0xdeb684 },
+    { name: '神域【極】', wood: '暗黒・竹割り箸', timeLim: 8.5, knots: 5, grainChaos: 1.55, runaway: 0.175, sweetW: 0.14, sweetMove: 0.22, brittle: 2.0, tremor: 0.18, colHex: 0xe0d284 }
+  ];
+
+  // =========================================================
+  // THREE.JS FIRST-PERSON 3D ARENA SCENE (DAY 11 / DAY 8 STYLE!)
+  // =========================================================
+  const glCanvas = document.getElementById('gl-canvas');
+  const fxCanvas = document.getElementById('fx-canvas'), fxCtx = fxCanvas.getContext('2d');
+  let viewW = window.innerWidth, viewH = window.innerHeight;
+  let renderer = null, scene = null, camera = null;
+  let stickRoot, segL = [], segR = [], knotMeshes = [], crackGlowMesh, crackLight;
+  let handL, handR, steamPuffs = [], splinterMeshes = [];
+
+  function makeWoodTexture() {
+    const cv = document.createElement('canvas'); cv.width = 128; cv.height = 256;
+    const c = cv.getContext('2d');
+    c.fillStyle = '#e8c892'; c.fillRect(0, 0, 128, 256);
+    for (let x = 0; x < 128; x += 3) {
+      c.fillStyle = `rgba(120, 68, 28, ${0.06 + Math.random() * 0.14})`;
+      c.fillRect(x, 0, 1 + Math.random() * 2, 256);
+    }
+    const tex = new THREE.CanvasTexture(cv);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    return tex;
+  }
+
+  try {
+    renderer = new THREE.WebGLRenderer({ canvas: glCanvas, antialias: true, preserveDrawingBuffer: true, powerPreference: 'high-performance' });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(viewW, viewH);
+    renderer.shadowMap.enabled = true;
+  } catch (_) { renderer = null; }
+
+  const SEG_COUNT = 48, JOINT_START = 26;
+
+  function initThree() {
+    if (!renderer) return;
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x070b12);
+    scene.fog = new THREE.FogExp2(0x070b12, 0.11);
+
+    camera = new THREE.PerspectiveCamera(50, viewW / viewH, 0.05, 40);
+    camera.position.set(0, 1.58, 2.75);
+    camera.lookAt(0, 0.96, 1.15);
+
+    // Pro Arena Spotlight + Emerald Rim Light (Day 11 signature!)
+    scene.add(new THREE.AmbientLight(0xdbeafe, 0.48));
+    const key = new THREE.DirectionalLight(0xfffbeb, 1.25); key.position.set(2.2, 2.4, 5.8); key.castShadow = true; scene.add(key);
+    const rim = new THREE.DirectionalLight(0x34d399, 0.85); rim.position.set(-4, 3.5, -3); scene.add(rim);
+    const warm = new THREE.PointLight(0xfb923c, 1.0, 8); warm.position.set(1.8, 2.1, -0.5); scene.add(warm);
+
+    // 3D Dark Lacquered Ramen Counter
+    const counter = new THREE.Mesh(
+      new THREE.BoxGeometry(8, 0.25, 5),
+      new THREE.MeshStandardMaterial({ color: 0x2a140a, roughness: 0.35, metalness: 0.1 })
+    );
+    counter.position.set(0, 0.0, 0.2); counter.receiveShadow = true; scene.add(counter);
+
+    // Glowing Neon Counter Trim Strip
+    const trim = new THREE.Mesh(new THREE.BoxGeometry(8, 0.03, 0.04), new THREE.MeshBasicMaterial({ color: 0xbef264 }));
+    trim.position.set(0, 0.13, -1.6); scene.add(trim);
+
+    // 3D Steaming Ramen Bowl on counter ahead!
+    const bowlGroup = new THREE.Group(); bowlGroup.position.set(0, 0.15, -0.15); scene.add(bowlGroup);
+    const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.54, 0.30, 0.32, 28), new THREE.MeshStandardMaterial({ color: 0x991b1b, roughness: 0.3 }));
+    bowl.position.y = 0.16; bowlGroup.add(bowl);
+    const broth = new THREE.Mesh(new THREE.CircleGeometry(0.49, 28), new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.2 }));
+    broth.rotation.x = -Math.PI * 0.5; broth.position.y = 0.315; bowlGroup.add(broth);
+    const naruto = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.03, 18), new THREE.MeshStandardMaterial({ color: 0xffffff }));
+    naruto.position.set(-0.16, 0.325, 0.05); bowlGroup.add(naruto);
+
+    for (let i = 0; i < 6; i++) {
+      const puff = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 10), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.14 }));
+      puff.position.set((Math.random() - 0.5) * 0.35, 0.4 + i * 0.16, -0.15);
+      scene.add(puff); steamPuffs.push({ mesh: puff, phase: i * 1.1 });
+    }
+
+    // 3D Segmented Waribashi held in front of First-Person Camera!
+    stickRoot = new THREE.Group();
+    stickRoot.position.set(0, 0.95, 1.44);
+    scene.add(stickRoot);
+    const woodTex = makeWoodTexture();
+    const baseMat = new THREE.MeshStandardMaterial({ color: 0xf2d4a2, map: woodTex, roughness: 0.62 });
+    for (let s = 0; s < SEG_COUNT; s++) {
+      const mL = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), baseMat.clone());
+      const mR = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), baseMat.clone());
+      mL.rotation.order = 'XYZ'; mR.rotation.order = 'XYZ';
+      mL.castShadow = true; mR.castShadow = true;
+      stickRoot.add(mL); stickRoot.add(mR);
+      segL.push(mL); segR.push(mR);
+    }
+
+    crackGlowMesh = new THREE.Mesh(new THREE.SphereGeometry(0.026, 12, 12), new THREE.MeshBasicMaterial({ color: 0x34d399 }));
+    stickRoot.add(crackGlowMesh);
+    crackLight = new THREE.PointLight(0x34d399, 1.2, 1.4);
+    stickRoot.add(crackLight);
+
+    // Articulated First-Person 3D Hands gripping left & right prongs!
+    function buildHand(side) {
+      const g = new THREE.Group();
+      const skinMat = new THREE.MeshStandardMaterial({ color: 0xd99672, roughness: 0.72, metalness: 0.0 });
+      const sleeveMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.75 });
+      const palm = new THREE.Mesh(new THREE.SphereGeometry(0.052, 16, 16), skinMat);
+      palm.scale.set(0.88, 1.08, 0.72); g.add(palm);
+      for (let fi = -1; fi <= 1; fi++) {
+        const finger = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.011, 0.068, 10), skinMat);
+        finger.rotation.z = Math.PI * 0.5;
+        finger.position.set(-side * 0.044, fi * 0.028, 0.022);
+        g.add(finger);
+      }
+      const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.042, 0.062, 0.52, 14), sleeveMat);
+      sleeve.rotation.z = side * 0.85; sleeve.rotation.x = 0.42; sleeve.position.set(side * 0.16, -0.12, 0.11); g.add(sleeve);
+      scene.add(g);
+      return g;
+    }
+    handL = buildHand(-1); handR = buildHand(1);
+  }
+
+  function handleResize() {
+    viewW = window.innerWidth; viewH = window.innerHeight;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    fxCanvas.width = Math.floor(viewW * dpr); fxCanvas.height = Math.floor(viewH * dpr); fxCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (renderer && camera) { renderer.setSize(viewW, viewH); camera.aspect = viewW / viewH; camera.updateProjectionMatrix(); }
+  }
+  window.addEventListener('resize', handleResize);
+
+  const sim = {
+    tierIdx: 1, phase: 'ready', time: 0, timeLeft: 11.0, hitstop: 0, slowMo: 1.0, shake: 0,
+    crackPath: [], grainForce: [], knots: [], crackIdx: JOINT_START, crackX: 0,
+    pullOpen: 0, targetOpen: 0, pullVel: 0, steerX: 0, tension: 0, sweetCenter: 0.48, strainAccum: 0, counters: 0,
+    dragging: false, dragStartX: 0, dragStartY: 0, dragStartOpen: 0,
+    keys: { left: false, right: false, space: false },
+    splitSep: 0, brokenSide: 0, brokenSeg: 0, leftPct: 50, rightPct: 50,
+    resRank: '', resTitle: '', resSub: '', popups: []
+  };
+
+  function getSegWorldPos(s) {
+    const u = s / SEG_COUNT;
+    return { y: 1.38 - u * 0.86, z: 1.72 - u * 0.56, hw: 0.076 * (0.52 + u * 0.48) };
+  }
+
+  function clearTempMeshes() {
+    if (!scene) return;
+    knotMeshes.forEach((m) => stickRoot.remove(m)); knotMeshes = [];
+    splinterMeshes.forEach((sp) => scene.remove(sp.mesh)); splinterMeshes = [];
+  }
+
+  function startNewStick(tierIdx = sim.tierIdx) {
+    sim.tierIdx = tierIdx; const tr = TIERS[tierIdx];
+    sim.phase = 'ready'; sim.timeLeft = tr.timeLim; sim.hitstop = 0; sim.slowMo = 1.0; sim.shake = 0;
+    sim.crackIdx = JOINT_START; sim.crackX = 0; sim.pullOpen = 0; sim.targetOpen = 0; sim.pullVel = 0; sim.steerX = 0;
+    sim.tension = 0; sim.sweetCenter = 0.48; sim.strainAccum = 0; sim.counters = 0;
+    sim.dragging = false; sim.splitSep = 0; sim.brokenSide = 0; sim.brokenSeg = 0;
+    sim.leftPct = 50; sim.rightPct = 50; sim.popups = [];
+    clearTempMeshes();
+
+    sim.crackPath = new Array(SEG_COUNT + 1).fill(0); sim.grainForce = new Array(SEG_COUNT + 1).fill(0);
+    sim.knots = [];
+    for (let k = 0; k < tr.knots; k++) {
+      const seg = JOINT_START + 2 + Math.floor(((k + 0.5) / tr.knots) * (SEG_COUNT - JOINT_START - 4));
+      const side = Math.random() < 0.5 ? -1 : 1;
+      const kn = { seg, side, xOff: side * (0.16 + Math.random() * 0.34), str: (0.75 + Math.random() * 0.55) * (-side), passed: false };
+      sim.knots.push(kn);
+      if (scene) {
+        const km = new THREE.Mesh(new THREE.SphereGeometry(0.022, 10, 10), new THREE.MeshStandardMaterial({ color: 0x451a03, roughness: 0.9 }));
+        const wp = getSegWorldPos(seg); km.position.set(kn.xOff * wp.hw, wp.y - 0.95, wp.z - 1.44 + 0.032);
+        stickRoot.add(km); knotMeshes.push(km);
+      }
+    }
+    const baseB = (Math.random() - 0.5) * 0.45 * tr.grainChaos; let walker = baseB;
+    for (let s = JOINT_START; s <= SEG_COUNT; s++) {
+      walker = walker * 0.65 + (Math.random() - 0.5) * 0.85 * tr.grainChaos + baseB * 0.42;
+      for (const kn of sim.knots) { const d = Math.abs(s - kn.seg); if (d < 3.6) walker += kn.str * Math.exp(-(d * d) / 2.2) * 1.05; }
+      sim.grainForce[s] = Math.max(-1.45, Math.min(1.45, walker));
+    }
+    if (stickRoot) stickRoot.rotation.y = 0;
+    if (handL && handR) { handL.visible = true; handR.visible = true; }
+    sim.scoreSubmitted = false;
+    document.getElementById('resActions').classList.add('hidden');
+    document.getElementById('btnRankSubmitOpen').classList.add('hidden');
+    document.getElementById('tierTag').textContent = `${tr.name} // ${tr.wood}`;
+    updateHudDom();
+  }
+
+  function computeRatio() {
+    let l = 0, r = 0;
+    for (let s = 0; s < SEG_COUNT; s++) {
+      const hw = 0.52 + (s / SEG_COUNT) * 0.48, cx = ((sim.crackPath[s] + sim.crackPath[s + 1]) * 0.5) * hw;
+      l += Math.max(0.015, hw + cx); r += Math.max(0.015, hw - cx);
+    }
+    sim.leftPct = (l / (l + r)) * 100; sim.rightPct = (r / (l + r)) * 100;
+    updateHudDom();
+  }
+
+  function updateHudDom() {
+    document.getElementById('timerVal').textContent = `${sim.timeLeft.toFixed(2)}s`;
+    document.getElementById('timerVal').style.color = sim.timeLeft < 3.0 ? '#ef4444' : '#ffffff';
+    document.getElementById('ratioVal').textContent = sim.phase === 'broken' ? 'ポキッ!!' : `${sim.leftPct.toFixed(2)} : ${sim.rightPct.toFixed(2)}`;
+    document.getElementById('strainFill').style.width = `${Math.min(100, sim.strainAccum * 100)}%`;
+  }
+
+  function addPopup(sx, sy, text, color, size = 18) { sim.popups.push({ x: sx, y: sy, text, color, size, life: 0, maxLife: 1.0 }); }
+
+  function spawnSplinters3D(x, y, z, count) {
+    if (!scene) return;
+    const mat = new THREE.MeshStandardMaterial({ color: TIERS[sim.tierIdx].colHex });
+    for (let i = 0; i < count; i++) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(0.015, 0.06, 0.015), mat);
+      m.position.set(x, y, z); scene.add(m);
+      splinterMeshes.push({ mesh: m, vx: (Math.random() - 0.5) * 2.2, vy: 0.7 + Math.random() * 1.8, vz: (Math.random() - 0.5) * 1.5, vr: (Math.random() - 0.5) * 14, life: 0, maxLife: 0.9 });
+    }
+  }
+
+  function stepHardcorePhysics(dt) {
+    const tr = TIERS[sim.tierIdx];
+    sim.timeLeft = Math.max(0, sim.timeLeft - dt);
+    if (sim.timeLeft <= 0) {
+      sim.phase = 'timeout'; sim.dragging = false; Sfx.snapFinish(false, true);
+      sim.resRank = 'F'; sim.resTitle = '🍜 麺が伸びた（時間切れ!!）'; sim.resSub = '慎重すぎた…熱々のラーメンが完全にのびてしまった！';
+      document.getElementById('resActions').classList.remove('hidden'); updateHudDom(); return;
+    }
+
+    let knotNear = 0;
+    for (const kn of sim.knots) { const d = Math.abs(sim.crackIdx - kn.seg); if (d < 3.5) knotNear = Math.max(knotNear, 1 - d / 3.5); }
+    sim.sweetCenter = 0.48 + Math.sin(sim.time * (2.6 + tr.sweetMove * 8)) * tr.sweetMove + knotNear * 0.10;
+    const sweetLo = Math.max(0.24, sim.sweetCenter - tr.sweetW * 0.5), sweetHi = Math.min(0.84, sim.sweetCenter + tr.sweetW * 0.5);
+
+    if (sim.keys.space) sim.targetOpen = Math.min(1.0, sim.targetOpen + dt * 0.52);
+    const keySteer = (sim.keys.right ? 1 : 0) - (sim.keys.left ? 1 : 0), activeSteer = keySteer !== 0 ? keySteer : sim.steerX;
+    const prevOpen = sim.pullOpen; sim.pullOpen += (sim.targetOpen - sim.pullOpen) * Math.min(1, dt * 15);
+    sim.pullVel = Math.max(0, (sim.pullOpen - prevOpen) / Math.max(0.001, dt));
+
+    const rem = (SEG_COUNT - sim.crackIdx) / (SEG_COUNT - JOINT_START), over = Math.max(0, sim.pullOpen - ((1 - rem) * 0.72 + 0.08));
+    const jitter = (Math.sin(sim.time * 27) * 0.5 + Math.cos(sim.time * 41) * 0.5) * tr.tremor;
+    sim.tension = Math.max(0, Math.min(1.0, over * 3.8 + Math.max(0, sim.pullVel - 0.35) * 0.85 + jitter));
+
+    const inRed = sim.tension > sweetHi, inSweet = sim.tension >= sweetLo && sim.tension <= sweetHi;
+    sim.slowMo = sim.crackIdx >= SEG_COUNT - 4 ? 0.45 : 1.0;
+
+    if (sim.crackIdx > JOINT_START) {
+      const redExcess = Math.max(0, sim.tension - sweetHi) * 3.4 * tr.brittle;
+      const thinDanger = Math.abs(sim.crackX) > 0.58 ? (Math.abs(sim.crackX) - 0.52) * 3.2 : 0;
+      sim.strainAccum += (redExcess + thinDanger * (0.5 + sim.pullVel)) * dt * 1.15;
+      if (sim.strainAccum >= 1.0 && sim.crackIdx < SEG_COUNT - 2) {
+        sim.phase = 'broken'; sim.dragging = false; sim.brokenSide = sim.crackX <= 0 ? -1 : 1; sim.brokenSeg = Math.max(10, sim.crackIdx - 5);
+        sim.shake = 16; sim.hitstop = 0.14; Sfx.snapFinish(false, true);
+        const wp = getSegWorldPos(sim.brokenSeg); spawnSplinters3D(sim.brokenSide * 0.1, wp.y, wp.z, 26);
+        addPopup(viewW * 0.5, viewH * 0.42, 'ポキッ!! 折損即死!!', '#ef4444', 24);
+        sim.resRank = 'DEAD'; sim.resTitle = '💀 中途折損（ポキッ!!）'; sim.resSub = '赤ゾーン負荷で木が真っ二つに折れた！';
+        if (handL && handR) { handL.visible = false; handR.visible = false; }
+        knotMeshes.forEach((m) => { m.visible = false; });
+        document.getElementById('resActions').classList.remove('hidden'); updateHudDom(); return;
+      }
+    } else sim.strainAccum = Math.max(0, sim.strainAccum - dt * 1.4);
+
+    if (sim.tension > 0.18 && (sim.dragging || sim.keys.space)) Sfx.creak(sim.tension);
+
+    while (sim.tension >= sweetLo && sim.crackIdx < SEG_COUNT) {
+      sim.crackIdx++; const s = sim.crackIdx;
+      const chaosMult = inRed ? 2.15 : (inSweet ? 0.95 : 1.25);
+      const grainPull = sim.grainForce[s] * (0.14 + Math.min(0.22, sim.pullVel * 0.12)) * chaosMult;
+      const runaway = Math.sign(sim.crackX) * Math.pow(Math.abs(sim.crackX), 1.15) * tr.runaway * (inRed ? 1.6 : 1.0);
+      const steerPower = inSweet ? 0.21 : (inRed ? 0.075 : 0.13);
+      sim.crackX = Math.max(-0.96, Math.min(0.96, sim.crackX + grainPull + runaway + activeSteer * steerPower));
+      sim.crackPath[s] = sim.crackX;
+
+      const wp = getSegWorldPos(s); Sfx.crack(sim.tension);
+      if (Math.random() < 0.7) spawnSplinters3D(sim.crackX * wp.hw, wp.y, wp.z, 2);
+
+      for (const kn of sim.knots) {
+        if (!kn.passed && s >= kn.seg) {
+          kn.passed = true;
+          if (Math.abs(sim.crackX) < 0.14 && inSweet) {
+            sim.counters++; sim.hitstop = 0.08; sim.strainAccum = Math.max(0, sim.strainAccum - 0.35);
+            Sfx.counterPing(); addPopup(viewW * 0.5, viewH * 0.44, `⚡ JUST節見切り!! ×${sim.counters}`, '#34d399', 20);
+          }
+        }
+      }
+      sim.tension -= 0.19; computeRatio();
+      if (sim.crackIdx >= SEG_COUNT) { finishSplit(); break; }
+    }
+    updateHudDom();
+  }
+
+  function finishSplit() {
+    sim.phase = 'done'; sim.dragging = false; sim.hitstop = 0.12; computeRatio();
+    const diff = Math.abs(sim.leftPct - 50.0), small = Math.min(sim.leftPct, sim.rightPct), perfect = diff <= 0.50;
+    sim.shake = perfect ? 7 : 12; Sfx.snapFinish(perfect, false);
+    const wp = getSegWorldPos(SEG_COUNT); spawnSplinters3D(0, wp.y, wp.z, 28);
+    if (handL && handR) { handL.visible = false; handR.visible = false; }
+    knotMeshes.forEach((m) => { m.visible = false; });
+
+    if (diff <= 0.15) { sim.resRank = 'GOD'; sim.resTitle = '👑 神域・完全黄金比 50.00 : 50.00!!'; sim.resSub = `誤差 ±${diff.toFixed(2)}%!! 人間国宝認定！`; }
+    else if (diff <= 0.60) { sim.resRank = 'S'; sim.resTitle = '✨ ランク【S】割り箸の達人!!'; sim.resSub = `誤差 ±${diff.toFixed(2)}%！節見切り ${sim.counters}回！`; }
+    else if (diff <= 2.2) { sim.resRank = 'A'; sim.resTitle = '🥢 ランク【A】プロ級バランス'; sim.resSub = `誤差 ±${diff.toFixed(2)}%！あと一歩でSランク！`; }
+    else if (diff <= 7.0) { sim.resRank = 'B'; sim.resTitle = '😅 ランク【B】ちょっと歪んだ'; sim.resSub = `誤差 ±${diff.toFixed(2)}%…微妙に太さが違う！`; }
+    else if (small >= 12.0) { sim.resRank = 'C'; sim.resTitle = '⚡ ランク【C】凶悪アンバランス'; sim.resSub = `${sim.leftPct.toFixed(1)}% : ${sim.rightPct.toFixed(1)}%…節に持っていかれた！`; }
+    else { sim.resRank = 'D'; sim.resTitle = '🪡 ランク【D】伝説の「ほぼ爪楊枝」'; sim.resSub = `細い方が ${small.toFixed(2)}%!! 海苔すら掴めないｗ`; }
+    document.getElementById('resActions').classList.remove('hidden');
+    document.getElementById('btnRankSubmitOpen').classList.remove('hidden');
+    updateHudDom();
+  }
+
+  function updateThreeScene(rawDt) {
+    if (!renderer || !scene) return;
+    const tr = TIERS[sim.tierIdx];
+    const sep = sim.phase === 'done' || sim.phase === 'broken' ? sim.splitSep : 0;
+
+    function getDefl(s, side) {
+      if (sim.phase === 'done' || sim.phase === 'broken') return side * sep;
+      if (s >= sim.crackIdx) return 0;
+      return side * sim.pullOpen * 0.56 * Math.pow(((sim.crackIdx - s) / SEG_COUNT) * 1.45, 1.45);
+    }
+
+    for (let s = 0; s < SEG_COUNT; s++) {
+      const wp = getSegWorldPos(s), wpNext = getSegWorldPos(Math.min(SEG_COUNT, s + 1));
+      const dy = Math.max(0.001, wp.y - wpNext.y), dz = wp.z - wpNext.z;
+      const segLen = Math.hypot(dy, dz), pitchX = Math.atan2(dz, dy);
+      const midY = (wp.y + wpNext.y) * 0.5 - 0.95, midZ = (wp.z + wpNext.z) * 0.5 - 1.44;
+      const hw = wp.hw, cx = s <= sim.crackIdx ? sim.crackPath[s] * hw : 0;
+      const wL = Math.max(0.004, hw + cx), wR = Math.max(0.004, hw - cx);
+      const dL = getDefl(s, -1), dLn = getDefl(Math.min(SEG_COUNT, s + 1), -1);
+      const dR = getDefl(s, 1), dRn = getDefl(Math.min(SEG_COUNT, s + 1), 1);
+      const mL = segL[s], mR = segR[s];
+      mL.visible = !(sim.phase === 'broken' && sim.brokenSide === -1 && s < sim.brokenSeg);
+      mR.visible = !(sim.phase === 'broken' && sim.brokenSide === 1 && s < sim.brokenSeg);
+      mL.material.color.setHex(tr.colHex); mR.material.color.setHex(tr.colHex);
+      mL.scale.set(wL, segLen * 1.15, 0.044); mL.position.set(-hw + wL * 0.5 + (dL + dLn) * 0.5, midY, midZ);
+      mL.rotation.x = pitchX; mL.rotation.z = -Math.atan2(dL - dLn, segLen);
+      mR.scale.set(wR, segLen * 1.15, 0.044); mR.position.set(cx + wR * 0.5 + (dR + dRn) * 0.5, midY, midZ);
+      mR.rotation.x = pitchX; mR.rotation.z = -Math.atan2(dR - dRn, segLen);
+    }
+
+    const cp = getSegWorldPos(sim.crackIdx);
+    const sweetHi = Math.min(0.84, sim.sweetCenter + tr.sweetW * 0.5), sweetLo = Math.max(0.24, sim.sweetCenter - tr.sweetW * 0.5);
+    const glowHex = sim.tension > sweetHi ? 0xef4444 : sim.tension >= sweetLo ? 0x34d399 : 0xfacc15;
+    crackGlowMesh.visible = sim.phase === 'ready' || sim.phase === 'splitting';
+    crackGlowMesh.material.color.setHex(glowHex);
+    crackGlowMesh.position.set(sim.crackX * cp.hw, cp.y - 0.95, cp.z - 1.44 + 0.036);
+    crackLight.color.setHex(glowHex); crackLight.position.copy(crackGlowMesh.position);
+
+    if (handL && handR && handL.visible) {
+      const gp = getSegWorldPos(13);
+      handL.position.set(-gp.hw - 0.056 + getDefl(13, -1), gp.y - sim.steerX * 0.035, gp.z + 0.025);
+      handR.position.set(gp.hw + 0.056 + getDefl(13, 1), gp.y + sim.steerX * 0.035, gp.z + 0.025);
+    }
+
+    if (sim.phase === 'done' || sim.phase === 'broken') {
+      stickRoot.rotation.y = Math.sin(sim.time * 1.1) * 0.52;
+    }
+
+    // Dynamic First-Person Camera zoom-in on crack!
+    const prog = (sim.crackIdx - JOINT_START) / (SEG_COUNT - JOINT_START);
+    const targetZ = sim.phase === 'splitting' ? 2.75 - prog * 0.42 - sim.tension * 0.14 : 2.82;
+    camera.position.z += (targetZ - camera.position.z) * Math.min(1, rawDt * 8);
+    camera.position.x = (sim.shake > 0.2 ? (Math.random() - 0.5) * sim.shake * 0.008 : 0) + sim.steerX * 0.08;
+    camera.lookAt(0, 0.96 - prog * 0.14, 1.15);
+
+    for (const sf of steamPuffs) {
+      sf.mesh.position.y = 0.45 + ((sim.time * 0.4 + sf.phase) % 0.9);
+      sf.mesh.material.opacity = Math.max(0, 0.16 * (1 - (sf.mesh.position.y - 0.45) / 0.9));
+    }
+    for (let i = splinterMeshes.length - 1; i >= 0; i--) {
+      const sp = splinterMeshes[i]; sp.life += rawDt;
+      if (sp.life >= sp.maxLife) { scene.remove(sp.mesh); splinterMeshes.splice(i, 1); continue; }
+      sp.vy -= 5.8 * rawDt; sp.mesh.position.x += sp.vx * rawDt; sp.mesh.position.y += sp.vy * rawDt; sp.mesh.position.z += sp.vz * rawDt;
+      sp.mesh.rotation.x += sp.vr * rawDt; sp.mesh.rotation.z += sp.vr * rawDt;
+    }
+    renderer.render(scene, camera);
+  }
+
+  let lastT = performance.now();
+  function tick(now) {
+    const rawDt = Math.min(0.04, (now - lastT) / 1000); lastT = now;
+    if (sim.hitstop > 0) { sim.hitstop = Math.max(0, sim.hitstop - rawDt); requestAnimationFrame(tick); return; }
+    const dt = rawDt * sim.slowMo; sim.time += dt;
+    if (sim.shake > 0) sim.shake = Math.max(0, sim.shake - rawDt * 34);
+    if (sim.phase === 'splitting') stepHardcorePhysics(dt);
+    else if (sim.phase === 'done' || sim.phase === 'broken') sim.splitSep += (0.28 - sim.splitSep) * Math.min(1, rawDt * 6);
+
+    updateThreeScene(rawDt);
+
+    // 2D Pro FX Overlay: Sweet-Spot Tension Meter + Result Card + Popups
+    fxCtx.clearRect(0, 0, viewW, viewH);
+    const tr = TIERS[sim.tierIdx];
+    if (sim.phase === 'ready' || sim.phase === 'splitting') {
+      const mbW = Math.min(viewW - 40, 360), mbX = (viewW - mbW) * 0.5, mbY = viewH - 74;
+      const sweetLo = Math.max(0.24, sim.sweetCenter - tr.sweetW * 0.5), sweetHi = Math.min(0.84, sim.sweetCenter + tr.sweetW * 0.5);
+      fxCtx.fillStyle = 'rgba(9, 13, 22, 0.90)'; fxCtx.strokeStyle = 'rgba(255,255,255,0.2)'; fxCtx.lineWidth = 1.6;
+      fxCtx.beginPath(); fxCtx.roundRect(mbX - 10, mbY - 8, mbW + 20, 48, 12); fxCtx.fill(); fxCtx.stroke();
+      fxCtx.fillStyle = '#334155'; fxCtx.fillRect(mbX, mbY, mbW * sweetLo, 12);
+      fxCtx.fillStyle = '#22c55e'; fxCtx.fillRect(mbX + mbW * sweetLo, mbY, mbW * (sweetHi - sweetLo), 12);
+      fxCtx.fillStyle = '#ef4444'; fxCtx.fillRect(mbX + mbW * sweetHi, mbY, mbW * (1 - sweetHi), 12);
+      fxCtx.fillStyle = '#ffffff'; fxCtx.fillRect(mbX + mbW * sim.tension - 3, mbY - 3, 6, 18);
+
+      let msg = '下へドラッグで緑帯キープ！左右で木目を逆ステア！', col = '#bef264';
+      if (sim.phase === 'splitting') {
+        if (sim.tension > sweetHi) { msg = '⚠ 赤ゾーン危険!! 折れるぞ緩めろ!!'; col = '#ef4444'; }
+        else if (sim.crackX < -0.10) { msg = '◀ 左へ裂けそう！右(→)に傾けて修正!!'; col = '#fb923c'; }
+        else if (sim.crackX > 0.10) { msg = '▶ 右へ裂けそう！左(←)に傾けて修正!!'; col = '#38bdf8'; }
+        else { msg = '✨ 中心ジャスト！そのまま緑帯を維持!!'; col = '#34d399'; }
+      }
+      fxCtx.fillStyle = col; fxCtx.font = '900 12px sans-serif'; fxCtx.textAlign = 'center'; fxCtx.textBaseline = 'middle';
+      fxCtx.fillText(msg, viewW * 0.5, mbY + 26, mbW);
+    } else {
+      const cw = Math.min(viewW - 32, 420), cx = (viewW - cw) * 0.5, cyBox = viewH - 236;
+      fxCtx.fillStyle = 'rgba(9, 13, 22, 0.92)';
+      fxCtx.strokeStyle = sim.resRank === 'GOD' || sim.resRank === 'S' ? '#bef264' : sim.resRank === 'DEAD' ? '#ef4444' : '#facc15';
+      fxCtx.lineWidth = 3; fxCtx.beginPath(); fxCtx.roundRect(cx, cyBox, cw, 88, 14); fxCtx.fill(); fxCtx.stroke();
+      fxCtx.fillStyle = sim.resRank === 'GOD' || sim.resRank === 'S' ? '#bef264' : sim.resRank === 'DEAD' ? '#f87171' : '#facc15';
+      fxCtx.font = '900 17px sans-serif'; fxCtx.textAlign = 'center'; fxCtx.textBaseline = 'middle';
+      fxCtx.fillText(sim.resTitle, viewW * 0.5, cyBox + 24, cw - 20);
+      fxCtx.fillStyle = '#ffffff'; fxCtx.font = 'bold 13px monospace';
+      fxCtx.fillText(sim.phase === 'done' ? `左 ${sim.leftPct.toFixed(2)}%  :  右 ${sim.rightPct.toFixed(2)}%` : '3D断面を回転表示中', viewW * 0.5, cyBox + 46);
+      fxCtx.fillStyle = '#cbd5e1'; fxCtx.font = 'bold 11.5px sans-serif';
+      fxCtx.fillText(sim.resSub, viewW * 0.5, cyBox + 69, cw - 22);
+    }
+
+    for (let i = sim.popups.length - 1; i >= 0; i--) {
+      const p = sim.popups[i]; p.life += rawDt; if (p.life >= p.maxLife) { sim.popups.splice(i, 1); continue; }
+      p.y -= 28 * rawDt; fxCtx.save(); fxCtx.globalAlpha = Math.max(0, 1 - p.life / p.maxLife);
+      fxCtx.font = `900 ${p.size}px sans-serif`; fxCtx.textAlign = 'center'; fxCtx.lineWidth = 4; fxCtx.strokeStyle = '#090d16';
+      fxCtx.strokeText(p.text, p.x, p.y); fxCtx.fillStyle = p.color; fxCtx.fillText(p.text, p.x, p.y); fxCtx.restore();
+    }
+    requestAnimationFrame(tick);
+  }
+
+  const rankModal = document.getElementById('rankModal');
+  window.addEventListener('pointerdown', (e) => {
+    if (!rankModal.classList.contains('hidden')) return;
+    if (e.target.closest('button') || e.target.closest('a') || e.target.closest('input')) return;
+    Sfx.ensure();
+    if (sim.phase === 'done' || sim.phase === 'broken' || sim.phase === 'timeout') return;
+    sim.dragging = true; sim.phase = 'splitting'; sim.dragStartX = e.clientX; sim.dragStartY = e.clientY; sim.dragStartOpen = sim.pullOpen;
+  });
+  window.addEventListener('pointermove', (e) => {
+    if (!sim.dragging || sim.phase !== 'splitting') return;
+    const dy = e.clientY - sim.dragStartY, dx = e.clientX - sim.dragStartX;
+    const pullPx = Math.max(0, dy * 1.15, Math.hypot(dx, dy) * 0.72);
+    sim.targetOpen = Math.min(1.0, sim.dragStartOpen + pullPx / 215);
+    sim.steerX = Math.max(-1, Math.min(1, dx / 52));
+  });
+  window.addEventListener('pointerup', () => {
+    if (!sim.dragging) return; sim.dragging = false; sim.steerX = 0;
+    if (sim.phase === 'splitting') { sim.targetOpen = Math.max(0, sim.pullOpen * 0.55); sim.tension = 0; }
+  });
+  window.addEventListener('keydown', (e) => {
+    if (!rankModal.classList.contains('hidden') || e.target.tagName === 'INPUT') return;
+    if (e.code === 'ArrowLeft' || e.code === 'KeyA') sim.keys.left = true;
+    if (e.code === 'ArrowRight' || e.code === 'KeyD') sim.keys.right = true;
+    if (e.code === 'Space') { e.preventDefault(); sim.keys.space = true; if (sim.phase === 'ready') sim.phase = 'splitting'; }
+  });
+  window.addEventListener('keyup', (e) => {
+    if (e.code === 'ArrowLeft' || e.code === 'KeyA') sim.keys.left = false;
+    if (e.code === 'ArrowRight' || e.code === 'KeyD') sim.keys.right = false;
+    if (e.code === 'Space') sim.keys.space = false;
+  });
+
+  function renderTierRow() {
+    const row = document.getElementById('tierRow'); row.innerHTML = '';
+    TIERS.forEach((t, idx) => {
+      const b = document.createElement('button'); b.type = 'button';
+      b.className = `tier-btn ${sim.tierIdx === idx ? (idx >= 3 ? 'active oni' : 'active') : ''}`;
+      b.textContent = t.name;
+      b.onclick = () => { startNewStick(idx); renderTierRow(); };
+      row.appendChild(b);
+    });
+  }
+
+  // =========================================================
+  // GOOGLE SPREADSHEET (GAS) + LOCAL STORAGE LEADERBOARD
+  // =========================================================
+  // gas_ranking.gs をデプロイしたウェブアプリ URL をここに貼り付けると全ユーザー共通の全国ランキングになります
+  const GAS_ENDPOINT = '';
+  const LS_SCORES_KEY = 'waribashi_3d_scores_v1';
+  const LS_NAME_KEY = 'waribashi_3d_player_v1';
+  const LS_GAS_KEY = 'waribashi_3d_gas_url_v1';
+
+  let rankFilter = 'all'; // 'all' or 0..4
+
+  function getActiveGasUrl() {
+    if (GAS_ENDPOINT && GAS_ENDPOINT.startsWith('https://')) return GAS_ENDPOINT;
+    const saved = localStorage.getItem(LS_GAS_KEY) || '';
+    return saved.startsWith('https://') ? saved : '';
+  }
+
+  function loadLocalScores() {
+    try { return JSON.parse(localStorage.getItem(LS_SCORES_KEY) || '[]'); } catch (_) { return []; }
+  }
+
+  function saveLocalScore(entry) {
+    const arr = loadLocalScores();
+    arr.push(entry);
+    arr.sort((a, b) => {
+      if (Math.abs(a.diff - b.diff) > 0.001) return a.diff - b.diff;
+      if (a.tierIdx !== b.tierIdx) return b.tierIdx - a.tierIdx;
+      if (a.counters !== b.counters) return b.counters - a.counters;
+      return b.timeLeft - a.timeLeft;
+    });
+    localStorage.setItem(LS_SCORES_KEY, JSON.stringify(arr.slice(0, 40)));
+  }
+
+  function escHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  function renderRankTable(items) {
+    const tbody = document.getElementById('rankTbody');
+    const filtered = rankFilter === 'all' ? items : items.filter((r) => Number(r.tierIdx) === Number(rankFilter));
+    const sorted = [...filtered].sort((a, b) => {
+      if (Math.abs(a.diff - b.diff) > 0.001) return a.diff - b.diff;
+      if (a.tierIdx !== b.tierIdx) return b.tierIdx - a.tierIdx;
+      if (a.counters !== b.counters) return b.counters - a.counters;
+      return b.timeLeft - a.timeLeft;
+    }).slice(0, 20);
+
+    if (!sorted.length) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:18px 6px;">まだ記録がありません！綺麗に割って最初の1位に名前を刻もう🥢</td></tr>';
+      return;
+    }
+    tbody.innerHTML = sorted.map((r, i) => {
+      const medal = i === 0 ? '👑' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`;
+      const isGod = Number(r.diff) <= 0.15;
+      return `<tr class="${isGod ? 'rank-god' : ''}">
+        <td>${medal}</td>
+        <td>${escHtml(r.name)}</td>
+        <td>${escHtml(r.tierName || TIERS[r.tierIdx]?.name || '')}</td>
+        <td>±${Number(r.diff).toFixed(2)}%</td>
+        <td style="font-size:11px;color:#cbd5e1;">${Number(r.leftPct).toFixed(2)}:${Number(r.rightPct).toFixed(2)} / ⚡${r.counters || 0}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  function renderRankFilterTabs() {
+    const row = document.getElementById('rankFilterRow');
+    row.innerHTML = '';
+    const opts = [{ id: 'all', label: '全難度' }, ...TIERS.map((t, idx) => ({ id: idx, label: t.name }))];
+    opts.forEach((o) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = `tier-btn ${rankFilter === o.id ? 'active' : ''}`;
+      b.textContent = o.label;
+      b.onclick = () => { rankFilter = o.id; renderRankFilterTabs(); refreshLeaderboard(); };
+      row.appendChild(b);
+    });
+  }
+
+  async function refreshLeaderboard() {
+    const statusEl = document.getElementById('rankStatus');
+    const url = getActiveGasUrl();
+    if (!url) {
+      statusEl.textContent = '💾 ローカル自己ベスト表示中（下の設定にGAS URLを貼るとGoogleスプレッドシート全国ランキングに連携します）';
+      renderRankTable(loadLocalScores());
+      return;
+    }
+    statusEl.textContent = '🔄 スプレッドシートからランキング読込中...';
+    try {
+      const qs = rankFilter === 'all' ? '?tier=all' : `?tier=${encodeURIComponent(rankFilter)}`;
+      const res = await fetch(url + qs, { method: 'GET', cache: 'no-store' });
+      const data = await res.json();
+      if (!data.ok || !Array.isArray(data.items)) throw new Error(data.error || 'Bad response');
+      statusEl.textContent = '🌐 Google スプレッドシート全国ランキング同期中（50.00% 誤差順）';
+      renderRankTable(data.items);
+    } catch (err) {
+      statusEl.textContent = '⚠ スプレッドシート取得失敗（ローカル記録を表示中）';
+      renderRankTable(loadLocalScores());
+    }
+  }
+
+  function openRankModal(showSubmit = false) {
+    rankModal.classList.remove('hidden');
+    document.getElementById('gasUrlInput').value = localStorage.getItem(LS_GAS_KEY) || GAS_ENDPOINT || '';
+    document.getElementById('playerNameInput').value = localStorage.getItem(LS_NAME_KEY) || '';
+    const submitBox = document.getElementById('submitBox');
+    const submitMsg = document.getElementById('submitMsg');
+    submitMsg.textContent = '';
+
+    if (showSubmit && sim.phase === 'done' && !sim.scoreSubmitted) {
+      const tr = TIERS[sim.tierIdx];
+      const diff = Math.abs(sim.leftPct - 50.0);
+      document.getElementById('submitSummary').textContent =
+        `今回の記録：${tr.name} / 誤差 ±${diff.toFixed(2)}%（${sim.leftPct.toFixed(2)} : ${sim.rightPct.toFixed(2)} / 節見切り${sim.counters}回）`;
+      submitBox.classList.remove('hidden');
+      rankFilter = sim.tierIdx;
+    } else {
+      submitBox.classList.add('hidden');
+    }
+    renderRankFilterTabs();
+    refreshLeaderboard();
+  }
+
+  document.getElementById('btnRankOpen').onclick = () => openRankModal(sim.phase === 'done' && !sim.scoreSubmitted);
+  document.getElementById('btnRankSubmitOpen').onclick = () => openRankModal(true);
+  document.getElementById('btnRankClose').onclick = () => rankModal.classList.add('hidden');
+  rankModal.addEventListener('click', (e) => { if (e.target === rankModal) rankModal.classList.add('hidden'); });
+
+  document.getElementById('btnSaveGasUrl').onclick = () => {
+    const val = document.getElementById('gasUrlInput').value.trim();
+    localStorage.setItem(LS_GAS_KEY, val);
+    refreshLeaderboard();
+  };
+
+  document.getElementById('btnSubmitScore').onclick = async () => {
+    if (sim.phase !== 'done' || sim.scoreSubmitted) return;
+    const btn = document.getElementById('btnSubmitScore');
+    const msg = document.getElementById('submitMsg');
+    const nameInput = document.getElementById('playerNameInput');
+    const playerName = (nameInput.value.trim() || '名無しの職人').slice(0, 12);
+    localStorage.setItem(LS_NAME_KEY, playerName);
+
+    const tr = TIERS[sim.tierIdx];
+    const diff = Math.round(Math.abs(sim.leftPct - 50.0) * 100) / 100;
+    const payload = {
+      name: playerName,
+      tierIdx: sim.tierIdx,
+      tierName: tr.name,
+      diff,
+      leftPct: Math.round(sim.leftPct * 100) / 100,
+      rightPct: Math.round(sim.rightPct * 100) / 100,
+      counters: sim.counters,
+      timeLeft: Math.round(sim.timeLeft * 100) / 100,
+      rank: sim.resRank
+    };
+
+    saveLocalScore(payload);
+    sim.scoreSubmitted = true;
+    document.getElementById('btnRankSubmitOpen').classList.add('hidden');
+
+    const url = getActiveGasUrl();
+    if (!url) {
+      msg.textContent = '✅ ローカルランキングに登録しました！（GAS URLを設定すると全国ランキングにも送信されます）';
+      renderRankTable(loadLocalScores());
+      return;
+    }
+
+    btn.disabled = true;
+    msg.textContent = '📡 スプレッドシートへ送信中...';
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'Submit failed');
+      msg.textContent = '🎉 Google スプレッドシート全国ランキングに登録完了!!';
+      if (Array.isArray(data.items) && Number(rankFilter) === sim.tierIdx) renderRankTable(data.items);
+      else refreshLeaderboard();
+    } catch (err) {
+      msg.textContent = '⚠ スプレッドシート送信に失敗しましたが、ローカル記録には保存しました。';
+      renderRankTable(loadLocalScores());
+    } finally {
+      btn.disabled = false;
+    }
+  };
+
+  document.getElementById('btnSound').onclick = (e) => { e.currentTarget.textContent = Sfx.toggle() ? '🔊 音ON' : '🔇 音OFF'; };
+  document.getElementById('btnReset').onclick = () => startNewStick(sim.tierIdx);
+  document.getElementById('btnAgain').onclick = () => startNewStick(sim.tierIdx);
+  document.getElementById('btnSavePng').onclick = () => { const a = document.createElement('a'); a.download = `waribashi_3d_${Date.now()}.png`; a.href = glCanvas.toDataURL('image/png'); a.click(); };
+  document.getElementById('btnShareX').onclick = () => {
+    const tr = TIERS[sim.tierIdx];
+    const txt = `【WARIBASHI MASTER 3D｜一人称3D極限割り箸割り】\n難度「${tr.name}（${tr.wood}）」に挑んだ結果…\n▶ ${sim.resTitle}\n（${sim.leftPct.toFixed(2)}% : ${sim.rightPct.toFixed(2)}%）\n#WARIBASHIMASTER3D #ThreeJS #個人開発`;
+    window.open('https://twitter.com/intent/tweet?text=' + encodeURIComponent(txt), '_blank', 'noopener');
+  };
+
+  if (new URLSearchParams(location.search).get('shorts') === '1') document.body.classList.add('shorts-mode');
+  initThree(); handleResize(); renderTierRow(); startNewStick(1); requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>

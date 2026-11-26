@@ -132,6 +132,18 @@
       "game_path": "games/day11-sky-smash-3d/index.html",
       "note_path": "notes/day11/note_draft.md",
       "shorts_script": "shorts/day11/generate_shorts.py"
+    },
+    {
+      "day": 12,
+      "date": "2026-11-26",
+      "slug": "day12-waribashi-3d",
+      "title": "WARIBASHI MASTER 3D（極限・一人称3D割り箸割り）",
+      "type": "game",
+      "genre": "Three.js 一人称3D物理アクション / 極限割り箸割り",
+      "core_mechanic": "Three.js一人称3Dアリーナで割り箸を両手で握り、左右に揺れ動く緑帯テンションゲージを維持しながら下へ割る！赤ゾーン過負荷で横折れ即死「ポキッ!!」、時間切れで「麺が伸びた」、3Dの節（フシ）＆凶悪木目へ左右逆ステアで「⚡ JUST節見切り!!」を発動し0.01%精度で50.00% : 50.00%を目指す！5段階鬼難度・3D断面ターンテーブル保存・Googleスプレッドシート(GAS)全国ランキング対応",
+      "game_path": "games/day12-waribashi-3d/index.html",
+      "note_path": "notes/day12/note_draft.md",
+      "shorts_script": "shorts/day12/generate_shorts.py"
     }
   ]
 }

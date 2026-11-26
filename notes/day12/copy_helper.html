@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Day 12 投稿ヘルパー｜WARIBASHI MASTER 3D</title>
+  <style>
+    :root {
+      --bg: #070b12;
+      --card: #0e1627;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #bef264;
+      --gold: #facc15;
+      --border: #233252;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px 16px 60px;
+      background: radial-gradient(circle at 20% 0%, #172a18 0%, #070b12 65%);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
+      line-height: 1.65;
+    }
+    .wrap { max-width: 760px; margin: 0 auto; }
+    h1 { font-size: 22px; margin: 0 0 8px; }
+    .lead { margin: 0 0 20px; color: var(--muted); font-size: 14px; }
+    .quick-bar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 12px;
+      margin-bottom: 22px;
+    }
+    .action-link {
+      display: block;
+      text-align: center;
+      text-decoration: none;
+      border-radius: 14px;
+      padding: 14px 16px;
+      font-weight: 900;
+      font-size: 14px;
+      background: linear-gradient(90deg, #bef264, #f59e0b);
+      color: #090d16;
+    }
+    .action-link.secondary { background: #142038; color: var(--text); border: 1px solid var(--border); }
+    .section {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 18px 20px;
+      margin-bottom: 18px;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+    }
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+    .section-title { font-size: 15px; font-weight: 800; color: var(--accent); }
+    .copy-btn {
+      border: none;
+      border-radius: 10px;
+      padding: 8px 14px;
+      background: #bef264;
+      color: #090d16;
+      font-weight: 800;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .copy-btn.done { background: var(--gold); color: #09090b; }
+    textarea {
+      width: 100%;
+      background: #080f1f;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-family: inherit;
+      font-size: 14px;
+      line-height: 1.6;
+      resize: vertical;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Day 12 投稿ヘルパー（ゲーム12日目：WARIBASHI MASTER 3D）</h1>
+    <p class="lead">Three.js 一人称3D極限割り箸割り『WARIBASHI MASTER 3D』のYouTube Shorts・X・note投稿用コピペ画面です。</p>
+
+    <div class="quick-bar">
+      <a class="action-link" id="xIntentBtn" href="#" target="_blank" rel="noopener">X（Twitter）の投稿画面を開く</a>
+      <a class="action-link secondary" href="https://note.com/notes/new" target="_blank" rel="noopener">note 新規記事作成を開く</a>
+      <a class="action-link secondary" href="../../games/day12-waribashi-3d/">ゲーム本体を開く</a>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">YouTube Shorts タイトル</span>
+        <button class="copy-btn" data-target="ytTitle">コピー</button>
+      </div>
+      <textarea id="ytTitle" rows="2" readonly>【Day 12】ただ割り箸を割るだけの一人称3Dゲーム作ったら激ムズすぎて爪楊枝量産したｗ #割り箸 #Shorts #個人開発</textarea>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">YouTube Shorts 説明文</span>
+        <button class="copy-btn" data-target="ytDesc">コピー</button>
+      </div>
+      <textarea id="ytDesc" rows="12" readonly>スマホ・PCで今すぐ無料で遊べます▼
+https://kam2525-hub.github.io/note_create_use/games/day12-waribashi-3d/
+
+🔥 100日後にバズるゲームを見たい人は、チャンネル登録よろしく！
+💬 作ってほしいゲームがあったら、ぜひコメント欄で教えてね！（次の制作に採用するかも!?）
+
+100日後にバズるゲーム【Day 12】
+『WARIBASHI MASTER 3D（Three.js 一人称3D極限割り箸割り）』
+
+💥 動く緑テンション帯をキープ！赤ゾーンに入ると「ポキッ!! 折損即死!!」
+🪵 3Dの「節（フシ）」を左右逆ステアで耐える「⚡ JUST節見切り!!」
+👑 誤差 ±0.15%以内で「神域 50.00% : 50.00%」を狙え！
+
+#Shorts #YouTubeShorts #おすすめ #100日後にバズるゲーム #Day12 #割り箸 #激ムズゲーム #個人開発</textarea>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">X（Twitter）告知ポスト</span>
+        <button class="copy-btn" data-target="xPost">コピー</button>
+      </div>
+      <textarea id="xPost" rows="7" readonly>【100日後にバズるゲーム制作 Day 12】
+ただ「割り箸を綺麗に割ること」だけに全振りした超激ムズ一人称3Dゲーム『WARIBASHI MASTER 3D』公開🥢🔥
+
+・動く緑帯外れて赤ゾーンで「ポキッ!! 折損即死!!」
+・節への逆ステアで「⚡ JUST節見切り!!」
+・神域 50.00% : 50.00% 狙えるか!?（ランキング対応）
+
+今すぐブラウザで無料プレイ👇
+https://kam2525-hub.github.io/note_create_use/games/day12-waribashi-3d/</textarea>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">note 記事タイトル＆本文</span>
+        <button class="copy-btn" data-target="noteBody">コピー</button>
+      </div>
+      <textarea id="noteBody" rows="10" readonly>【ゲーム12日目】ただ割り箸を綺麗に割るだけなのに激ムズすぎて脳汁!! 一人称3D割り箸物理『WARIBASHI MASTER 3D』
+
+100日後にバズるゲームを作る男、12日目です。
+今回は一人称3D視点で「割り箸を50.00% : 50.00%で綺麗に割ることだけ」に全振りした超ハードコア3Dゲーム『WARIBASHI MASTER 3D』を公開しました！
+
+動く緑テンション帯・3Dの節への逆ステア「⚡ JUST節見切り!!」・時間切れ「麺が伸びた」判定・スプレッドシート連携ランキングまで搭載。スマホ／PCから今すぐ無料で遊べます👇
+https://kam2525-hub.github.io/note_create_use/games/day12-waribashi-3d/</textarea>
+    </div>
+  </div>
+
+  <script>
+    const xPost = document.getElementById('xPost');
+    document.getElementById('xIntentBtn').href =
+      'https://twitter.com/intent/tweet?text=' + encodeURIComponent(xPost.value);
+
+    document.querySelectorAll('.copy-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const el = document.getElementById(btn.dataset.target);
+        try {
+          await navigator.clipboard.writeText(el.value);
+        } catch (_) {
+          el.select();
+          document.execCommand('copy');
+        }
+        const orig = btn.textContent;
+        btn.textContent = 'コピー済み!';
+        btn.classList.add('done');
+        setTimeout(() => {
+          btn.textContent = orig;
+          btn.classList.remove('done');
+        }, 1600);
+      });
+    });
+  </script>
+</body>
+</html>
