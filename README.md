@@ -9,6 +9,14 @@
 ## 制作ログ（重複防止カタログ）
 - 一覧表: [CATALOG.md](CATALOG.md) / 機械可読データ: [CATALOG.json](CATALOG.json)
 
+## Day 13: YUGIRI MASTER 3D（極限・一人称3Dカップ焼きそば湯切り）
+- ゲーム本体: [games/day13-yugiri-3d/index.html](games/day13-yugiri-3d/index.html)
+- スプレッドシート全国ランキングGAS: [games/day13-yugiri-3d/gas_ranking.gs](games/day13-yugiri-3d/gas_ranking.gs) / [設定手順](games/day13-yugiri-3d/RANKING_SETUP.md)
+- 1クリックコピペヘルパー: [notes/day13/copy_helper.html](notes/day13/copy_helper.html)
+- note 記事原稿: [notes/day13/note_draft.md](notes/day13/note_draft.md)
+- YouTube メタデータ: [notes/day13/youtube_metadata.txt](notes/day13/youtube_metadata.txt)
+- サムネ／Shorts スクリプト: [shorts/day13/generate_shorts.py](shorts/day13/generate_shorts.py)
+
 ## Day 12: WARIBASHI MASTER 3D（極限・一人称3D割り箸割り）
 - ゲーム本体: [games/day12-waribashi-3d/index.html](games/day12-waribashi-3d/index.html)
 - スプレッドシート全国ランキングGAS: [games/day12-waribashi-3d/gas_ranking.gs](games/day12-waribashi-3d/gas_ranking.gs) / [設定手順](games/day12-waribashi-3d/RANKING_SETUP.md)

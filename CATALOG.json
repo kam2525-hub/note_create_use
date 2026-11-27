@@ -144,6 +144,18 @@
       "game_path": "games/day12-waribashi-3d/index.html",
       "note_path": "notes/day12/note_draft.md",
       "shorts_script": "shorts/day12/generate_shorts.py"
+    },
+    {
+      "day": 13,
+      "date": "2026-11-27",
+      "slug": "day13-yugiri-3d",
+      "title": "YUGIRI MASTER 3D（カップ焼きそば湯切り）",
+      "type": "game",
+      "genre": "Three.js 一人称3D物理アクション / カップ焼きそば湯切り",
+      "core_mechanic": "明るい昼間のキッチンシンクでカップ焼きそばを傾けてお湯を切り、終盤は『ひと振り』で表面張力の残り数滴を切って残湯0.00mL＆麺流出0本(S+)を狙うシンプル極限湯切り！傾けすぎると『蓋ペロッ!! 麺ドバァァ!!』で高密度ちぢれ麺とキャベツがシンク排水口へ全流出！ピンクノイズ3層ASMR水流＆水泡音・並盛〜激辛〜極の全5種カップ・Googleスプレッドシート(GAS)全国ランキング対応",
+      "game_path": "games/day13-yugiri-3d/index.html",
+      "note_path": "notes/day13/note_draft.md",
+      "shorts_script": "shorts/day13/generate_shorts.py"
     }
   ]
 }
