@@ -442,11 +442,15 @@
     }
   }
 
+  window.__gameEvents = [];
+  let shortsElapsed = 0;
+  function emitEv(type) { if (window.__manualStep) window.__gameEvents.push({ t: Math.round(shortsElapsed * 1000) / 1000, type }); }
+
   function stepHardcorePhysics(dt) {
     const tr = TIERS[sim.tierIdx];
     sim.timeLeft = Math.max(0, sim.timeLeft - dt);
     if (sim.timeLeft <= 0) {
-      sim.phase = 'timeout'; sim.dragging = false; Sfx.snapFinish(false, true);
+      sim.phase = 'timeout'; sim.dragging = false; Sfx.snapFinish(false, true); emitEv('timeout');
       sim.resRank = 'F'; sim.resTitle = '🍜 麺が伸びた（時間切れ!!）'; sim.resSub = '慎重すぎた…熱々のラーメンが完全にのびてしまった！';
       document.getElementById('resActions').classList.remove('hidden'); updateHudDom(); return;
     }
@@ -474,7 +478,7 @@
       sim.strainAccum += (redExcess + thinDanger * (0.5 + sim.pullVel)) * dt * 1.15;
       if (sim.strainAccum >= 1.0 && sim.crackIdx < SEG_COUNT - 2) {
         sim.phase = 'broken'; sim.dragging = false; sim.brokenSide = sim.crackX <= 0 ? -1 : 1; sim.brokenSeg = Math.max(10, sim.crackIdx - 5);
-        sim.shake = 16; sim.hitstop = 0.14; Sfx.snapFinish(false, true);
+        sim.shake = 16; sim.hitstop = 0.14; Sfx.snapFinish(false, true); emitEv('snap_broken');
         const wp = getSegWorldPos(sim.brokenSeg); spawnSplinters3D(sim.brokenSide * 0.1, wp.y, wp.z, 26);
         addPopup(viewW * 0.5, viewH * 0.42, 'ポキッ!! 折損即死!!', '#ef4444', 24);
         sim.resRank = 'DEAD'; sim.resTitle = '💀 中途折損（ポキッ!!）'; sim.resSub = '赤ゾーン負荷で木が真っ二つに折れた！';
@@ -495,7 +499,7 @@
       sim.crackX = Math.max(-0.96, Math.min(0.96, sim.crackX + grainPull + runaway + activeSteer * steerPower));
       sim.crackPath[s] = sim.crackX;
 
-      const wp = getSegWorldPos(s); Sfx.crack(sim.tension);
+      const wp = getSegWorldPos(s); Sfx.crack(sim.tension); emitEv('crack');
       if (Math.random() < 0.7) spawnSplinters3D(sim.crackX * wp.hw, wp.y, wp.z, 2);
 
       for (const kn of sim.knots) {
@@ -503,7 +507,7 @@
           kn.passed = true;
           if (Math.abs(sim.crackX) < 0.14 && inSweet) {
             sim.counters++; sim.hitstop = 0.08; sim.strainAccum = Math.max(0, sim.strainAccum - 0.35);
-            Sfx.counterPing(); addPopup(viewW * 0.5, viewH * 0.44, `⚡ JUST節見切り!! ×${sim.counters}`, '#34d399', 20);
+            Sfx.counterPing(); emitEv('counter'); addPopup(viewW * 0.5, viewH * 0.44, `⚡ JUST節見切り!! ×${sim.counters}`, '#34d399', 20);
           }
         }
       }
@@ -516,7 +520,7 @@
   function finishSplit() {
     sim.phase = 'done'; sim.dragging = false; sim.hitstop = 0.12; computeRatio();
     const diff = Math.abs(sim.leftPct - 50.0), small = Math.min(sim.leftPct, sim.rightPct), perfect = diff <= 0.50;
-    sim.shake = perfect ? 7 : 12; Sfx.snapFinish(perfect, false);
+    sim.shake = perfect ? 7 : 12; Sfx.snapFinish(perfect, false); emitEv(perfect ? 'snap_god' : 'snap_done');
     const wp = getSegWorldPos(SEG_COUNT); spawnSplinters3D(0, wp.y, wp.z, 28);
     if (handL && handR) { handL.visible = false; handR.visible = false; }
     knotMeshes.forEach((m) => { m.visible = false; });
@@ -601,9 +605,12 @@
   }
 
   let lastT = performance.now();
-  function tick(now) {
-    const rawDt = Math.min(0.04, (now - lastT) / 1000); lastT = now;
-    if (sim.hitstop > 0) { sim.hitstop = Math.max(0, sim.hitstop - rawDt); requestAnimationFrame(tick); return; }
+  function renderFrame(rawDt) {
+    if (sim.hitstop > 0) {
+      sim.hitstop = Math.max(0, sim.hitstop - rawDt);
+      updateThreeScene(rawDt * 0.15);
+      return;
+    }
     const dt = rawDt * sim.slowMo; sim.time += dt;
     if (sim.shake > 0) sim.shake = Math.max(0, sim.shake - rawDt * 34);
     if (sim.phase === 'splitting') stepHardcorePhysics(dt);
@@ -653,8 +660,44 @@
       fxCtx.font = `900 ${p.size}px sans-serif`; fxCtx.textAlign = 'center'; fxCtx.lineWidth = 4; fxCtx.strokeStyle = '#090d16';
       fxCtx.strokeText(p.text, p.x, p.y); fxCtx.fillStyle = p.color; fxCtx.fillText(p.text, p.x, p.y); fxCtx.restore();
     }
+  }
+
+  function tick(now) {
+    const rawDt = Math.min(0.04, (now - lastT) / 1000); lastT = now;
+    if (!window.__manualStep) renderFrame(rawDt);
     requestAnimationFrame(tick);
   }
+
+  window.__stepFrame = (dt) => {
+    shortsElapsed += dt;
+    renderFrame(dt);
+  };
+  window.__shortsDemo = {
+    startTier(tierIdx, autoCenter = false) {
+      startNewStick(tierIdx); renderTierRow();
+      if (autoCenter) {
+        for (let s = JOINT_START; s <= SEG_COUNT; s++) sim.grainForce[s] *= 0.28;
+      }
+      sim.phase = 'splitting'; sim.dragging = true;
+    },
+    setDrive(targetOpen, steerX) {
+      sim.targetOpen = targetOpen;
+      sim.steerX = steerX;
+    },
+    autoCounter(pullSpeed = 0.72) {
+      if (sim.phase !== 'splitting') return;
+      const tr = TIERS[sim.tierIdx];
+      const rem = (SEG_COUNT - sim.crackIdx) / (SEG_COUNT - JOINT_START);
+      const baseOpen = (1 - rem) * 0.72 + 0.08;
+      sim.targetOpen = Math.min(1.0, baseOpen + sim.sweetCenter * 0.25 + pullSpeed * 0.06);
+      const nextForce = sim.grainForce[Math.min(SEG_COUNT, sim.crackIdx + 1)] || 0;
+      sim.steerX = Math.max(-1, Math.min(1, -sim.crackX * 2.2 - nextForce * 0.78));
+    },
+    forceRedSnap() {
+      if (sim.phase === 'splitting') { sim.targetOpen = 1.0; sim.pullVel = 1.6; sim.steerX = 0; }
+    },
+    getState() { return { phase: sim.phase, crackIdx: sim.crackIdx, leftPct: sim.leftPct, rightPct: sim.rightPct, counters: sim.counters }; }
+  };
 
   const rankModal = document.getElementById('rankModal');
   window.addEventListener('pointerdown', (e) => {
